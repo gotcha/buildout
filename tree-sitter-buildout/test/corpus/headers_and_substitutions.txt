@@ -71,6 +71,27 @@ d = ${a:b} and ${c:d} twice
     (option (option_name) (assignment) (value (substitution) (substitution)))))
 
 ================================================================================
+substitutions and escapes on continuation lines
+================================================================================
+
+[s]
+a = first ${other:opt}
+    second ${other:opt} and $$ dollar
+    third
+
+---------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header (section_name))
+    (option
+      (option_name)
+      (assignment)
+      (value (substitution))
+      (continuation (substitution) (escape))
+      (continuation))))
+
+================================================================================
 conditional header with brackets inside the expression
 ================================================================================
 

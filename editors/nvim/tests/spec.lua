@@ -70,6 +70,13 @@ for _, name in ipairs({
   check('capture: ' .. name .. ' present', (counts[name] or 0) > 0)
 end
 check('capture: sane total (>= 30)', total >= 30, total)
+-- Regression: ${...} must be a substitution on ANY line of a multiline
+-- value, not just the first (sample.cfg has one per line in `eggs`).
+check(
+  'capture: variable.member on first AND continuation line',
+  (counts['variable.member'] or 0) >= 2,
+  counts['variable.member']
+)
 
 -- 5. Injection: old-style condition_body -> python, marker expression NOT -----
 local iok, iq = pcall(vim.treesitter.query.get, 'buildout', 'injections')

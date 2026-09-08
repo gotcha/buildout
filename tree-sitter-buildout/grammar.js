@@ -253,12 +253,17 @@ module.exports = grammar({
 
     assignment: $ => /[ \t]*[-+]?[ \t]*=[ \t]*/,
 
-    value: $ => repeat1(choice(
+    value: $ => repeat1($._value_piece),
+
+    // Pieces of an option value, shared by the first line (value) and
+    // indented continuation lines, so substitutions and escapes are
+    // recognized anywhere in a multiline value.
+    _value_piece: $ => choice(
       $.substitution,
       $.escape,
       /[^$\n]+/,
       /\$/,
-    )),
+    ),
 
     substitution: $ => token(seq('${', /[^}\n]*/, '}')),
 
@@ -273,8 +278,14 @@ module.exports = grammar({
       repeat(choice($.continuation, $.comment, $._blank_line)),
     ),
 
+    // An indented line continues the current option's (or annotation's)
+    // value; it is made of the same pieces as the first line, so
+    // ${...} substitutions and $$ escapes are recognized on any line.
+    // Whitespace-only lines never reach here: _value_piece needs a
+    // non-space char, so they fall back to _blank_line.
     continuation: $ => seq(
-      token(/[ \t]+\S[^\n]*/),
+      $._hws,
+      repeat1($._value_piece),
       $._newline,
     ),
 

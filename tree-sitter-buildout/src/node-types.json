@@ -40,7 +40,21 @@
   {
     "type": "continuation",
     "named": true,
-    "fields": {}
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "escape",
+          "named": true
+        },
+        {
+          "type": "substitution",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "dependency_annotation",

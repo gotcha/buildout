@@ -721,26 +721,30 @@
     "value": {
       "type": "REPEAT1",
       "content": {
-        "type": "CHOICE",
-        "members": [
-          {
-            "type": "SYMBOL",
-            "name": "substitution"
-          },
-          {
-            "type": "SYMBOL",
-            "name": "escape"
-          },
-          {
-            "type": "PATTERN",
-            "value": "[^$\\n]+"
-          },
-          {
-            "type": "PATTERN",
-            "value": "\\$"
-          }
-        ]
+        "type": "SYMBOL",
+        "name": "_value_piece"
       }
+    },
+    "_value_piece": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "substitution"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "escape"
+        },
+        {
+          "type": "PATTERN",
+          "value": "[^$\\n]+"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\$"
+        }
+      ]
     },
     "substitution": {
       "type": "TOKEN",
@@ -818,10 +822,14 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "TOKEN",
+          "type": "SYMBOL",
+          "name": "_hws"
+        },
+        {
+          "type": "REPEAT1",
           "content": {
-            "type": "PATTERN",
-            "value": "[ \\t]+\\S[^\\n]*"
+            "type": "SYMBOL",
+            "name": "_value_piece"
           }
         },
         {
