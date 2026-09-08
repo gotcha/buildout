@@ -37,7 +37,23 @@ def test_easy_install(easy_install_env):
     update_extdemo = easy_install_env['update_extdemo']
     write = easy_install_env['write']
 
-    assert_output(str(get(link_server)), '<html><body>\n<a href="bigdemo-0.1-py3-none-any.whl">bigdemo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.1-py3-none-any.whl">demo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.2-py3-none-any.whl">demo-0.2-py3-none-any.whl</a><br>\n<a href="demo-0.3-py3-none-any.whl">demo-0.3-py3-none-any.whl</a><br>\n<a href="demo-0.4rc1-py3-none-any.whl">demo-0.4rc1-py3-none-any.whl</a><br>\n<a href="demoneeded-1.0.tar.gz">demoneeded-1.0.tar.gz</a><br>\n<a href="demoneeded-1.1.tar.gz">demoneeded-1.1.tar.gz</a><br>\n<a href="demoneeded-1.2rc1.tar.gz">demoneeded-1.2rc1.tar.gz</a><br>\n<a href="du_zipped-1.0-pyN.N.egg">du_zipped-1.0-pyN.N.egg</a><br>\n<a href="extdemo-1.4.tar.gz">extdemo-1.4.tar.gz</a><br>\n<a href="index/">index/</a><br>\n<a href="mixedcase-0.5.tar.gz">mixedcase-0.5.tar.gz</a><br>\n<a href="other-1.0-py3-none-any.whl">other-1.0-py3-none-any.whl</a><br>\n</body></html>', N)
+    assert_output(str(get(link_server)), """
+<html><body>
+<a href="bigdemo-0.1-py3-none-any.whl">bigdemo-0.1-py3-none-any.whl</a><br>
+<a href="demo-0.1-py3-none-any.whl">demo-0.1-py3-none-any.whl</a><br>
+<a href="demo-0.2-py3-none-any.whl">demo-0.2-py3-none-any.whl</a><br>
+<a href="demo-0.3-py3-none-any.whl">demo-0.3-py3-none-any.whl</a><br>
+<a href="demo-0.4rc1-py3-none-any.whl">demo-0.4rc1-py3-none-any.whl</a><br>
+<a href="demoneeded-1.0.tar.gz">demoneeded-1.0.tar.gz</a><br>
+<a href="demoneeded-1.1.tar.gz">demoneeded-1.1.tar.gz</a><br>
+<a href="demoneeded-1.2rc1.tar.gz">demoneeded-1.2rc1.tar.gz</a><br>
+<a href="du_zipped-1.0-pyN.N.egg">du_zipped-1.0-pyN.N.egg</a><br>
+<a href="extdemo-1.4.tar.gz">extdemo-1.4.tar.gz</a><br>
+<a href="index/">index/</a><br>
+<a href="mixedcase-0.5.tar.gz">mixedcase-0.5.tar.gz</a><br>
+<a href="other-1.0-py3-none-any.whl">other-1.0-py3-none-any.whl</a><br>
+</body></html>
+""", N)
     dest = tmpdir('sample-install')
     import zc.buildout.easy_install
     ws = zc.buildout.easy_install.install(
@@ -46,14 +62,24 @@ def test_easy_install(easy_install_env):
     for dist in ws:
         print_(dist)
     # TODO assert: 'demoneeded 1.1\ndemo 0.2'
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demoneeded-1.1-py2.4.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+""", N)
     ws = zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/',
         newest=False)
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demoneeded-1.1-py2.4.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+""", N)
     ws = zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/')
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demo-0.3-py2.4.egg\nd  demoneeded-1.1-py2.4.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demo-0.3-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+""", N)
     _val = (zc.buildout.easy_install.prefer_final(False))
     assert repr(_val) == 'True' or str(_val) == 'True'
     ws = zc.buildout.easy_install.install(
@@ -61,7 +87,13 @@ def test_easy_install(easy_install_env):
     for dist in ws:
         print_(dist)
     # TODO assert: 'demoneeded 1.2rc1\ndemo 0.4rc1'
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demo-0.3-py2.4.egg\nd  demo-0.4rc1-py2.4.egg\nd  demoneeded-1.1-py2.4.egg\nd  demoneeded-1.2rc1-py2.4.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demo-0.3-py2.4.egg
+d  demo-0.4rc1-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  demoneeded-1.2rc1-py2.4.egg
+""", N)
     _val = (zc.buildout.easy_install.prefer_final(True))
     assert repr(_val) == 'False' or str(_val) == 'False'
     ws = zc.buildout.easy_install.install(
@@ -70,7 +102,15 @@ def test_easy_install(easy_install_env):
     for dist in ws:
         print_(dist)
     # TODO assert: 'demoneeded 1.0\nother 1.0\ndemo 0.3'
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demo-0.3-py2.4.egg\nd  demo-0.4rc1-py2.4.egg\nd  demoneeded-1.0-py2.4.egg\nd  demoneeded-1.1-py2.4.egg\nd  demoneeded-1.2rc1-py2.4.egg\nd  other-1.0-py2.4.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demo-0.3-py2.4.egg
+d  demo-0.4rc1-py2.4.egg
+d  demoneeded-1.0-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  demoneeded-1.2rc1-py2.4.egg
+d  other-1.0-py2.4.egg
+""", N)
     rmdir(dest)
     try:
         ws = zc.buildout.easy_install.install(
@@ -94,7 +134,10 @@ def test_easy_install(easy_install_env):
     for dist in ws:
         print_(str(dist).lower())
     # TODO assert: 'demoneeded 1.1\nmixedcase 0.5'
-    assert_output(capture_print(ls, dest, lowercase_and_sort_output=True), 'd  demoneeded-1.1-py2.4.egg\nd  mixedcase-0.5-pyN.N.egg', N)
+    assert_output(capture_print(ls, dest, lowercase_and_sort_output=True), """
+d  demoneeded-1.1-py2.4.egg
+d  mixedcase-0.5-pyN.N.egg
+""", N)
     _ = get(link_server + 'disable_server_logging')
     rmdir(dest)
     ws = zc.buildout.easy_install.install(
@@ -114,12 +157,58 @@ def test_easy_install(easy_install_env):
         assert False, "Expected IncompatibleConstraintError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "The requirement ('demo>0.2') is not allowed by your [versions] constraint (0.2)", N)
-    assert_output(str(handler), "zc.buildout.easy_install DEBUG\n  Installing 'demo >0.2'.\nzc.buildout.easy_install INFO\n  Version and requirements information containing demo:\n  [versions] constraint on demo: 0.2\n  Base installation request: 'demo >0.2'", N)
+    assert_output(str(handler), """
+zc.buildout.easy_install DEBUG
+  Installing 'demo >0.2'.
+zc.buildout.easy_install INFO
+  Version and requirements information containing demo:
+  [versions] constraint on demo: 0.2
+  Base installation request: 'demo >0.2'
+""", N)
     handler.clear()
     ws = zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/',
         )
-    assert_output(str(handler), "zc.buildout.easy_install DEBUG\n  Installing 'demo'.\nzc.buildout.easy_install INFO\n  Getting distribution for 'demo'.\nzc.buildout.easy_install DEBUG\n  Fetching demo 0.3 from: http://.../demo-0.3-py3-none-any.whl\nzc.buildout.easy_install DEBUG\n  Turning dist demo 0.3 (.../demo-0.3-py3-none-any.whl) into egg, and moving to eggs dir /sample-install).\nzc.buildout.easy_install DEBUG\n  Calling pip install for .whl on .../demo-0.3-py3-none-any.whl\nzc.buildout.easy_install DEBUG\n  Running pip install:...\nzc.buildout.easy_install DEBUG\n  Egg for demo 0.3 installed at .../demo-0.3-pyN.N.egg\nzc.buildout.easy_install INFO\n  Got demo 0.3.\nzc.buildout.easy_install DEBUG\n  Picked: demo = 0.3\nzc.buildout.easy_install DEBUG\n  Getting required 'demoneeded'\nzc.buildout.easy_install DEBUG\n    required by demo 0.3.\nzc.buildout.easy_install INFO\n  Getting distribution for 'demoneeded'.\nzc.buildout.easy_install DEBUG\n  Fetching demoneeded 1.1 from: http://.../demoneeded-1.1.tar.gz\nzc.buildout.easy_install DEBUG\n  Turning dist demoneeded 1.1 (.../demoneeded-1.1.tar.gz) into egg, and moving to eggs dir /sample-install).\nzc.buildout.easy_install DEBUG\n  Calling pip install for .gz on .../demoneeded-1.1.tar.gz\nzc.buildout.easy_install DEBUG\n  Running pip install:...\nzc.buildout.easy_install DEBUG\n  Egg for demoneeded 1.1 installed at .../demoneeded-1.1-pyN.N.egg\nzc.buildout.easy_install INFO\n  Got demoneeded 1.1.\nzc.buildout.easy_install DEBUG\n  Picked: demoneeded = 1.1", N)
+    assert_output(str(handler), """
+zc.buildout.easy_install DEBUG
+  Installing 'demo'.
+zc.buildout.easy_install INFO
+  Getting distribution for 'demo'.
+zc.buildout.easy_install DEBUG
+  Fetching demo 0.3 from: http://.../demo-0.3-py3-none-any.whl
+zc.buildout.easy_install DEBUG
+  Turning dist demo 0.3 (.../demo-0.3-py3-none-any.whl) into egg, and moving to eggs dir /sample-install).
+zc.buildout.easy_install DEBUG
+  Calling pip install for .whl on .../demo-0.3-py3-none-any.whl
+zc.buildout.easy_install DEBUG
+  Running pip install:...
+zc.buildout.easy_install DEBUG
+  Egg for demo 0.3 installed at .../demo-0.3-pyN.N.egg
+zc.buildout.easy_install INFO
+  Got demo 0.3.
+zc.buildout.easy_install DEBUG
+  Picked: demo = 0.3
+zc.buildout.easy_install DEBUG
+  Getting required 'demoneeded'
+zc.buildout.easy_install DEBUG
+    required by demo 0.3.
+zc.buildout.easy_install INFO
+  Getting distribution for 'demoneeded'.
+zc.buildout.easy_install DEBUG
+  Fetching demoneeded 1.1 from: http://.../demoneeded-1.1.tar.gz
+zc.buildout.easy_install DEBUG
+  Turning dist demoneeded 1.1 (.../demoneeded-1.1.tar.gz) into egg, and moving to eggs dir /sample-install).
+zc.buildout.easy_install DEBUG
+  Calling pip install for .gz on .../demoneeded-1.1.tar.gz
+zc.buildout.easy_install DEBUG
+  Running pip install:...
+zc.buildout.easy_install DEBUG
+  Egg for demoneeded 1.1 installed at .../demoneeded-1.1-pyN.N.egg
+zc.buildout.easy_install INFO
+  Got demoneeded 1.1.
+zc.buildout.easy_install DEBUG
+  Picked: demoneeded = 1.1
+""", N)
     handler.uninstall()
     logging.getLogger('zc.buildout.easy_install').propagate = True
     _val = (zc.buildout.easy_install.allow_picked_versions(False))
@@ -211,14 +300,43 @@ def test_easy_install(easy_install_env):
                     os.path.join(bin, 'demo-script.py')]
     else:
         scripts == [os.path.join(bin, 'demo')]
-    assert_output(capture_print(cat, bin, 'demo'), "#!/usr/local/bin/python2.7\n\nimport sys\nsys.path[0:0] = [\n  '/sample-install/demo-0.3-py2.4.egg',\n  '/sample-install/demoneeded-1.1-py2.4.egg',\n  ]\n\nimport eggrecipedemo\n\nif __name__ == '__main__':\n    sys.exit(eggrecipedemo.main())", N)
+    assert_output(capture_print(cat, bin, 'demo'), """
+#!/usr/local/bin/python2.7
+
+import sys
+sys.path[0:0] = [
+  '/sample-install/demo-0.3-py2.4.egg',
+  '/sample-install/demoneeded-1.1-py2.4.egg',
+  ]
+
+import eggrecipedemo
+
+if __name__ == '__main__':
+    sys.exit(eggrecipedemo.main())
+""", N)
     scripts = zc.buildout.easy_install.scripts(
         [('demo', 'eggrecipedemo', 'main')], ws,
         sys.executable, bin)
-    assert_output(capture_print(cat, bin, 'demo'), "#!/usr/local/bin/python2.7\n\nimport sys\nsys.path[0:0] = [\n  '/sample-install/demo-0.3-py2.4.egg',\n  '/sample-install/demoneeded-1.1-py2.4.egg',\n  ]\n\nimport eggrecipedemo\n\nif __name__ == '__main__':\n    sys.exit(eggrecipedemo.main())", N)
+    assert_output(capture_print(cat, bin, 'demo'), """
+#!/usr/local/bin/python2.7
+
+import sys
+sys.path[0:0] = [
+  '/sample-install/demo-0.3-py2.4.egg',
+  '/sample-install/demoneeded-1.1-py2.4.egg',
+  ]
+
+import eggrecipedemo
+
+if __name__ == '__main__':
+    sys.exit(eggrecipedemo.main())
+""", N)
     scripts = zc.buildout.easy_install.scripts(
         ['demo'], ws, sys.executable, bin, interpreter='py')
-    assert_output(capture_print(ls, bin), '-  demo\n-  py', N)
+    assert_output(capture_print(ls, bin), """
+-  demo
+-  py
+""", N)
     if sys.platform == 'win32':
         scripts == [os.path.join(bin, 'demo.exe'),
                     os.path.join(bin, 'demo-script.py'),
@@ -227,7 +345,53 @@ def test_easy_install(easy_install_env):
     else:
         scripts == [os.path.join(bin, 'demo'),
                     os.path.join(bin, 'py')]
-    assert_output(capture_print(cat, bin, 'py'), '#!/usr/local/bin/python2.7\n\nimport sys\n\nsys.path[0:0] = [\n  \'/sample-install/demo-0.3-pyN.N.egg\',\n  \'/sample-install/demoneeded-1.1-pyN.N.egg\',\n  ]\n\n_interactive = True\nif len(sys.argv) > 1:\n    # The Python interpreter wrapper allows only some of the options that a\n    # "regular" Python interpreter accepts.\n    _options, _args = __import__("getopt").getopt(sys.argv[1:], \'Iic:m:\')\n    _interactive = False\n    for (_opt, _val) in _options:\n        if _opt == \'-i\':\n            _interactive = True\n        elif _opt == \'-c\':\n            exec(_val)\n        elif _opt == \'-m\':\n            sys.argv[1:] = _args\n            _args = []\n            __import__("runpy").run_module(\n                 _val, {}, "__main__", alter_sys=True)\n        elif _opt == \'-I\':\n            # Allow yet silently ignore the `-I` option. The original behaviour\n            # for this option is to create an isolated Python runtime. It was\n            # deemed acceptable to allow the option here as this Python wrapper\n            # is isolated from the system Python already anyway.\n            # The specific use-case that led to this change is how the Python\n            # language extension for Visual Studio Code calls the Python\n            # interpreter when initializing the extension.\n            pass\n\n    if _args:\n        sys.argv[:] = _args\n        __file__ = _args[0]\n        del _options, _args\n        with open(__file__, \'U\') as __file__f:\n            exec(compile(__file__f.read(), __file__, "exec"))\n\nif _interactive:\n    del _interactive\n    __import__("code").interact(banner="", local=globals())', N)
+    assert_output(capture_print(cat, bin, 'py'), """
+#!/usr/local/bin/python2.7
+
+import sys
+
+sys.path[0:0] = [
+  '/sample-install/demo-0.3-pyN.N.egg',
+  '/sample-install/demoneeded-1.1-pyN.N.egg',
+  ]
+
+_interactive = True
+if len(sys.argv) > 1:
+    # The Python interpreter wrapper allows only some of the options that a
+    # "regular" Python interpreter accepts.
+    _options, _args = __import__("getopt").getopt(sys.argv[1:], 'Iic:m:')
+    _interactive = False
+    for (_opt, _val) in _options:
+        if _opt == '-i':
+            _interactive = True
+        elif _opt == '-c':
+            exec(_val)
+        elif _opt == '-m':
+            sys.argv[1:] = _args
+            _args = []
+            __import__("runpy").run_module(
+                 _val, {}, "__main__", alter_sys=True)
+        elif _opt == '-I':
+            # Allow yet silently ignore the `-I` option. The original behaviour
+            # for this option is to create an isolated Python runtime. It was
+            # deemed acceptable to allow the option here as this Python wrapper
+            # is isolated from the system Python already anyway.
+            # The specific use-case that led to this change is how the Python
+            # language extension for Visual Studio Code calls the Python
+            # interpreter when initializing the extension.
+            pass
+
+    if _args:
+        sys.argv[:] = _args
+        __file__ = _args[0]
+        del _options, _args
+        with open(__file__, 'U') as __file__f:
+            exec(compile(__file__f.read(), __file__, "exec"))
+
+if _interactive:
+    del _interactive
+    __import__("code").interact(banner="", local=globals())
+""", N)
     write('ascript', r'''
     "demo doc"
     import sys
@@ -235,12 +399,24 @@ def test_easy_install(easy_install_env):
     print_(sys.argv)
     print_((__name__, __file__, __doc__))
     ''')
-    assert_output(system(join(bin, 'py') + ' ascript a b c'), "['ascript', 'a', 'b', 'c']\n('__main__', 'ascript', 'demo doc')", N)
+    assert_output(system(join(bin, 'py') + ' ascript a b c'), """
+['ascript', 'a', 'b', 'c']
+('__main__', 'ascript', 'demo doc')
+""", N)
     assert_output(system(join(bin, 'py') + ' -m pdb'), 'usage: ...pdb...', N)
     assert_output(system(join(bin, 'py') + ' -m pdb what'), 'Error: what does not exist', N)
     scripts = zc.buildout.easy_install.scripts(
         [], [], sys.executable, bin, interpreter='py')
-    assert_output(capture_print(cat, bin, 'py'), '#!/usr/local/bin/python2.7\n\nimport sys\n\nsys.path[0:0] = [\n\n  ]\n...', N)
+    assert_output(capture_print(cat, bin, 'py'), """
+#!/usr/local/bin/python2.7
+
+import sys
+
+sys.path[0:0] = [
+
+  ]
+...
+""", N)
     bin = tmpdir('bin2')
     scripts = zc.buildout.easy_install.scripts(
         ['demo'], ws, sys.executable, bin, dict(demo='run'))
@@ -259,18 +435,75 @@ def test_easy_install(easy_install_env):
     scripts = zc.buildout.easy_install.scripts(
        ['demo'], ws, sys.executable, bin, dict(demo='run'),
        extra_paths=[foo])
-    assert_output(capture_print(cat, bin, 'run'), "#!/usr/local/bin/python2.7\n\nimport sys\nsys.path[0:0] = [\n  '/sample-install/demo-0.3-py2.4.egg',\n  '/sample-install/demoneeded-1.1-py2.4.egg',\n  '/foo',\n  ]\n\nimport eggrecipedemo\n\nif __name__ == '__main__':\n    sys.exit(eggrecipedemo.main())", N)
+    assert_output(capture_print(cat, bin, 'run'), """
+#!/usr/local/bin/python2.7
+
+import sys
+sys.path[0:0] = [
+  '/sample-install/demo-0.3-py2.4.egg',
+  '/sample-install/demoneeded-1.1-py2.4.egg',
+  '/foo',
+  ]
+
+import eggrecipedemo
+
+if __name__ == '__main__':
+    sys.exit(eggrecipedemo.main())
+""", N)
     scripts = zc.buildout.easy_install.scripts(
        ['demo'], ws, sys.executable, bin, dict(demo='run'),
        arguments='1, 2')
-    assert_output(capture_print(cat, bin, 'run'), "#!/usr/local/bin/python2.7\nimport sys\nsys.path[0:0] = [\n  '/sample-install/demo-0.3-py2.4.egg',\n  '/sample-install/demoneeded-1.1-py2.4.egg',\n  ]\n\nimport eggrecipedemo\n\nif __name__ == '__main__':\n    sys.exit(eggrecipedemo.main(1, 2))", N)
+    assert_output(capture_print(cat, bin, 'run'), """
+#!/usr/local/bin/python2.7
+import sys
+sys.path[0:0] = [
+  '/sample-install/demo-0.3-py2.4.egg',
+  '/sample-install/demoneeded-1.1-py2.4.egg',
+  ]
+
+import eggrecipedemo
+
+if __name__ == '__main__':
+    sys.exit(eggrecipedemo.main(1, 2))
+""", N)
     scripts = zc.buildout.easy_install.scripts(
        ['demo'], ws, sys.executable, bin, dict(demo='run'),
        arguments='1, 2',
        initialization='import os\nos.chdir("foo")',
        interpreter='py')
-    assert_output(capture_print(cat, bin, 'run'), '#!/usr/local/bin/python2.7\nimport sys\nsys.path[0:0] = [\n  \'/sample-install/demo-0.3-py2.4.egg\',\n  \'/sample-install/demoneeded-1.1-py2.4.egg\',\n  ]\n\nimport os\nos.chdir("foo")\n\nimport eggrecipedemo\n\nif __name__ == \'__main__\':\n    sys.exit(eggrecipedemo.main(1, 2))', N)
-    assert_output(capture_print(cat, bin, 'py'), '#!/usr/local/bin/python2.7\n\nimport sys\n\nsys.path[0:0] = [\n  \'/sample-install/demo-0.3-py3.3.egg\',\n  \'/sample-install/demoneeded-1.1-py3.3.egg\',\n  ]\n\nimport os\nos.chdir("foo")\n\n\n_interactive = True\n...', N)
+    assert_output(capture_print(cat, bin, 'run'), """
+#!/usr/local/bin/python2.7
+import sys
+sys.path[0:0] = [
+  '/sample-install/demo-0.3-py2.4.egg',
+  '/sample-install/demoneeded-1.1-py2.4.egg',
+  ]
+
+import os
+os.chdir("foo")
+
+import eggrecipedemo
+
+if __name__ == '__main__':
+    sys.exit(eggrecipedemo.main(1, 2))
+""", N)
+    assert_output(capture_print(cat, bin, 'py'), """
+#!/usr/local/bin/python2.7
+
+import sys
+
+sys.path[0:0] = [
+  '/sample-install/demo-0.3-py3.3.egg',
+  '/sample-install/demoneeded-1.1-py3.3.egg',
+  ]
+
+import os
+os.chdir("foo")
+
+
+_interactive = True
+...
+""", N)
     bo = tmpdir('bo')
     ba = tmpdir('ba')
     mkdir(bo, 'eggs')
@@ -284,9 +517,87 @@ def test_easy_install(easy_install_env):
        extra_paths=[ba, join(bo, 'bar'), bo],
        interpreter='py',
        relative_paths=bo)
-    assert_output(capture_print(cat, bo, 'bin', 'run'), "#!/usr/local/bin/python2.7\n\nimport os\n\njoin = os.path.join\nbase = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))\nbase = os.path.dirname(base)\n\nimport sys\nsys.path[0:0] = [\n  join(base, 'eggs/demoneeded-1.1-pyN.N.egg'),\n  join(base, 'eggs/demo-0.3-pyN.N.egg'),\n  '/ba',\n  join(base, 'bar'),\n  base,\n  ]\n\nimport eggrecipedemo\n\nif __name__ == '__main__':\n    sys.exit(eggrecipedemo.main())", N)
+    assert_output(capture_print(cat, bo, 'bin', 'run'), """
+#!/usr/local/bin/python2.7
+
+import os
+
+join = os.path.join
+base = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
+base = os.path.dirname(base)
+
+import sys
+sys.path[0:0] = [
+  join(base, 'eggs/demoneeded-1.1-pyN.N.egg'),
+  join(base, 'eggs/demo-0.3-pyN.N.egg'),
+  '/ba',
+  join(base, 'bar'),
+  base,
+  ]
+
+import eggrecipedemo
+
+if __name__ == '__main__':
+    sys.exit(eggrecipedemo.main())
+""", N)
     assert_output(system(join(bo, 'bin', 'run')), '3 1', N)
-    assert_output(capture_print(cat, bo, 'bin', 'py'), '#!/usr/local/bin/python2.7\n\nimport os\n\njoin = os.path.join\nbase = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))\nbase = os.path.dirname(base)\n\nimport sys\n\nsys.path[0:0] = [\n  join(base, \'eggs/demoneeded-1.1-pyN.N.egg\'),\n  join(base, \'eggs/demo-0.3-pyN.N.egg\'),\n  \'/ba\',\n  join(base, \'bar\'),\n  base,\n  ]\n\n\n_interactive = True\nif len(sys.argv) > 1:\n    # The Python interpreter wrapper allows only some of the options that a\n    # "regular" Python interpreter accepts.\n    _options, _args = __import__("getopt").getopt(sys.argv[1:], \'Iic:m:\')\n    _interactive = False\n    for (_opt, _val) in _options:\n        if _opt == \'-i\':\n            _interactive = True\n        elif _opt == \'-c\':\n            exec(_val)\n        elif _opt == \'-m\':\n            sys.argv[1:] = _args\n            _args = []\n            __import__("runpy").run_module(\n                 _val, {}, "__main__", alter_sys=True)\n        elif _opt == \'-I\':\n            # Allow yet silently ignore the `-I` option. The original behaviour\n            # for this option is to create an isolated Python runtime. It was\n            # deemed acceptable to allow the option here as this Python wrapper\n            # is isolated from the system Python already anyway.\n            # The specific use-case that led to this change is how the Python\n            # language extension for Visual Studio Code calls the Python\n            # interpreter when initializing the extension.\n            pass\n\n    if _args:\n        sys.argv[:] = _args\n        __file__ = _args[0]\n        del _options, _args\n        with open(__file__, \'U\') as __file__f:\n            exec(compile(__file__f.read(), __file__, "exec"))\n\nif _interactive:\n    del _interactive\n    __import__("code").interact(banner="", local=globals())', N)
+    assert_output(capture_print(cat, bo, 'bin', 'py'), """
+#!/usr/local/bin/python2.7
+
+import os
+
+join = os.path.join
+base = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
+base = os.path.dirname(base)
+
+import sys
+
+sys.path[0:0] = [
+  join(base, 'eggs/demoneeded-1.1-pyN.N.egg'),
+  join(base, 'eggs/demo-0.3-pyN.N.egg'),
+  '/ba',
+  join(base, 'bar'),
+  base,
+  ]
+
+
+_interactive = True
+if len(sys.argv) > 1:
+    # The Python interpreter wrapper allows only some of the options that a
+    # "regular" Python interpreter accepts.
+    _options, _args = __import__("getopt").getopt(sys.argv[1:], 'Iic:m:')
+    _interactive = False
+    for (_opt, _val) in _options:
+        if _opt == '-i':
+            _interactive = True
+        elif _opt == '-c':
+            exec(_val)
+        elif _opt == '-m':
+            sys.argv[1:] = _args
+            _args = []
+            __import__("runpy").run_module(
+                 _val, {}, "__main__", alter_sys=True)
+        elif _opt == '-I':
+            # Allow yet silently ignore the `-I` option. The original behaviour
+            # for this option is to create an isolated Python runtime. It was
+            # deemed acceptable to allow the option here as this Python wrapper
+            # is isolated from the system Python already anyway.
+            # The specific use-case that led to this change is how the Python
+            # language extension for Visual Studio Code calls the Python
+            # interpreter when initializing the extension.
+            pass
+
+    if _args:
+        sys.argv[:] = _args
+        __file__ = _args[0]
+        del _options, _args
+        with open(__file__, 'U') as __file__f:
+            exec(compile(__file__f.read(), __file__, "exec"))
+
+if _interactive:
+    del _interactive
+    __import__("code").interact(banner="", local=globals())
+""", N)
     mkdir('include')
     write('include', 'extdemo.h',
     """
@@ -297,9 +608,32 @@ def test_easy_install(easy_install_env):
   {'include_dirs': os.path.join(sample_buildout, 'include')},
   links=[link_server], index=link_server+'index/'))
     assert repr(_val) == "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']" or str(_val) == "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']"
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demo-0.3-py2.4.egg\nd  demoneeded-1.0-py2.4.egg\nd  demoneeded-1.1-py2.4.egg\nd  extdemo-1.4-py2.4-unix-i686.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demo-0.3-py2.4.egg
+d  demoneeded-1.0-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  extdemo-1.4-py2.4-unix-i686.egg
+""", N)
     update_extdemo()
-    assert_output(str(get(link_server)), '<html><body>\n<a href="bigdemo-0.1-py3-none-any.whl">bigdemo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.1-py3-none-any.whl">demo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.2-py3-none-any.whl">demo-0.2-py3-none-any.whl</a><br>\n<a href="demo-0.3-py3-none-any.whl">demo-0.3-py3-none-any.whl</a><br>\n<a href="demo-0.4rc1-py3-none-any.whl">demo-0.4rc1-py3-none-any.whl</a><br>\n<a href="demoneeded-1.0.tar.gz">demoneeded-1.0.tar.gz</a><br>\n<a href="demoneeded-1.1.tar.gz">demoneeded-1.1.tar.gz</a><br>\n<a href="demoneeded-1.2rc1.tar.gz">demoneeded-1.2rc1.tar.gz</a><br>\n<a href="du_zipped-1.0-pyN.N.egg">du_zipped-1.0-pyN.N.egg</a><br>\n<a href="extdemo-1.4.tar.gz">extdemo-1.4.tar.gz</a><br>\n<a href="extdemo-1.5.tar.gz">extdemo-1.5.tar.gz</a><br>\n<a href="index/">index/</a><br>\n<a href="mixedcase-0.5.tar.gz">mixedcase-0.5.tar.gz</a><br>\n<a href="other-1.0-py3-none-any.whl">other-1.0-py3-none-any.whl</a><br>\n</body></html>', N)
+    assert_output(str(get(link_server)), """
+<html><body>
+<a href="bigdemo-0.1-py3-none-any.whl">bigdemo-0.1-py3-none-any.whl</a><br>
+<a href="demo-0.1-py3-none-any.whl">demo-0.1-py3-none-any.whl</a><br>
+<a href="demo-0.2-py3-none-any.whl">demo-0.2-py3-none-any.whl</a><br>
+<a href="demo-0.3-py3-none-any.whl">demo-0.3-py3-none-any.whl</a><br>
+<a href="demo-0.4rc1-py3-none-any.whl">demo-0.4rc1-py3-none-any.whl</a><br>
+<a href="demoneeded-1.0.tar.gz">demoneeded-1.0.tar.gz</a><br>
+<a href="demoneeded-1.1.tar.gz">demoneeded-1.1.tar.gz</a><br>
+<a href="demoneeded-1.2rc1.tar.gz">demoneeded-1.2rc1.tar.gz</a><br>
+<a href="du_zipped-1.0-pyN.N.egg">du_zipped-1.0-pyN.N.egg</a><br>
+<a href="extdemo-1.4.tar.gz">extdemo-1.4.tar.gz</a><br>
+<a href="extdemo-1.5.tar.gz">extdemo-1.5.tar.gz</a><br>
+<a href="index/">index/</a><br>
+<a href="mixedcase-0.5.tar.gz">mixedcase-0.5.tar.gz</a><br>
+<a href="other-1.0-py3-none-any.whl">other-1.0-py3-none-any.whl</a><br>
+</body></html>
+""", N)
     zc.buildout.easy_install.clear_index_cache()
     _val = (zc.buildout.easy_install.build(
   'extdemo', dest,
@@ -307,13 +641,26 @@ def test_easy_install(easy_install_env):
   links=[link_server], index=link_server+'index/',
   newest=False))
     assert repr(_val) == "['/sample-install/extdemo-1.4-py2.4-linux-i686.egg']" or str(_val) == "['/sample-install/extdemo-1.4-py2.4-linux-i686.egg']"
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demo-0.3-py2.4.egg\nd  demoneeded-1.0-py2.4.egg\nd  demoneeded-1.1-py2.4.egg\nd  extdemo-1.4-py2.4-unix-i686.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demo-0.3-py2.4.egg
+d  demoneeded-1.0-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  extdemo-1.4-py2.4-unix-i686.egg
+""", N)
     _val = (zc.buildout.easy_install.build(
   'extdemo', dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')},
   links=[link_server], index=link_server+'index/'))
     assert repr(_val) == "['/sample-install/extdemo-1.5-py2.4-unix-i686.egg']" or str(_val) == "['/sample-install/extdemo-1.5-py2.4-unix-i686.egg']"
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demo-0.3-py2.4.egg\nd  demoneeded-1.0-py2.4.egg\nd  demoneeded-1.1-py2.4.egg\nd  extdemo-1.4-py2.4-unix-i686.egg\nd  extdemo-1.5-py2.4-unix-i686.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demo-0.3-py2.4.egg
+d  demoneeded-1.0-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  extdemo-1.4-py2.4-unix-i686.egg
+d  extdemo-1.5-py2.4-unix-i686.egg
+""", N)
     import os
     for name in os.listdir(dest):
         remove(dest, name)
@@ -337,7 +684,10 @@ def test_easy_install(easy_install_env):
   extdemo, dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')}))
     assert repr(_val) == "'/sample-install/extdemo.egg-link'" or str(_val) == "'/sample-install/extdemo.egg-link'"
-    assert_output(capture_print(ls, dest), 'd  extdemo-1.4-py2.4-unix-i686.egg\n-  extdemo.egg-link', N)
+    assert_output(capture_print(ls, dest), """
+d  extdemo-1.4-py2.4-unix-i686.egg
+-  extdemo.egg-link
+""", N)
     contents = os.listdir(extdemo)
     _val = (bool([f for f in contents if f.endswith('.so') or f.endswith('.pyd')]))
     assert repr(_val) == 'True' or str(_val) == 'True'
@@ -354,9 +704,21 @@ def test_easy_install(easy_install_env):
     assert_output(capture_print(lambda: zc.buildout.easy_install.build(
   'extdemo', dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')},
-  links=[link_server], index=link_server+'index/')), "GET 404 /index/extdemo/\nGET 200 /extdemo-1.5.tar.gz\n['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']", N)
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demoneeded-1.1-py2.4.egg\nd  extdemo-1.5-py2.4-linux-i686.egg', N)
-    assert_output(capture_print(ls, cache), '-  demo-0.2-py3-none-any.whl\n-  demoneeded-1.1.tar.gz\n-  extdemo-1.5.tar.gz', N)
+  links=[link_server], index=link_server+'index/')), """
+GET 404 /index/extdemo/
+GET 200 /extdemo-1.5.tar.gz
+['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']
+""", N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  extdemo-1.5-py2.4-linux-i686.egg
+""", N)
+    assert_output(capture_print(ls, cache), """
+-  demo-0.2-py3-none-any.whl
+-  demoneeded-1.1.tar.gz
+-  extdemo-1.5.tar.gz
+""", N)
     remove(dest)
     dest = tmpdir('sample-install')
     zc.buildout.easy_install.clear_index_cache()
@@ -367,8 +729,15 @@ def test_easy_install(easy_install_env):
     assert_output(capture_print(lambda: zc.buildout.easy_install.build(
   'extdemo', dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')},
-  links=[link_server], index=link_server+'index/')), "GET 404 /index/extdemo/\n['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']", N)
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demoneeded-1.1-py2.4.egg\nd  extdemo-1.5-py2.4-linux-i686.egg', N)
+  links=[link_server], index=link_server+'index/')), """
+GET 404 /index/extdemo/
+['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']
+""", N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  extdemo-1.5-py2.4-linux-i686.egg
+""", N)
     ws = zc.buildout.easy_install.install(
         ['demo'], dest,
         links=[link_server], index=link_server+'index/')
@@ -386,7 +755,10 @@ def test_easy_install(easy_install_env):
     ws = zc.buildout.easy_install.install(
         ['demo'], dest,
         links=[link_server], index=link_server+'index/')
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demoneeded-1.1-py2.4.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+""", N)
     _val = (zc.buildout.easy_install.download_cache(None))
     assert repr(_val) == "'/cache'" or str(_val) == "'/cache'"
     _val = (zc.buildout.easy_install.install_from_cache(False))
@@ -445,17 +817,49 @@ def test_downloadcache(easy_install_env):
     recipe = zc.recipe.egg
     eggs = demo ==0.2
     ''' % locals())
-    assert_output(str(get(link_server)), '<html><body>\n<a href="bigdemo-0.1-py3-none-any.whl">bigdemo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.1-py3-none-any.whl">demo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.2-py3-none-any.whl">demo-0.2-py3-none-any.whl</a><br>\n<a href="demo-0.3-py3-none-any.whl">demo-0.3-py3-none-any.whl</a><br>\n<a href="demo-0.4rc1-py3-none-any.whl">demo-0.4rc1-py3-none-any.whl</a><br>\n<a href="demoneeded-1.0.tar.gz">demoneeded-1.0.tar.gz</a><br>\n<a href="demoneeded-1.1.tar.gz">demoneeded-1.1.tar.gz</a><br>\n<a href="demoneeded-1.2rc1.tar.gz">demoneeded-1.2rc1.tar.gz</a><br>\n<a href="du_zipped-1.0-pyN.N.egg">du_zipped-1.0-pyN.N.egg</a><br>\n<a href="extdemo-1.4.tar.gz">extdemo-1.4.tar.gz</a><br>\n<a href="index/">index/</a><br>\n<a href="mixedcase-0.5.tar.gz">mixedcase-0.5.tar.gz</a><br>\n<a href="other-1.0-py3-none-any.whl">other-1.0-py3-none-any.whl</a><br>\n</body></html>', N)
+    assert_output(str(get(link_server)), """
+<html><body>
+<a href="bigdemo-0.1-py3-none-any.whl">bigdemo-0.1-py3-none-any.whl</a><br>
+<a href="demo-0.1-py3-none-any.whl">demo-0.1-py3-none-any.whl</a><br>
+<a href="demo-0.2-py3-none-any.whl">demo-0.2-py3-none-any.whl</a><br>
+<a href="demo-0.3-py3-none-any.whl">demo-0.3-py3-none-any.whl</a><br>
+<a href="demo-0.4rc1-py3-none-any.whl">demo-0.4rc1-py3-none-any.whl</a><br>
+<a href="demoneeded-1.0.tar.gz">demoneeded-1.0.tar.gz</a><br>
+<a href="demoneeded-1.1.tar.gz">demoneeded-1.1.tar.gz</a><br>
+<a href="demoneeded-1.2rc1.tar.gz">demoneeded-1.2rc1.tar.gz</a><br>
+<a href="du_zipped-1.0-pyN.N.egg">du_zipped-1.0-pyN.N.egg</a><br>
+<a href="extdemo-1.4.tar.gz">extdemo-1.4.tar.gz</a><br>
+<a href="index/">index/</a><br>
+<a href="mixedcase-0.5.tar.gz">mixedcase-0.5.tar.gz</a><br>
+<a href="other-1.0-py3-none-any.whl">other-1.0-py3-none-any.whl</a><br>
+</body></html>
+""", N)
     _ = get(link_server+'enable_server_logging')
     # TODO assert: 'GET 200 /enable_server_logging'
-    assert_output(system(buildout), "Installing eggs.\nGetting distribution for 'demo==0.2'.\nGot demo 0.2.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.\nGenerated script '/sample-buildout/bin/demo'.", N)
+    assert_output(system(buildout), """
+Installing eggs.
+Getting distribution for 'demo==0.2'.
+Got demo 0.2.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1.
+Generated script '/sample-buildout/bin/demo'.
+""", N)
     assert_output(capture_print(ls, cache), 'd  dist', N)
-    assert_output(capture_print(ls, cache, 'dist'), '-  demo-0.2-py3-none-any.whl\n-  demoneeded-1.1.tar.gz', N)
+    assert_output(capture_print(ls, cache, 'dist'), """
+-  demo-0.2-py3-none-any.whl
+-  demoneeded-1.1.tar.gz
+""", N)
     import os
     for f in os.listdir(os.path.join('eggs', 'v5')):
         if f.startswith('demo'):
             remove('eggs', 'v5', f)
-    assert_output(system(buildout), "Updating eggs.\nGetting distribution for 'demo==0.2'.\nGot demo 0.2.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.", N)
+    assert_output(system(buildout), """
+Updating eggs.
+Getting distribution for 'demo==0.2'.
+Got demo 0.2.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1.
+""", N)
     for f in os.listdir(os.path.join('eggs', 'v5')):
         if f.startswith('demo'):
             remove('eggs', 'v5', f)
@@ -471,15 +875,29 @@ def test_downloadcache(easy_install_env):
     recipe = zc.recipe.egg
     eggs = demo
     ''' % locals())
-    assert_output(system(buildout), "Uninstalling eggs.\nInstalling eggs.\nGetting distribution for 'demo'.\nGot demo 0.2.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.\nGenerated script '/sample-buildout/bin/demo'.", N)
+    assert_output(system(buildout), """
+Uninstalling eggs.
+Installing eggs.
+Getting distribution for 'demo'.
+Got demo 0.2.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1.
+Generated script '/sample-buildout/bin/demo'.
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
     parts =
     download-cache = %(cache)s/newdir
     ''' % locals())
-    assert_output(system(buildout), "Creating directory '/cache/newdir'.\nUninstalling eggs.", N)
-    assert_output(capture_print(ls, cache), 'd  dist\nd  newdir', N)
+    assert_output(system(buildout), """
+Creating directory '/cache/newdir'.
+Uninstalling eggs.
+""", N)
+    assert_output(capture_print(ls, cache), """
+d  dist
+d  newdir
+""", N)
     basedir = tmpdir('basecfg')
     write(basedir, 'base.cfg',
     '''
@@ -493,7 +911,10 @@ def test_downloadcache(easy_install_env):
     parts =
     ''' % locals())
     dummy = system(buildout)
-    assert_output(capture_print(ls, basedir), '-  base.cfg\nd  cache', N)
+    assert_output(capture_print(ls, basedir), """
+-  base.cfg
+d  cache
+""", N)
     server_data = tmpdir('server_data')
     server_url = start_server(server_data)
     cd(sample_buildout)
@@ -507,7 +928,12 @@ def test_downloadcache(easy_install_env):
     extends = %(server_url)s/base.cfg
     parts =
     ''' % locals())
-    assert_output(system(buildout), 'While:\n  Initializing.\nError: Setting "download-cache" to a non absolute location ("cache") within a\nremote configuration file...', N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Setting "download-cache" to a non absolute location ("cache") within a
+remote configuration file...
+""", N)
     test_nested = tmpdir('test_nested')
     cd(test_nested)
     write('buildout.cfg',
@@ -519,8 +945,17 @@ def test_downloadcache(easy_install_env):
     develop-eggs-directory = ${buildout:directory}/var/develop-eggs
     ''')
     dummy = system(buildout)
-    assert_output(capture_print(ls, test_nested), 'd  bin\n-  buildout.cfg\nd  var', N)
-    assert_output(capture_print(ls, os.path.join(test_nested, 'var')), 'd  cache\nd  develop-eggs\nd  eggs\nd  parts', N)
+    assert_output(capture_print(ls, test_nested), """
+d  bin
+-  buildout.cfg
+d  var
+""", N)
+    assert_output(capture_print(ls, os.path.join(test_nested, 'var')), """
+d  cache
+d  develop-eggs
+d  eggs
+d  parts
+""", N)
 
 def test_dependencylinks(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -559,7 +994,12 @@ def test_dependencylinks(easy_install_env):
     recipe = zc.recipe.egg:eggs
     eggs = depdemo
     ''')
-    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nInstalling eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/depdemo'
+Installing eggs.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1...
+""", N)
     write(sample_buildout, 'depdemo', 'setup.py',
     '''from setuptools import setup; setup(
         name='depdemo', py_modules=['dependencydemo'],
@@ -572,7 +1012,15 @@ def test_dependencylinks(easy_install_env):
         for egg in glob(join(sample_buildout, 'eggs', 'v5', 'demoneeded*.egg')):
             remove(sample_buildout, 'eggs', egg)
     remove_demoneeded_egg()
-    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nUpdating eggs.\n...\nWhile:\n  Updating eggs.\n  Getting distribution for 'demoneeded'.\nError: Couldn't find a distribution for 'demoneeded'.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/depdemo'
+Updating eggs.
+...
+While:
+  Updating eggs.
+  Getting distribution for 'demoneeded'.
+Error: Couldn't find a distribution for 'demoneeded'.
+""", N)
     write(sample_buildout, 'buildout.cfg',
     '''
     [buildout]
@@ -584,7 +1032,12 @@ def test_dependencylinks(easy_install_env):
     recipe = zc.recipe.egg:eggs
     eggs = depdemo
     ''' % link_server)
-    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nInstalling eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/depdemo'
+Installing eggs.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1.
+""", N)
     write(sample_buildout, 'depdemo', 'setup.py',
     '''from setuptools import setup; setup(
         name='depdemo', py_modules=['dependencydemo'],
@@ -593,7 +1046,12 @@ def test_dependencylinks(easy_install_env):
         zip_safe=True, version='1')
     '''  % link_server2)
     remove_demoneeded_egg()
-    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nUpdating eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/depdemo'
+Updating eggs.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1...
+""", N)
     write(sample_buildout, 'buildout.cfg',
     '''
     [buildout]
@@ -607,7 +1065,12 @@ def test_dependencylinks(easy_install_env):
     eggs = depdemo
     ''' % link_server)
     remove_demoneeded_egg()
-    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nUpdating eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/depdemo'
+Updating eggs.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1.
+""", N)
     write(sample_buildout, 'buildout.cfg',
     '''
     [buildout]
@@ -621,7 +1084,12 @@ def test_dependencylinks(easy_install_env):
     eggs = depdemo
     ''' % link_server)
     remove_demoneeded_egg()
-    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nUpdating eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/depdemo'
+Updating eggs.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1...
+""", N)
 
 def test_allowhosts(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -653,7 +1121,15 @@ def test_allowhosts(easy_install_env):
     recipe = zc.recipe.egg:eggs
     eggs = allowdemo
     ''')
-    assert_output(system(buildout), "Develop: '/sample-buildout/allowdemo'\nInstalling eggs...\n...\nWhile:\n  Installing eggs.\n  Getting distribution for 'kss.core'.\nError: Couldn't find a distribution for 'kss.core'.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/allowdemo'
+Installing eggs...
+...
+While:
+  Installing eggs.
+  Getting distribution for 'kss.core'.
+Error: Couldn't find a distribution for 'kss.core'.
+""", N)
     write(sample_buildout, 'buildout.cfg',
     '''
     [buildout]
@@ -666,7 +1142,15 @@ def test_allowhosts(easy_install_env):
     recipe = zc.recipe.egg:eggs
     eggs = allowdemo
     ''')
-    assert_output(system(buildout), "Develop: '/sample-buildout/allowdemo'\nInstalling eggs...\n...\nWhile:\n  Installing eggs.\n  Getting distribution for 'kss.core'.\nError: Couldn't find a distribution for 'kss.core'.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/allowdemo'
+Installing eggs...
+...
+While:
+  Installing eggs.
+  Getting distribution for 'kss.core'.
+Error: Couldn't find a distribution for 'kss.core'.
+""", N)
     write(sample_buildout, 'buildout.cfg',
     '''
     [buildout]
@@ -681,7 +1165,13 @@ def test_allowhosts(easy_install_env):
     def _step():
         print_('XX')
         print_(system(buildout), end='')
-    assert_output(capture_print(_step), "X...\nSection `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.\nInstalling python...\nGenerated interpreter '/sample-buildout/bin/python'.", N)
+    assert_output(capture_print(_step), """
+X...
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+Installing python...
+Generated interpreter '/sample-buildout/bin/python'.
+""", N)
 
 def test_allow_unknown_extras(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -709,7 +1199,14 @@ def test_allow_unknown_extras(easy_install_env):
     recipe = zc.recipe.egg:eggs
     eggs = allowdemo[bad_extra]
     ''')
-    assert_output(system(buildout), "Develop: '/sample-buildout/allowdemo'\nInstalling eggs...\n...\nWhile:\n  Installing eggs.\nError: Couldn't find the required extra...", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/allowdemo'
+Installing eggs...
+...
+While:
+  Installing eggs.
+Error: Couldn't find the required extra...
+""", N)
     write(sample_buildout, 'buildout.cfg',
     '''
     [buildout]
@@ -721,7 +1218,11 @@ def test_allow_unknown_extras(easy_install_env):
     recipe = zc.recipe.egg:eggs
     eggs = allowdemo[bad_extra]
     ''')
-    assert_output(system(buildout), "Develop: '/sample-buildout/allowdemo'\nInstalling eggs...\nallowdemo 1 does not provide the extra 'bad_extra'", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/allowdemo'
+Installing eggs...
+allowdemo 1 does not provide the extra 'bad_extra'
+""", N)
 
 def test_download(easy_install_env):
     cat = easy_install_env['cat']
@@ -910,7 +1411,10 @@ def test_download(easy_install_env):
     assert repr(_val) == 'True' or str(_val) == 'True'
     assert_output(capture_print(cat, path), 'This is a foo text.', N)
     assert_output(capture_print(cat, path2), 'The wrong text.', N)
-    assert_output(capture_print(ls, cache), '- <MD5 CHECKSUM>\n- <MD5 CHECKSUM>', N)
+    assert_output(capture_print(ls, cache), """
+- <MD5 CHECKSUM>
+- <MD5 CHECKSUM>
+""", N)
     remove(path)
     remove(path2)
     write(server_data, 'foo.txt', 'This is a foo text.')
@@ -1032,30 +1536,63 @@ def test_extends_cache(easy_install_env):
     [buildout]
     extends = %sbase.cfg
     """ % server_url)
-    assert_output(system(buildout + ' -o'), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base.cfg' in offline mode.", N)
-    assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(system(buildout + ' -o'), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base.cfg' in offline mode.", N)
+    assert_output(system(buildout + ' -o'), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
+""", N)
+    assert_output(system(buildout), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
+    assert_output(system(buildout + ' -o'), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
+""", N)
     mkdir('cache')
     write('buildout.cfg', """\
     [buildout]
     extends = %sbase.cfg
     extends-cache = cache
     """ % server_url)
-    assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(system(buildout), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
     cache = join(sample_buildout, 'cache')
     assert_output(capture_print(ls, cache), '-  <MD5 CHECKSUM>', N)
     import os
-    assert_output(capture_print(cat, cache, os.listdir(cache)[0]), '[buildout]\nparts =\nfoo = bar', N)
-    assert_output(system(buildout + ' -o'), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(capture_print(cat, cache, os.listdir(cache)[0]), """
+[buildout]
+parts =
+foo = bar
+""", N)
+    assert_output(system(buildout + ' -o'), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
     write(server_data, 'base.cfg', """\
     [buildout]
     parts =
     bar = baz
     """)
-    assert_output(system(buildout + ' -o'), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(system(buildout + ' install-from-cache=true download-cache=.'), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(system(buildout), "Section `buildout` contains unused option(s): 'bar'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(system(buildout + ' -o'), "Section `buildout` contains unused option(s): 'bar'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(system(buildout + ' -o'), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
+    assert_output(system(buildout + ' install-from-cache=true download-cache=.'), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
+    assert_output(system(buildout), """
+Section `buildout` contains unused option(s): 'bar'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
+    assert_output(system(buildout + ' -o'), """
+Section `buildout` contains unused option(s): 'bar'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
     rmdir(cache)
     mkdir('home')
     mkdir('home', '.buildout')
@@ -1093,11 +1630,22 @@ def test_extends_cache(easy_install_env):
     parts =
     offline = false
     """)
-    assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(system(buildout), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
     assert_output(capture_print(ls, 'user-cache'), '-  <MD5 CHECKSUM>', N)
-    assert_output(capture_print(cat, 'user-cache', os.listdir('user-cache')[0]), '[buildout]\nfoo = bar\noffline = false', N)
+    assert_output(capture_print(cat, 'user-cache', os.listdir('user-cache')[0]), """
+[buildout]
+foo = bar
+offline = false
+""", N)
     assert_output(capture_print(ls, 'cache'), '-  <MD5 CHECKSUM>', N)
-    assert_output(capture_print(cat, 'cache', os.listdir('cache')[0]), '[buildout]\nparts =\noffline = false', N)
+    assert_output(capture_print(cat, 'cache', os.listdir('cache')[0]), """
+[buildout]
+parts =
+offline = false
+""", N)
     write('home', '.buildout', 'default.cfg', """\
     [buildout]
     extends = fancy_default.cfg
@@ -1118,55 +1666,34 @@ def test_extends_cache(easy_install_env):
     """ % server_url)
     remove('user-cache', os.listdir('user-cache')[0])
     remove('cache', os.listdir('cache')[0])
-    assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(system(buildout), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
     assert_output(capture_print(ls, 'user-cache'), '-  <MD5 CHECKSUM>', N)
-    assert_output(capture_print(cat, 'user-cache', os.listdir('user-cache')[0]), '[buildout]\nparts =\noffline = false', N)
+    assert_output(capture_print(cat, 'user-cache', os.listdir('user-cache')[0]), """
+[buildout]
+parts =
+offline = false
+""", N)
     ls('cache')
     rmdir('user-cache')
     rmdir('cache')
-    assert_output(system(buildout + ' -o'), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base_default.cfg' in offline mode.", N)
+    assert_output(system(buildout + ' -o'), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base_default.cfg' in offline mode.
+""", N)
     write('home', '.buildout', 'default.cfg', """\
     [buildout]
     extends = fancy_default.cfg
     offline = true
     """)
-    assert_output(system(buildout), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base_default.cfg' in offline mode.", N)
-    write('home', '.buildout', 'default.cfg', """\
-    [buildout]
-    extends = fancy_default.cfg
-    """)
-    write('home', '.buildout', 'fancy_default.cfg', """\
-    [buildout]
-    extends = %sbase_default.cfg
-    offline = true
-    """ % server_url)
-    assert_output(system(buildout), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base.cfg' in offline mode.", N)
-    write('home', '.buildout', 'fancy_default.cfg', """\
-    [buildout]
-    extends = %sbase_default.cfg
-    """ % server_url)
-    write('buildout.cfg', """\
-    [buildout]
-    extends = fancy.cfg
-    offline = true
-    """)
-    assert_output(system(buildout), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base.cfg' in offline mode.", N)
-    write('buildout.cfg', """\
-    [buildout]
-    extends = fancy.cfg
-    """)
-    write('fancy.cfg', """\
-    [buildout]
-    extends = %sbase.cfg
-    offline = true
-    """ % server_url)
-    assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    write('home', '.buildout', 'default.cfg', """\
-    [buildout]
-    extends = fancy_default.cfg
-    install-from-cache = true
-    """)
-    assert_output(system(buildout), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base_default.cfg' in offline mode.", N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base_default.cfg' in offline mode.
+""", N)
     write('home', '.buildout', 'default.cfg', """\
     [buildout]
     extends = fancy_default.cfg
@@ -1174,9 +1701,13 @@ def test_extends_cache(easy_install_env):
     write('home', '.buildout', 'fancy_default.cfg', """\
     [buildout]
     extends = %sbase_default.cfg
-    install-from-cache = true
+    offline = true
     """ % server_url)
-    assert_output(system(buildout), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base.cfg' in offline mode.", N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
+""", N)
     write('home', '.buildout', 'fancy_default.cfg', """\
     [buildout]
     extends = %sbase_default.cfg
@@ -1184,9 +1715,13 @@ def test_extends_cache(easy_install_env):
     write('buildout.cfg', """\
     [buildout]
     extends = fancy.cfg
-    install-from-cache = true
+    offline = true
     """)
-    assert_output(system(buildout), "While:\n  Initializing.\nError: Couldn't download 'http://localhost/base.cfg' in offline mode.", N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
+""", N)
     write('buildout.cfg', """\
     [buildout]
     extends = fancy.cfg
@@ -1194,9 +1729,66 @@ def test_extends_cache(easy_install_env):
     write('fancy.cfg', """\
     [buildout]
     extends = %sbase.cfg
+    offline = true
+    """ % server_url)
+    assert_output(system(buildout), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
+    write('home', '.buildout', 'default.cfg', """\
+    [buildout]
+    extends = fancy_default.cfg
+    install-from-cache = true
+    """)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base_default.cfg' in offline mode.
+""", N)
+    write('home', '.buildout', 'default.cfg', """\
+    [buildout]
+    extends = fancy_default.cfg
+    """)
+    write('home', '.buildout', 'fancy_default.cfg', """\
+    [buildout]
+    extends = %sbase_default.cfg
     install-from-cache = true
     """ % server_url)
-    assert_output(system(buildout), 'While:\n  Installing.\n  Checking for upgrades.\nAn internal error occurred ...\nValueError: install_from_cache set to true with no download cache', N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
+""", N)
+    write('home', '.buildout', 'fancy_default.cfg', """\
+    [buildout]
+    extends = %sbase_default.cfg
+    """ % server_url)
+    write('buildout.cfg', """\
+    [buildout]
+    extends = fancy.cfg
+    install-from-cache = true
+    """)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
+""", N)
+    write('buildout.cfg', """\
+    [buildout]
+    extends = fancy.cfg
+    """)
+    write('fancy.cfg', """\
+    [buildout]
+    extends = %sbase.cfg
+    install-from-cache = true
+    """ % server_url)
+    assert_output(system(buildout), """
+While:
+  Installing.
+  Checking for upgrades.
+An internal error occurred ...
+ValueError: install_from_cache set to true with no download cache
+""", N)
     rmdir('home', '.buildout')
     mkdir("cache")
     write(server_data, 'base.cfg', """\
@@ -1210,20 +1802,37 @@ def test_extends_cache(easy_install_env):
     """ % server_url)
     print_(system(buildout))
     assert_output(capture_print(ls, 'cache'), '-  <MD5 CHECKSUM>', N)
-    assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), '[buildout]\nparts =', N)
+    assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), """
+[buildout]
+parts =
+""", N)
     write(server_data, 'base.cfg', """\
     [buildout]
     parts =
     foo = bar
     """)
-    assert_output(system(buildout + ' -n'), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), '[buildout]\nparts =\nfoo = bar', N)
+    assert_output(system(buildout + ' -n'), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
+    assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), """
+[buildout]
+parts =
+foo = bar
+""", N)
     write(server_data, 'base.cfg', """\
     [buildout]
     parts =
     """)
-    assert_output(system(buildout + ' -N'), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), '[buildout]\nparts =\nfoo = bar', N)
+    assert_output(system(buildout + ' -N'), """
+Section `buildout` contains unused option(s): 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
+    assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), """
+[buildout]
+parts =
+foo = bar
+""", N)
     write(server_data, 'baseA.cfg', """\
     [buildout]
     extends = %sbase.cfg
@@ -1241,21 +1850,35 @@ def test_extends_cache(easy_install_env):
     newest = true
     extends = %sbaseA.cfg %sbaseB.cfg
     """ % (server_url, server_url))
-    assert_output(system(buildout + ' -n'), "Section `buildout` contains unused option(s): 'bar' 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(system(buildout + ' -n'), """
+Section `buildout` contains unused option(s): 'bar' 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
     import zc.buildout
     old_download = zc.buildout.download.Download.download
     def wrapper_download(self, url, md5sum=None, path=None):
       print_("The URL %s was downloaded." % url)
       return old_download(url, md5sum, path)
     zc.buildout.download.Download.download = wrapper_download
-    assert_output(capture_print(lambda: zc.buildout.buildout.main([])), "The URL http://localhost/baseA.cfg was downloaded.\nThe URL http://localhost/base.cfg was downloaded.\nThe URL http://localhost/baseB.cfg was downloaded.\nNot upgrading because not running a local buildout command.\nSection `buildout` contains unused option(s): 'bar' 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(capture_print(lambda: zc.buildout.buildout.main([])), """
+The URL http://localhost/baseA.cfg was downloaded.
+The URL http://localhost/base.cfg was downloaded.
+The URL http://localhost/baseB.cfg was downloaded.
+Not upgrading because not running a local buildout command.
+Section `buildout` contains unused option(s): 'bar' 'foo'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
     zc.buildout.download.Download.download = old_download
     write(server_data, 'base.cfg', """\
     [buildout]
     parts =
     extended-by = foo.cfg
     """)
-    assert_output(system(buildout), 'While:\n  Initializing.\nError: No-longer supported "extended-by" option found in http://localhost/base.cfg.', N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: No-longer supported "extended-by" option found in http://localhost/base.cfg.
+""", N)
     write(server_data, 'faulty.cfg', """\
     This is definitively not
     a proper() config file.
@@ -1264,7 +1887,13 @@ def test_extends_cache(easy_install_env):
     [buildout]
     extends = %sfaulty.cfg
     """ % server_url)
-    assert_output(system(buildout), "While:\n  Initializing.\n... File contains no section headers.\nfile: http://localhost/faulty.cfg (downloaded as ...), line: 1\n'This is definitively not\\n'", N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+... File contains no section headers.
+file: http://localhost/faulty.cfg (downloaded as ...), line: 1
+'This is definitively not\\n'
+""", N)
     write(server_data, 'proper.cfg', """\
     [buildout]
     dummy = fjhfj
@@ -1274,7 +1903,11 @@ def test_extends_cache(easy_install_env):
     extends = %sproper.cfg
     extends-cache = ${buildout:dummy}
     """ % server_url)
-    assert_output(system(buildout), "While:\n  Initializing.\n... ValueError: extends-cache '${buildout:dummy}' may not contain ${section:variable} to expand.", N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+... ValueError: extends-cache '${buildout:dummy}' may not contain ${section:variable} to expand.
+""", N)
     ls(tempfile.tempdir)
     tempfile.tempdir = old_tempdir
 

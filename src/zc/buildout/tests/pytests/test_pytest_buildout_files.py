@@ -41,7 +41,10 @@ def test_runsetup(buildout_env):
           author_email="bob@foo.com",
           )
     """)
-    assert_output(system(buildout + ' setup hello -q bdist_egg'), "Running setup script 'hello/setup.py'.\nzip_safe flag not set; analyzing archive contents...", N)
+    assert_output(system(buildout + ' setup hello -q bdist_egg'), """
+Running setup script 'hello/setup.py'.
+zip_safe flag not set; analyzing archive contents...
+""", N)
     assert_output(capture_print(ls, 'hello', 'dist'), '-  hello-1.0-py2.4.egg', N)
 
 def test_repeatable(buildout_env):
@@ -74,7 +77,10 @@ def test_repeatable(buildout_env):
           )
     ''')
     write('recipe', 'README', '')
-    assert_output(system(buildout + ' setup recipe bdist_egg'), "Running setup script 'recipe/setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup recipe bdist_egg'), """
+Running setup script 'recipe/setup.py'.
+...
+""", N)
     rmdir('recipe', 'build')
     write('recipe', 'recipe.py',
     '''
@@ -94,7 +100,10 @@ def test_repeatable(buildout_env):
           entry_points={'zc.buildout': ['default = recipe:Recipe']},
           )
     ''')
-    assert_output(system(buildout + ' setup recipe bdist_egg'), "Running setup script 'recipe/setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup recipe bdist_egg'), """
+Running setup script 'recipe/setup.py'.
+...
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -104,7 +113,12 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), "Getting distribution for 'spam'.\nGot spam 2.\nInstalling foo.\nrecipe v2", N)
+    assert_output(system(buildout), """
+Getting distribution for 'spam'.
+Got spam 2.
+Installing foo.
+recipe v2
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -118,9 +132,32 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), "Getting distribution for 'spam==1'.\nGot spam 1.\nUninstalling foo.\nInstalling foo.\nrecipe v1", N)
-    assert_output(system(buildout + ' buildout:versions= -v'), "Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.\n...\nInstalling 'spam'.\nWe have the best distribution that satisfies 'spam'.\nPicked: spam = 2.\nUninstalling foo.\nInstalling foo.\nrecipe v2", N)
-    assert_output(system(buildout + ' -v'), "Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.\n...\nInstalling 'spam'.\nWe have the distribution that satisfies 'spam==1'.\nUninstalling foo.\nInstalling foo.\nrecipe v1", N)
+    assert_output(system(buildout), """
+Getting distribution for 'spam==1'.
+Got spam 1.
+Uninstalling foo.
+Installing foo.
+recipe v1
+""", N)
+    assert_output(system(buildout + ' buildout:versions= -v'), """
+Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+...
+Installing 'spam'.
+We have the best distribution that satisfies 'spam'.
+Picked: spam = 2.
+Uninstalling foo.
+Installing foo.
+recipe v2
+""", N)
+    assert_output(system(buildout + ' -v'), """
+Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+...
+Installing 'spam'.
+We have the distribution that satisfies 'spam==1'.
+Uninstalling foo.
+Installing foo.
+recipe v1
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -134,7 +171,15 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam >0
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout + ' -v'), "Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.\n...\nInstalling 'spam >0'.\nWe have the distribution that satisfies 'spam==1'.\nUninstalling foo.\nInstalling foo.\nrecipe v1", N)
+    assert_output(system(buildout + ' -v'), """
+Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+...
+Installing 'spam >0'.
+We have the distribution that satisfies 'spam==1'.
+Uninstalling foo.
+Installing foo.
+recipe v1
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -151,7 +196,13 @@ def test_repeatable(buildout_env):
     recipe = spam
     option = TEST
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), "Uninstalling foo.\nSection `buildout` contains unused option(s): 'test'.\n...\nInstalling foo.\nrecipe v1", N)
+    assert_output(system(buildout), """
+Uninstalling foo.
+Section `buildout` contains unused option(s): 'test'.
+...
+Installing foo.
+recipe v1
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -165,7 +216,16 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), "While:\n  Installing.\n  Getting section foo.\n  Initializing section foo.\n  Installing recipe spam.\n  Getting distribution for 'spam'.\nError: Picked: spam = 2\n...", N)
+    assert_output(system(buildout), """
+While:
+  Installing.
+  Getting section foo.
+  Initializing section foo.
+  Installing recipe spam.
+  Getting distribution for 'spam'.
+Error: Picked: spam = 2
+...
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -180,7 +240,11 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), 'Uninstalling foo.\nInstalling foo.\nrecipe v1', N)
+    assert_output(system(buildout), """
+Uninstalling foo.
+Installing foo.
+recipe v1
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -195,7 +259,11 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), 'Uninstalling foo.\nInstalling foo.\nrecipe v2', N)
+    assert_output(system(buildout), """
+Uninstalling foo.
+Installing foo.
+recipe v2
+""", N)
     import pkg_resources
     req = pkg_resources.Requirement.parse('setuptools')
     setuptools_version = pkg_resources.working_set.find(req).version
@@ -213,7 +281,14 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), 'Updating foo.\nrecipe v2\nVersions had to be automatically picked.\nThe following part definition lists the versions picked:\n[versions]\nspam = 2', N)
+    assert_output(system(buildout), """
+Updating foo.
+recipe v2
+Versions had to be automatically picked.
+The following part definition lists the versions picked:
+[versions]
+spam = 2
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -229,7 +304,10 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % (join('recipe', 'dist'), pip_version, setuptools_version))
-    assert_output(system(buildout), 'Updating foo.\nrecipe v2', N)
+    assert_output(system(buildout), """
+Updating foo.
+recipe v2
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -245,7 +323,10 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % (join('recipe', 'dist'), pip_version, setuptools_version))
-    assert_output(system(buildout), 'Updating foo.\nrecipe v2', N)
+    assert_output(system(buildout), """
+Updating foo.
+recipe v2
+""", N)
     write('my_versions.cfg',
     '''
     [versions]
@@ -264,7 +345,10 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), 'Updating foo.\nrecipe v2', N)
+    assert_output(system(buildout), """
+Updating foo.
+recipe v2
+""", N)
     write('my_versions.cfg',
     '''
     [versions]
@@ -283,7 +367,15 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), 'Updating foo.\nrecipe v2\nVersions had to be automatically picked.\nThe following part definition lists the versions picked:\n[versions]\nspam = 2\nPicked versions have been written to my_versions.cfg', N)
+    assert_output(system(buildout), """
+Updating foo.
+recipe v2
+Versions had to be automatically picked.
+The following part definition lists the versions picked:
+[versions]
+spam = 2
+Picked versions have been written to my_versions.cfg
+""", N)
     with open('my_versions.cfg') as f: print_(f.read())
     # TODO assert: '\n...\n# Added by buildout at YYYY-MM-DD hh:mm:ss.dddddd\nspam '
     _val = ('picked' in system(buildout))
@@ -306,7 +398,11 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), 'Updating foo.\nrecipe v2\nPicked versions have been written to my_versions.cfg', N)
+    assert_output(system(buildout), """
+Updating foo.
+recipe v2
+Picked versions have been written to my_versions.cfg
+""", N)
     with open('my_versions.cfg') as f: print_(f.read())
     # TODO assert: '\n[versions]\n...\n\n# Added by buildout at YYYY-MM-DD hh:mm:ss.'
     write(sample_buildout, 'buildout.cfg',
@@ -318,7 +414,13 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     """)
-    assert_output(system(buildout), "While:\n  Installing.\n  Loading extensions.\n  Error: Buildout now includes 'buildout-versions' (and part of the older 'buildout.dumppickedversions').\n  Remove the extension from your configuration and look at the 'show-picked-versions' option in buildout's documentation.", N)
+    assert_output(system(buildout), """
+While:
+  Installing.
+  Loading extensions.
+  Error: Buildout now includes 'buildout-versions' (and part of the older 'buildout.dumppickedversions').
+  Remove the extension from your configuration and look at the 'show-picked-versions' option in buildout's documentation.
+""", N)
 
 def test_setup(buildout_env):
     buildout = buildout_env['buildout']
@@ -336,10 +438,20 @@ def test_setup(buildout_env):
     from distutils.core import setup
     setup(name='sample')
     ''')
-    assert_output(system(buildout + ' setup'), "Creating directory '/sample-buildout/test/eggs/v5'.\nError: The setup command requires the path to a setup script or\ndirectory containing a setup script, and its arguments.", N)
-    assert_output(system(buildout + ' setup setup.py bdist_egg'), "Running setup script 'setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup'), """
+Creating directory '/sample-buildout/test/eggs/v5'.
+Error: The setup command requires the path to a setup script or
+directory containing a setup script, and its arguments.
+""", N)
+    assert_output(system(buildout + ' setup setup.py bdist_egg'), """
+Running setup script 'setup.py'.
+...
+""", N)
     assert_output(capture_print(ls, 'dist'), '-  sample-0.0.0-py2.5.egg', N)
-    assert_output(system(buildout + ' setup . bdist_egg'), "Running setup script './setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup . bdist_egg'), """
+Running setup script './setup.py'.
+...
+""", N)
 
 def test_debugging(buildout_env):
     buildout = buildout_env['buildout']
@@ -389,8 +501,34 @@ def test_debugging(buildout_env):
     recipe = recipes:mkdir
     path = mystuff
     """)
-    assert_output(system(buildout, with_exit_code=True), "Develop: '/sample-buildout/recipes'\nInstalling data-dir.\nWhile:\n  Installing data-dir.\nError: Missing option: data-dir:directory\nEXIT CODE: 1", N)
-    assert_output(system(buildout + ' -D', 'up\np sorted(self.options.keys())\nq\n', with_exit_code=True), 'Develop: \'/sample-buildout/recipes\'\nInstalling data-dir.\n> /zc/buildout/buildout.py(925)__getitem__()\n-> raise MissingOption("Missing option: %s:%s" % (self.name, key))\n(Pdb) > /sample-buildout/recipes/mkdir.py(14)install()\n-> directory = self.options[\'directory\']\n(Pdb) [\'path\', \'recipe\']\n...While:\n  Installing data-dir.\nTraceback (most recent call last):\n  File "/zc/buildout/buildout.py", line 1352, in main\n...\n  File "/zc/buildout/buildout.py", line 925, in __getitem__\n    raise MissingOption("Missing option: %s:%s" % (self.name, key))\nMissingOption: Missing option: data-dir:directory\n\nStarting pdb:\nEXIT CODE: 1', N)
+    assert_output(system(buildout, with_exit_code=True), """
+Develop: '/sample-buildout/recipes'
+Installing data-dir.
+While:
+  Installing data-dir.
+Error: Missing option: data-dir:directory
+EXIT CODE: 1
+""", N)
+    assert_output(system(buildout + ' -D', 'up\np sorted(self.options.keys())\nq\n', with_exit_code=True), """
+Develop: '/sample-buildout/recipes'
+Installing data-dir.
+> /zc/buildout/buildout.py(925)__getitem__()
+-> raise MissingOption("Missing option: %s:%s" % (self.name, key))
+(Pdb) > /sample-buildout/recipes/mkdir.py(14)install()
+-> directory = self.options['directory']
+(Pdb) ['path', 'recipe']
+...While:
+  Installing data-dir.
+Traceback (most recent call last):
+  File "/zc/buildout/buildout.py", line 1352, in main
+...
+  File "/zc/buildout/buildout.py", line 925, in __getitem__
+    raise MissingOption("Missing option: %s:%s" % (self.name, key))
+MissingOption: Missing option: data-dir:directory
+
+Starting pdb:
+EXIT CODE: 1
+""", N)
 
 def test_windows(buildout_env):
     buildout = buildout_env['buildout']
@@ -432,7 +570,10 @@ def test_windows(buildout_env):
           )
     ''')
     write('recipe', 'README', '')
-    assert_output(system(buildout + ' setup recipe bdist_egg'), "Running setup script 'recipe/setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup recipe bdist_egg'), """
+Running setup script 'recipe/setup.py'.
+...
+""", N)
     write('buildout.cfg',
     '''
     [buildout]
@@ -442,4 +583,9 @@ def test_windows(buildout_env):
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
-    assert_output(system(buildout), "Getting distribution for 'spam'.\nGot spam 1.\nInstalling foo.\ncan't remove read only files", N)
+    assert_output(system(buildout), """
+Getting distribution for 'spam'.
+Got spam 1.
+Installing foo.
+can't remove read only files
+""", N)

@@ -77,7 +77,10 @@ def test_develop_w_non_setuptools_setup_scripts(easy_install_env):
     write('foo', 'setup.py', '\nfrom distutils.core import setup\nsetup(name="foo")\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
     assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/foo'", N)
-    assert_output(capture_print(ls, 'develop-eggs'), '-  foo.egg-link\n-  zc.recipe.egg.egg-link', N)
+    assert_output(capture_print(ls, 'develop-eggs'), """
+-  foo.egg-link
+-  zc.recipe.egg.egg-link
+""", N)
 
 def test_develop_verbose(easy_install_env):
     join = easy_install_env['join']
@@ -90,9 +93,24 @@ def test_develop_verbose(easy_install_env):
     mkdir('foo')
     write('foo', 'setup.py', '\nfrom setuptools import setup\nsetup(name="foo")\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
-    assert_output(system(join('bin', 'buildout') + ' -vv'), 'Installing...\nMaking editable install of /sample-buildout/foo\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/foo.egg-link\n...', N)
-    assert_output(capture_print(ls, 'develop-eggs'), '-  foo.egg-link\n-  zc.recipe.egg.egg-link', N)
-    assert_output(system(join('bin', 'buildout') + ' -vvv'), 'Installing...\nMaking editable install of /sample-buildout/foo\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/foo.egg-link\n...', N)
+    assert_output(system(join('bin', 'buildout') + ' -vv'), """
+Installing...
+Making editable install of /sample-buildout/foo
+...
+Successfully made editable install: /sample-buildout/develop-eggs/foo.egg-link
+...
+""", N)
+    assert_output(capture_print(ls, 'develop-eggs'), """
+-  foo.egg-link
+-  zc.recipe.egg.egg-link
+""", N)
+    assert_output(system(join('bin', 'buildout') + ' -vvv'), """
+Installing...
+Making editable install of /sample-buildout/foo
+...
+Successfully made editable install: /sample-buildout/develop-eggs/foo.egg-link
+...
+""", N)
 
 def test_buildout_error_handling(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -117,19 +135,70 @@ def test_buildout_error_handling(easy_install_env):
     except Exception as _exc:
         assert_output(type(_exc).__name__ + ": " + str(_exc), 'MissingOption: Missing option: buildout:eek', N)
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\nparts =\nx = ${buildout:y}\ny = ${buildout:z}\nz = ${buildout:x}\n')
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), 'While:\n  Initializing.\n  Getting section buildout.\n  Initializing section buildout.\n  Getting option buildout:x.\n  Getting option buildout:y.\n  Getting option buildout:z.\n  Getting option buildout:x.\nError: Circular reference in substitutions.', N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
+While:
+  Initializing.
+  Getting section buildout.
+  Initializing section buildout.
+  Getting option buildout:x.
+  Getting option buildout:y.
+  Getting option buildout:z.
+  Getting option buildout:x.
+Error: Circular reference in substitutions.
+""", N)
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = data_dir debug\nx = ${bui$ldout:y}\n')
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), 'While:\n  Initializing.\n  Getting section buildout.\n  Initializing section buildout.\n  Getting option buildout:x.\nError: The section name in substitution, ${bui$ldout:y},\nhas invalid characters.', N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
+While:
+  Initializing.
+  Getting section buildout.
+  Initializing section buildout.
+  Getting option buildout:x.
+Error: The section name in substitution, ${bui$ldout:y},
+has invalid characters.
+""", N)
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = data_dir debug\nx = ${buildout:y{z}\n')
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), 'While:\n  Initializing.\n  Getting section buildout.\n  Initializing section buildout.\n  Getting option buildout:x.\nError: The option name in substitution, ${buildout:y{z},\nhas invalid characters.', N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
+While:
+  Initializing.
+  Getting section buildout.
+  Initializing section buildout.
+  Getting option buildout:x.
+Error: The option name in substitution, ${buildout:y{z},
+has invalid characters.
+""", N)
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = data_dir debug\nx = ${parts}\n')
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), "While:\n  Initializing.\n  Getting section buildout.\n  Initializing section buildout.\n  Getting option buildout:x.\nError: The substitution, ${parts},\ndoesn't contain a colon.", N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
+While:
+  Initializing.
+  Getting section buildout.
+  Initializing section buildout.
+  Getting option buildout:x.
+Error: The substitution, ${parts},
+doesn't contain a colon.
+""", N)
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = data_dir debug\nx = ${buildout:y:z}\n')
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), 'While:\n  Initializing.\n  Getting section buildout.\n  Initializing section buildout.\n  Getting option buildout:x.\nError: The substitution, ${buildout:y:z},\nhas too many colons.', N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
+While:
+  Initializing.
+  Getting section buildout.
+  Initializing section buildout.
+  Getting option buildout:x.
+Error: The substitution, ${buildout:y:z},
+has too many colons.
+""", N)
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\nparts = x\n')
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), "While:\n  Installing.\n  Getting section x.\nError: The referenced section, 'x', was not defined.", N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
+While:
+  Installing.
+  Getting section x.
+Error: The referenced section, 'x', was not defined.
+""", N)
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\nparts = x\n\n[x]\nfoo = 1\n')
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), 'While:\n  Installing.\nError: Missing option: x:recipe', N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
+While:
+  Installing.
+Error: Missing option: x:recipe
+""", N)
 
 def test_show_who_requires_when_there_is_a_conflict(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -141,11 +210,64 @@ def test_show_who_requires_when_there_is_a_conflict(easy_install_env):
     make_dist_that_requires(sample_buildout, 'sampley', ['demoneeded ==1.0'])
     make_dist_that_requires(sample_buildout, 'samplez', ['demoneeded ==1.1'])
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n' % easy_install_env)
-    assert_output(system(buildout), "Develop: '/sample-buildout/sampley'\nDevelop: '/sample-buildout/samplez'\nInstalling eggs.\nGetting distribution for 'demoneeded==1.1'.\nGot demoneeded 1.1.\nVersion and requirements information containing demoneeded:\n  Requirement of samplez: demoneeded==1.1\n  Requirement of sampley: demoneeded==1.0...\nWhile:\n  Installing eggs.\nError: There is a version conflict.\nWe already have: demoneeded 1.1\nbut sampley 1 requires 'demoneeded==1.0'.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/sampley'
+Develop: '/sample-buildout/samplez'
+Installing eggs.
+Getting distribution for 'demoneeded==1.1'.
+Got demoneeded 1.1.
+Version and requirements information containing demoneeded:
+  Requirement of samplez: demoneeded==1.1
+  Requirement of sampley: demoneeded==1.0...
+While:
+  Installing eggs.
+Error: There is a version conflict.
+We already have: demoneeded 1.1
+but sampley 1 requires 'demoneeded==1.0'.
+""", N)
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez samplea sampleb\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n       samplez\n' % easy_install_env)
-    assert_output(system(buildout + ' -v'), "Installing 'zc.buildout', 'wheel'...\nMaking editable install of /sample-buildout/sampley\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/sampley.egg-link\n...\nMaking editable install of /sample-buildout/samplez\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/samplez.egg-link\n...\nMaking editable install of /sample-buildout/samplea\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/samplea.egg-link\n...\nMaking editable install of /sample-buildout/sampleb\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/sampleb.egg-link\n...\nInstalling eggs.\nInstalling 'samplea', 'samplez'.\nWe have a develop egg: samplea 1\nWe have a develop egg: samplez 1\nGetting required 'demoneeded==1.1'\n  required by samplez 1.\nWe have the distribution that satisfies 'demoneeded==1.1'.\nGetting required 'sampleb'\n  required by samplea 1.\nWe have a develop egg: sampleb 1\nGetting required 'sampley'\n  required by sampleb 1.\nWe have a develop egg: sampley 1\nVersion and requirements information containing demoneeded:\n  Requirement of samplez: demoneeded==1.1\n  Requirement of sampley: demoneeded==1.0...\nWhile:\n  Installing eggs.\nError: There is a version conflict.\nWe already have: demoneeded 1.1\nbut sampley 1 requires 'demoneeded==1.0'.", N)
+    assert_output(system(buildout + ' -v'), """
+Installing 'zc.buildout', 'wheel'...
+Making editable install of /sample-buildout/sampley
+...
+Successfully made editable install: /sample-buildout/develop-eggs/sampley.egg-link
+...
+Making editable install of /sample-buildout/samplez
+...
+Successfully made editable install: /sample-buildout/develop-eggs/samplez.egg-link
+...
+Making editable install of /sample-buildout/samplea
+...
+Successfully made editable install: /sample-buildout/develop-eggs/samplea.egg-link
+...
+Making editable install of /sample-buildout/sampleb
+...
+Successfully made editable install: /sample-buildout/develop-eggs/sampleb.egg-link
+...
+Installing eggs.
+Installing 'samplea', 'samplez'.
+We have a develop egg: samplea 1
+We have a develop egg: samplez 1
+Getting required 'demoneeded==1.1'
+  required by samplez 1.
+We have the distribution that satisfies 'demoneeded==1.1'.
+Getting required 'sampleb'
+  required by samplea 1.
+We have a develop egg: sampleb 1
+Getting required 'sampley'
+  required by sampleb 1.
+We have a develop egg: sampley 1
+Version and requirements information containing demoneeded:
+  Requirement of samplez: demoneeded==1.1
+  Requirement of sampley: demoneeded==1.0...
+While:
+  Installing eggs.
+Error: There is a version conflict.
+We already have: demoneeded 1.1
+but sampley 1 requires 'demoneeded==1.0'.
+""", N)
 
 def test_version_conflict_rendering(easy_install_env):
     print_ = easy_install_env['print_']
@@ -155,7 +277,10 @@ def test_version_conflict_rendering(easy_install_env):
     assert_output(str(zc.buildout.easy_install.VersionConflict(error, ws)), 'There is a version conflict...', N)
     error = pkg_resources.VersionConflict('pkg1 2.1 is simply wrong')
     ws = []
-    assert_output(str(zc.buildout.easy_install.VersionConflict(error, ws)), 'There is a version conflict.\npkg1 2.1 is simply wrong', N)
+    assert_output(str(zc.buildout.easy_install.VersionConflict(error, ws)), """
+There is a version conflict.
+pkg1 2.1 is simply wrong
+""", N)
 
 def test_show_who_requires_missing_distributions(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -168,7 +293,25 @@ def test_show_who_requires_missing_distributions(easy_install_env):
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplea sampleb\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n')
-    assert_output(system(buildout + ' -v'), "Installing ...\nInstalling 'samplea'.\nWe have a develop egg: samplea 1\nGetting required 'sampleb'\n  required by samplea 1.\nWe have a develop egg: sampleb 1\nGetting required 'sampley'\n  required by sampleb 1.\nWe have a develop egg: sampley 1\nGetting required 'demoneeded'\n  required by sampley 1.\nWe have no distributions for demoneeded that satisfies 'demoneeded'.\n...\nWhile:\n  Installing eggs.\n  Getting distribution for 'demoneeded'.\nError: Couldn't find a distribution for 'demoneeded'.", N)
+    assert_output(system(buildout + ' -v'), """
+Installing ...
+Installing 'samplea'.
+We have a develop egg: samplea 1
+Getting required 'sampleb'
+  required by samplea 1.
+We have a develop egg: sampleb 1
+Getting required 'sampley'
+  required by sampleb 1.
+We have a develop egg: sampley 1
+Getting required 'demoneeded'
+  required by sampley 1.
+We have no distributions for demoneeded that satisfies 'demoneeded'.
+...
+While:
+  Installing eggs.
+  Getting distribution for 'demoneeded'.
+Error: Couldn't find a distribution for 'demoneeded'.
+""", N)
 
 def test_show_who_requires_picked_versions(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -181,7 +324,20 @@ def test_show_who_requires_picked_versions(easy_install_env):
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
     write('buildout.cfg', '\n[buildout]\nfind-links = %(sample_eggs)s\nparts = eggs\nshow-picked-versions = true\ndevelop = sampley samplea sampleb\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n' % easy_install_env)
-    assert_output(system(buildout), 'Develop: ...\nVersions had to be automatically picked.\nThe following part definition lists the versions picked:\n[versions]\n\n# Required by:\n# sampley==1\ndemo = 0.3\n\n# Required by:\n# demo==0.3\ndemoneeded = 1.1', N)
+    assert_output(system(buildout), """
+Develop: ...
+Versions had to be automatically picked.
+The following part definition lists the versions picked:
+[versions]
+
+# Required by:
+# sampley==1
+demo = 0.3
+
+# Required by:
+# demo==0.3
+demoneeded = 1.1
+""", N)
 
 def test_comparing_saved_options_with_funny_characters(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -199,8 +355,14 @@ def test_comparing_saved_options_with_funny_characters(easy_install_env):
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = debug\n\n[debug]\nrecipe = recipes\n')
     os.chdir(sample_buildout)
     buildout = os.path.join(sample_buildout, 'bin', 'buildout')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nInstalling debug.", N)
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nUpdating debug.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Installing debug.
+""", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Updating debug.
+""", N)
 
 def test_finding_eggs_as_local_directories(easy_install_env):
     join = easy_install_env['join']
@@ -228,7 +390,13 @@ def test_create_sections_on_command_line(easy_install_env):
     write = easy_install_env['write']
 
     write('buildout.cfg', '\n[buildout]\nparts =\nx = ${foo:bar}\n')
-    assert_output(system(buildout + ' foo:bar=1 -vv'), "Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.\n...\n[foo]\nbar = 1\n...", N)
+    assert_output(system(buildout + ' foo:bar=1 -vv'), """
+Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+...
+[foo]
+bar = 1
+...
+""", N)
 
 def test_help(easy_install_env):
     os = easy_install_env['os']
@@ -236,8 +404,34 @@ def test_help(easy_install_env):
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
 
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' -h'), 'Usage: buildout [options] [assignments] [command [command arguments]]\n\nOptions:\n\n  -c config_file\n\n    Specify the path to the buildout configuration file to be used.\n    This defaults to the file named "buildout.cfg" in the current\n    working directory.\n...\n  -h, --help\n...', N)
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' --help'), 'Usage: buildout [options] [assignments] [command [command arguments]]\n\nOptions:\n\n  -c config_file\n\n    Specify the path to the buildout configuration file to be used.\n    This defaults to the file named "buildout.cfg" in the current\n    working directory.\n...\n  -h, --help\n...', N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' -h'), """
+Usage: buildout [options] [assignments] [command [command arguments]]
+
+Options:
+
+  -c config_file
+
+    Specify the path to the buildout configuration file to be used.
+    This defaults to the file named "buildout.cfg" in the current
+    working directory.
+...
+  -h, --help
+...
+""", N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' --help'), """
+Usage: buildout [options] [assignments] [command [command arguments]]
+
+Options:
+
+  -c config_file
+
+    Specify the path to the buildout configuration file to be used.
+    This defaults to the file named "buildout.cfg" in the current
+    working directory.
+...
+  -h, --help
+...
+""", N)
 
 def test_version(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -260,7 +454,13 @@ def test_bootstrap_with_extension(easy_install_env):
     d = tmpdir('sample-bootstrap')
     write(d, 'buildout.cfg', '\n[buildout]\nextensions = some_awsome_extension\nparts =\n')
     os.chdir(d)
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' bootstrap'), "Creating directory '/sample-bootstrap/eggs/v5'.\nCreating directory '/sample-bootstrap/bin'.\nCreating directory '/sample-bootstrap/parts'.\nCreating directory '/sample-bootstrap/develop-eggs'.\nGenerated script '/sample-bootstrap/bin/buildout'.", N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' bootstrap'), """
+Creating directory '/sample-bootstrap/eggs/v5'.
+Creating directory '/sample-bootstrap/bin'.
+Creating directory '/sample-bootstrap/parts'.
+Creating directory '/sample-bootstrap/develop-eggs'.
+Generated script '/sample-bootstrap/bin/buildout'.
+""", N)
 
 def test_bug_92891_bootstrap_crashes_with_egg_recipe_in_buildout_section(easy_install_env):
     os = easy_install_env['os']
@@ -273,8 +473,17 @@ def test_bug_92891_bootstrap_crashes_with_egg_recipe_in_buildout_section(easy_in
     d = tmpdir('sample-bootstrap')
     write(d, 'buildout.cfg', '\n[buildout]\nparts = buildout\neggs-directory = eggs\n\n[buildout]\nrecipe = zc.recipe.egg\neggs = zc.buildout\nscripts = buildout=buildout\n')
     os.chdir(d)
-    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' bootstrap'), "Creating directory '/sample-bootstrap/eggs/v5'.\nCreating directory '/sample-bootstrap/bin'.\nCreating directory '/sample-bootstrap/parts'.\nCreating directory '/sample-bootstrap/develop-eggs'.\nGenerated script '/sample-bootstrap/bin/buildout'.", N)
-    assert_output(system(os.path.join('bin', 'buildout')), "Section `buildout` contains unused option(s): 'eggs' 'scripts'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout') + ' bootstrap'), """
+Creating directory '/sample-bootstrap/eggs/v5'.
+Creating directory '/sample-bootstrap/bin'.
+Creating directory '/sample-bootstrap/parts'.
+Creating directory '/sample-bootstrap/develop-eggs'.
+Generated script '/sample-bootstrap/bin/buildout'.
+""", N)
+    assert_output(system(os.path.join('bin', 'buildout')), """
+Section `buildout` contains unused option(s): 'eggs' 'scripts'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
 
 def test_removing_eggs_from_develop_section_causes_egg_link_to_be_removed(easy_install_env):
     cd = easy_install_env['cd']
@@ -291,15 +500,28 @@ def test_removing_eggs_from_develop_section_causes_egg_link_to_be_removed(easy_i
     write('foo', 'setup.py', "\nfrom setuptools import setup\nsetup(name='foox')\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
     assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/foo'", N)
-    assert_output(capture_print(ls, 'develop-eggs'), '-  foox.egg-link\n-  zc.recipe.egg.egg-link', N)
+    assert_output(capture_print(ls, 'develop-eggs'), """
+-  foox.egg-link
+-  zc.recipe.egg.egg-link
+""", N)
     mkdir('bar')
     write('bar', 'setup.py', "\nfrom setuptools import setup\nsetup(name='fooy')\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = foo bar\nparts =\n')
-    assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/foo'\nDevelop: '/sample-buildout/bar'", N)
-    assert_output(capture_print(ls, 'develop-eggs'), '-  foox.egg-link\n-  fooy.egg-link\n-  zc.recipe.egg.egg-link', N)
+    assert_output(system(join('bin', 'buildout')), """
+Develop: '/sample-buildout/foo'
+Develop: '/sample-buildout/bar'
+""", N)
+    assert_output(capture_print(ls, 'develop-eggs'), """
+-  foox.egg-link
+-  fooy.egg-link
+-  zc.recipe.egg.egg-link
+""", N)
     write('buildout.cfg', '\n[buildout]\ndevelop = bar\nparts =\n')
     assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/bar'", N)
-    assert_output(capture_print(ls, 'develop-eggs'), '-  fooy.egg-link\n-  zc.recipe.egg.egg-link', N)
+    assert_output(capture_print(ls, 'develop-eggs'), """
+-  fooy.egg-link
+-  zc.recipe.egg.egg-link
+""", N)
     write('buildout.cfg', '\n[buildout]\nparts =\n')
     print_(system(join('bin', 'buildout')), end='')
     assert_output(capture_print(ls, 'develop-eggs'), '-  zc.recipe.egg.egg-link', N)
@@ -323,7 +545,18 @@ def test_add_setuptools_to_dependencies_when_namespace_packages(easy_install_env
     write('foo', 'setup.py', "\nfrom setuptools import setup\nsetup(name='foox',\n      namespace_packages = ['stuff'],\n      package_dir = {'': 'src'},\n      packages = ['stuff', 'stuff.foox'],\n      )\n")
     write('foo', 'README.txt', '')
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
-    assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/foo'\nWARNING: Package foox at .../foo is using old style namespace packages. You should switch to native namespaces (PEP 420).\n...\nSome development packages are using old style namespace packages.\n...\npip install horse-with-no-namespace\n...\nThe following list shows the affected packages and their namespaces:\n\n* foox:...", N)
+    assert_output(system(join('bin', 'buildout')), """
+Develop: '/sample-buildout/foo'
+WARNING: Package foox at .../foo is using old style namespace packages. You should switch to native namespaces (PEP 420).
+...
+Some development packages are using old style namespace packages.
+...
+pip install horse-with-no-namespace
+...
+The following list shows the affected packages and their namespaces:
+
+* foox:...
+""", N)
     import logging, zope.testing.loggingsupport
     handler = zope.testing.loggingsupport.InstalledHandler('zc.buildout.easy_install', level=logging.WARNING)
     logging.getLogger('zc.buildout.easy_install').propagate = False
@@ -332,7 +565,11 @@ def test_add_setuptools_to_dependencies_when_namespace_packages(easy_install_env
         return [dist.project_name for dist in zc.buildout.easy_install.working_set(project_names, sys.executable, paths)]
     _val = (get_working_set('foox'))
     assert repr(_val) == "['foox', 'setuptools']" or str(_val) == "['foox', 'setuptools']"
-    assert_output(str(handler), 'zc.buildout.easy_install WARNING\n  Develop distribution: foox 0.0.0\nuses namespace packages but the distribution does not require setuptools.', N)
+    assert_output(str(handler), """
+zc.buildout.easy_install WARNING
+  Develop distribution: foox 0.0.0
+uses namespace packages but the distribution does not require setuptools.
+""", N)
     handler.clear()
     os.remove(join('develop-eggs', 'foox.egg-link'))
     _ = system(join('bin', 'buildout') + ' setup foo bdist_egg')
@@ -342,7 +579,14 @@ def test_add_setuptools_to_dependencies_when_namespace_packages(easy_install_env
     _ = shutil.copy(foox_egg, join(sample_buildout, 'eggs', 'v5'))
     assert_output(capture_print(ls, 'develop-eggs'), '-  zc.recipe.egg.egg-link', N)
     assert_output(capture_print(ls, 'eggs'), 'd  v5', N)
-    assert_output(capture_print(ls, 'eggs', 'v5'), '-  foox-0.0.0-py2.4.egg\n-  packaging.egg-link\n-  pip.egg-link\n-  setuptools.egg-link\n-  wheel.egg-link\n-  zc.buildout.egg-link', N)
+    assert_output(capture_print(ls, 'eggs', 'v5'), """
+-  foox-0.0.0-py2.4.egg
+-  packaging.egg-link
+-  pip.egg-link
+-  setuptools.egg-link
+-  wheel.egg-link
+-  zc.buildout.egg-link
+""", N)
     _val = (get_working_set('foox'))
     assert repr(_val) == "['foox', 'setuptools']" or str(_val) == "['foox', 'setuptools']"
     print_(handler, end='')
@@ -357,10 +601,26 @@ def test_add_setuptools_to_dependencies_when_namespace_packages(easy_install_env
     write('bar', 'setup.py', "\nfrom setuptools import setup\nsetup(name='bar', install_requires = ['foox'])\n")
     write('bar', 'README.txt', '')
     write('buildout.cfg', '\n[buildout]\ndevelop = foo bar\nparts =\n')
-    assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/foo'\nWARNING: Package foox at .../foo is using old style namespace packages. You should switch to native namespaces (PEP 420).\nDevelop: '/sample-buildout/bar'\n...\nSome development packages are using old style namespace packages.\n...\npip install horse-with-no-namespace\n...\nThe following list shows the affected packages and their namespaces:\n\n* foox:...", N)
+    assert_output(system(join('bin', 'buildout')), """
+Develop: '/sample-buildout/foo'
+WARNING: Package foox at .../foo is using old style namespace packages. You should switch to native namespaces (PEP 420).
+Develop: '/sample-buildout/bar'
+...
+Some development packages are using old style namespace packages.
+...
+pip install horse-with-no-namespace
+...
+The following list shows the affected packages and their namespaces:
+
+* foox:...
+""", N)
     _val = (get_working_set('bar'))
     assert repr(_val) == "['bar', 'foox', 'setuptools']" or str(_val) == "['bar', 'foox', 'setuptools']"
-    assert_output(str(handler), 'zc.buildout.easy_install WARNING\n  Develop distribution: foox 0.0.0\nuses namespace packages but the distribution does not require setuptools.', N)
+    assert_output(str(handler), """
+zc.buildout.easy_install WARNING
+  Develop distribution: foox 0.0.0
+uses namespace packages but the distribution does not require setuptools.
+""", N)
     foox_installed_egg = join(sample_buildout, 'eggs', 'v5', foox_egg_basename)
     namespace_init = join(foox_installed_egg, 'stuff', '__init__.py')
     write(namespace_init, "try:\n    __import__('pkg_resources').declare_namespace(__name__)\nexcept ImportError:\n    __path__ = __import__('pkgutil').extend_path(__path__, __name__)\n")
@@ -393,7 +653,13 @@ def test_develop_preserves_existing_setup_cfg(easy_install_env):
   {'include-dirs': os.path.join(sample_buildout, 'include')}))
     assert_output(repr(_val), "'/dest/extdemo.egg-link'", N)
     assert_output(capture_print(ls, dest), '-  extdemo.egg-link', N)
-    assert_output(capture_print(cat, extdemo, 'setup.cfg'), '# sampe cfg file\n[foo]\nbar = 1\n[build_ext]\ndefine = X,Y', N)
+    assert_output(capture_print(cat, extdemo, 'setup.cfg'), """
+# sampe cfg file
+[foo]
+bar = 1
+[build_ext]
+define = X,Y
+""", N)
 
 def test_uninstall_recipes_used_for_removal(easy_install_env):
     join = easy_install_env['join']
@@ -406,11 +672,27 @@ def test_uninstall_recipes_used_for_removal(easy_install_env):
     write('recipes', 'setup.py', '\nfrom setuptools import setup\nsetup(name=\'recipes\',\n      entry_points={\n         \'zc.buildout\': ["demo=demo:Install"],\n         \'zc.buildout.uninstall\': ["demo=demo:uninstall"],\n         })\n')
     write('recipes', 'demo.py', "\nimport sys\nclass Install:\n    def __init__(*args): pass\n    def install(self):\n        sys.stdout.write('installing\\n')\n        return ()\ndef uninstall(name, options):\n    sys.stdout.write('uninstalling\\n')\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = demo\n[demo]\nrecipe = recipes:demo\n')
-    assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/recipes'\nInstalling demo.\ninstalling", N)
+    assert_output(system(join('bin', 'buildout')), """
+Develop: '/sample-buildout/recipes'
+Installing demo.
+installing
+""", N)
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = demo\n[demo]\nrecipe = recipes:demo\nx = 1\n')
-    assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/recipes'\nUninstalling demo.\nRunning uninstall recipe.\nuninstalling\nInstalling demo.\ninstalling", N)
+    assert_output(system(join('bin', 'buildout')), """
+Develop: '/sample-buildout/recipes'
+Uninstalling demo.
+Running uninstall recipe.
+uninstalling
+Installing demo.
+installing
+""", N)
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts =\n')
-    assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/recipes'\nUninstalling demo.\nRunning uninstall recipe.\nuninstalling", N)
+    assert_output(system(join('bin', 'buildout')), """
+Develop: '/sample-buildout/recipes'
+Uninstalling demo.
+Running uninstall recipe.
+uninstalling
+""", N)
 
 def test_extensions_installed_as_eggs_work_in_offline_mode(easy_install_env):
     bdist_egg = easy_install_env['bdist_egg']
@@ -440,13 +722,22 @@ def test_changes_in_svn_or_git_dont_affect_sig(easy_install_env):
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe',\n      entry_points={'zc.buildout': ['default=foo:Foo']})\n")
     write('recipe', 'foo.py', '\nclass Foo:\n    def __init__(*args): pass\n    def install(*args): return ()\n    update = install\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = recipe\nparts = foo\n\n[foo]\nrecipe = recipe\n')
-    assert_output(system(join(sample_buildout, 'bin', 'buildout')), "Develop: '/sample-buildout/recipe'\nInstalling foo.", N)
+    assert_output(system(join(sample_buildout, 'bin', 'buildout')), """
+Develop: '/sample-buildout/recipe'
+Installing foo.
+""", N)
     mkdir('recipe', '.git')
     mkdir('recipe', '.svn')
-    assert_output(system(join(sample_buildout, 'bin', 'buildout')), "Develop: '/sample-buildout/recipe'\nUpdating foo.", N)
+    assert_output(system(join(sample_buildout, 'bin', 'buildout')), """
+Develop: '/sample-buildout/recipe'
+Updating foo.
+""", N)
     write('recipe', '.git', 'x', '1')
     write('recipe', '.svn', 'x', '1')
-    assert_output(system(join(sample_buildout, 'bin', 'buildout')), "Develop: '/sample-buildout/recipe'\nUpdating foo.", N)
+    assert_output(system(join(sample_buildout, 'bin', 'buildout')), """
+Develop: '/sample-buildout/recipe'
+Updating foo.
+""", N)
 
 def test_unicode_filename_doesnt_break_hash(easy_install_env):
     mkdir = easy_install_env['mkdir']
@@ -463,7 +754,12 @@ def test_o_option_sets_offline(easy_install_env):
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
 
-    assert_output(system(join(sample_buildout, 'bin', 'buildout') + ' -vvo'), '\n...\noffline = true\n...', N)
+    assert_output(system(join(sample_buildout, 'bin', 'buildout') + ' -vvo'), """
+
+...
+offline = true
+...
+""", N)
 
 def test_recipe_upgrade(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -478,18 +774,45 @@ def test_recipe_upgrade(easy_install_env):
     write('recipe', 'recipe.py', "\nimport sys\nclass Recipe:\n    def __init__(*a): pass\n    def install(self):\n        sys.stdout.write('recipe v1\\n')\n        return ()\n    update = install\n")
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe', version='1', py_modules=['recipe'],\n      entry_points={'zc.buildout': ['default = recipe:Recipe']},\n      )\n")
     write('recipe', 'README', '')
-    assert_output(system(buildout + ' setup recipe bdist_egg'), "Running setup script 'recipe/setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup recipe bdist_egg'), """
+Running setup script 'recipe/setup.py'.
+...
+""", N)
     rmdir('recipe', 'build')
     write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = %s\n\n[foo]\nrecipe = recipe\n' % join('recipe', 'dist'))
-    assert_output(system(buildout), "Getting distribution for 'recipe'.\nGot recipe 1.\nInstalling foo.\nrecipe v1", N)
+    assert_output(system(buildout), """
+Getting distribution for 'recipe'.
+Got recipe 1.
+Installing foo.
+recipe v1
+""", N)
     write('recipe', 'recipe.py', "\nimport sys\nclass Recipe:\n    def __init__(*a): pass\n    def install(self):\n        sys.stdout.write('recipe v2\\n')\n        return ()\n    update = install\n")
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe', version='2', py_modules=['recipe'],\n      entry_points={'zc.buildout': ['default = recipe:Recipe']},\n      )\n")
-    assert_output(system(buildout + ' setup recipe bdist_egg'), "Running setup script 'recipe/setup.py'.\n...", N)
-    assert_output(system(buildout + ' -N'), 'Updating foo.\nrecipe v1', N)
-    assert_output(system(buildout + ' -o'), 'Updating foo.\nrecipe v1', N)
-    assert_output(system(buildout), "Getting distribution for 'recipe'.\nGot recipe 2.\nUninstalling foo.\nInstalling foo.\nrecipe v2", N)
+    assert_output(system(buildout + ' setup recipe bdist_egg'), """
+Running setup script 'recipe/setup.py'.
+...
+""", N)
+    assert_output(system(buildout + ' -N'), """
+Updating foo.
+recipe v1
+""", N)
+    assert_output(system(buildout + ' -o'), """
+Updating foo.
+recipe v1
+""", N)
+    assert_output(system(buildout), """
+Getting distribution for 'recipe'.
+Got recipe 2.
+Uninstalling foo.
+Installing foo.
+recipe v2
+""", N)
     write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = %s\n\n[foo]\nrecipe = recipe ==1\n' % join('recipe', 'dist'))
-    assert_output(system(buildout), 'Uninstalling foo.\nInstalling foo.\nrecipe v1', N)
+    assert_output(system(buildout), """
+Uninstalling foo.
+Installing foo.
+recipe v1
+""", N)
 
 def test_update_adds_to_uninstall_list(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -503,9 +826,25 @@ def test_update_adds_to_uninstall_list(easy_install_env):
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe',\n      entry_points={'zc.buildout': ['default = recipe:Recipe']},\n      )\n")
     write('recipe', 'recipe.py', "\nimport os\nclass Recipe:\n    def __init__(*_): pass\n    def install(self):\n        r = ('a', 'b', 'c')\n        for p in r: os.mkdir(p)\n        return r\n    def update(self):\n        r = ('c', 'd', 'e')\n        for p in r:\n            if not os.path.exists(p):\n               os.mkdir(p)\n        return r\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = recipe\nparts = foo\n\n[foo]\nrecipe = recipe\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipe'\nInstalling foo.", N)
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipe'\nUpdating foo.", N)
-    assert_output(capture_print(cat, '.installed.cfg'), '[buildout]\n...\n[foo]\n__buildout_installed__ = a\n    b\n    c\n    d\n    e\n__buildout_signature__ = ...', N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipe'
+Installing foo.
+""", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipe'
+Updating foo.
+""", N)
+    assert_output(capture_print(cat, '.installed.cfg'), """
+[buildout]
+...
+[foo]
+__buildout_installed__ = a
+    b
+    c
+    d
+    e
+__buildout_signature__ = ...
+""", N)
 
 def test_log_when_there_are_not_local_distros(easy_install_env):
     link_server = easy_install_env['link_server']
@@ -521,7 +860,13 @@ def test_log_when_there_are_not_local_distros(easy_install_env):
     dest = tmpdir('sample-install')
     import zc.buildout.easy_install
     ws = zc.buildout.easy_install.install(['demo==0.2'], dest, links=[link_server], index=link_server + 'index/')
-    assert_output(str(handler), "zc.buildout.easy_install DEBUG\n  Installing 'demo==0.2'.\nzc.buildout.easy_install DEBUG\n  We have no distributions for demo that satisfies 'demo==0.2'.\n...", N)
+    assert_output(str(handler), """
+zc.buildout.easy_install DEBUG
+  Installing 'demo==0.2'.
+zc.buildout.easy_install DEBUG
+  We have no distributions for demo that satisfies 'demo==0.2'.
+...
+""", N)
     handler.uninstall()
     logger.propagate = old_propogate
 
@@ -537,7 +882,19 @@ def test_internal_errors(easy_install_env):
     write(sample_buildout, 'recipes', 'mkdir.py', "\nclass Mkdir:\n    def __init__(self, buildout, name, options):\n        self.name, self.options = name, options\n        options['path'] = os.path.join(\n                              buildout['buildout']['directory'],\n                              options['path'],\n                              )\n")
     write(sample_buildout, 'recipes', 'setup.py', '\nfrom setuptools import setup\nsetup(name = "recipes",\n      entry_points = {\'zc.buildout\': [\'mkdir = mkdir:Mkdir\']},\n      )\n')
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = data-dir\n\n[data-dir]\nrecipe = recipes:mkdir\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nWhile:\n  Installing.\n  Getting section data-dir.\n  Initializing section data-dir.\n\nAn internal error occurred due to a bug in either zc.buildout or in a\nrecipe being used:\nTraceback (most recent call last):\n...\nNameError: global name 'os' is not defined...", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+While:
+  Installing.
+  Getting section data-dir.
+  Initializing section data-dir.
+
+An internal error occurred due to a bug in either zc.buildout or in a
+recipe being used:
+Traceback (most recent call last):
+...
+NameError: global name 'os' is not defined...
+""", N)
 
 def test_whine_about_unused_options(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -548,7 +905,14 @@ def test_whine_about_unused_options(easy_install_env):
     write('foo.py', "\nclass Foo:\n\n    def __init__(self, buildout, name, options):\n        self.name, self.options = name, options\n        options['x']\n\n    def install(self):\n        self.options['y']\n        return ()\n")
     write('setup.py', '\nfrom setuptools import setup\nsetup(name = "foo",\n      py_modules=[\'foo\'],\n      entry_points = {\'zc.buildout\': [\'default = foo:Foo\']},\n      )\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = .\nparts = foo\na = 1\n\n[foo]\nrecipe = foo\nx = 1\ny = 1\nz = 1\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/.'\nSection `buildout` contains unused option(s): 'a'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.\nInstalling foo.\nSection `foo` contains unused option(s): 'z'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/.'
+Section `buildout` contains unused option(s): 'a'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+Installing foo.
+Section `foo` contains unused option(s): 'z'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+""", N)
 
 def test_abnormal_exit(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -561,19 +925,67 @@ def test_abnormal_exit(easy_install_env):
     write('recipes', 'recipes.py', '\nimport os\n\nclass Clean:\n    def __init__(*_): pass\n    def install(_): return ()\n    def update(_): pass\n\nclass EvilInstall(Clean):\n    def install(_): os._exit(1)\n\nclass EvilUpdate(Clean):\n    def update(_): os._exit(1)\n')
     write('recipes', 'setup.py', "\nimport setuptools\nsetuptools.setup(name='recipes',\n   entry_points = {\n     'zc.buildout': [\n         'clean = recipes:Clean',\n         'evil_install = recipes:EvilInstall',\n         'evil_update = recipes:EvilUpdate',\n         'evil_uninstall = recipes:Clean',\n         ],\n      },\n    )\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:clean\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:evil_install\n\n[p4]\nrecipe = recipes:clean\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nInstalling p1.\nInstalling p2.\nInstalling p3.", N)
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nUpdating p1.\nUpdating p2.\nInstalling p3.", N)
-    assert_output(system(buildout + ' buildout:parts='), "Develop: '/sample-buildout/recipes'\nUninstalling p2.\nUninstalling p1.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Installing p1.
+Installing p2.
+Installing p3.
+""", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Updating p1.
+Updating p2.
+Installing p3.
+""", N)
+    assert_output(system(buildout + ' buildout:parts='), """
+Develop: '/sample-buildout/recipes'
+Uninstalling p2.
+Uninstalling p1.
+""", N)
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:clean\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:evil_update\n\n[p4]\nrecipe = recipes:clean\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nInstalling p1.\nInstalling p2.\nInstalling p3.\nInstalling p4.", N)
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nUpdating p1.\nUpdating p2.\nUpdating p3.", N)
-    assert_output(system(buildout + ' buildout:parts='), "Develop: '/sample-buildout/recipes'\nUninstalling p2.\nUninstalling p1.\nUninstalling p4.\nUninstalling p3.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Installing p1.
+Installing p2.
+Installing p3.
+Installing p4.
+""", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Updating p1.
+Updating p2.
+Updating p3.
+""", N)
+    assert_output(system(buildout + ' buildout:parts='), """
+Develop: '/sample-buildout/recipes'
+Uninstalling p2.
+Uninstalling p1.
+Uninstalling p4.
+Uninstalling p3.
+""", N)
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:evil_update\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:clean\n\n[p4]\nrecipe = recipes:clean\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nInstalling p1.\nInstalling p2.\nInstalling p3.\nInstalling p4.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Installing p1.
+Installing p2.
+Installing p3.
+Installing p4.
+""", N)
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:evil_update\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:clean\n\n[p4]\nrecipe = recipes:clean\nx = 1\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nUninstalling p4.\nUpdating p1.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Uninstalling p4.
+Updating p1.
+""", N)
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:clean\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:clean\n\n[p4]\nrecipe = recipes:clean\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/recipes'\nUninstalling p1.\nInstalling p1.\nUpdating p2.\nUpdating p3.\nInstalling p4.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Uninstalling p1.
+Installing p1.
+Updating p2.
+Updating p3.
+Installing p4.
+""", N)
 
 def test_install_source_dist_with_bad_py(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -591,12 +1003,28 @@ def test_install_source_dist_with_bad_py(easy_install_env):
     write('badegg', 'badegg', 'scripts', '__init__.py', '#\\n')
     write('badegg', 'badegg', 'scripts', 'one.py', '\nreturn 1\n')
     write('badegg', 'setup.py', "\nfrom setuptools import setup, find_packages\nsetup(\n    name='badegg',\n    version='1',\n    packages = find_packages('.'),\n    zip_safe=False)\n")
-    assert_output(system(buildout + ' setup badegg sdist'), "Running setup script 'badegg/setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup badegg sdist'), """
+Running setup script 'badegg/setup.py'.
+...
+""", N)
     dist = join('badegg', 'dist')
     write('buildout.cfg', '\n[buildout]\nparts = eggs bo\nfind-links = %(dist)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = badegg\n\n[bo]\nrecipe = zc.recipe.egg\neggs = zc.buildout\nscripts = buildout=bo\n' % {**easy_install_env, 'dist': dist})
-    assert_output(system(buildout) + '\nX', "Installing eggs.\nGetting distribution for 'badegg'.\nGot badegg 1.\nInstalling bo.\nGenerated script '/sample-buildout/bin/bo'.\nX", N)
-    assert_output(capture_print(ls, 'eggs', 'v5'), 'd  badegg-1-py2.4.egg\n...', N)
-    assert_output(capture_print(ls, 'bin'), '-  bo\n-  buildout', N)
+    assert_output(system(buildout) + '\nX', """
+Installing eggs.
+Getting distribution for 'badegg'.
+Got badegg 1.
+Installing bo.
+Generated script '/sample-buildout/bin/bo'.
+X
+""", N)
+    assert_output(capture_print(ls, 'eggs', 'v5'), """
+d  badegg-1-py2.4.egg
+...
+""", N)
+    assert_output(capture_print(ls, 'bin'), """
+-  bo
+-  buildout
+""", N)
 
 def test_version_requirements_in_build_honored(easy_install_env):
     link_server = easy_install_env['link_server']
@@ -626,10 +1054,23 @@ def test_bug_105081_Specific_egg_versions_are_ignored_when_newer_eggs_are_around
     write = easy_install_env['write']
 
     write('buildout.cfg', '\n[buildout]\nparts = x\nfind-links = %(sample_eggs)s\n\n[x]\nrecipe = zc.recipe.egg\neggs = demo\n' % easy_install_env)
-    assert_output(system(buildout), "Installing x.\nGetting distribution for 'demo'.\nGot demo 0.3.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.\nGenerated script '/sample-buildout/bin/demo'.", N)
+    assert_output(system(buildout), """
+Installing x.
+Getting distribution for 'demo'.
+Got demo 0.3.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1.
+Generated script '/sample-buildout/bin/demo'.
+""", N)
     assert_output(system(join('bin', 'demo')), '3 1', N)
     write('buildout.cfg', '\n[buildout]\nparts = x\nfind-links = %(sample_eggs)s\n\n[x]\nrecipe = zc.recipe.egg\neggs = demo ==0.1\n' % easy_install_env)
-    assert_output(system(buildout), "Uninstalling x.\nInstalling x.\nGetting distribution for 'demo==0.1'.\nGot demo 0.1.\nGenerated script '/sample-buildout/bin/demo'.", N)
+    assert_output(system(buildout), """
+Uninstalling x.
+Installing x.
+Getting distribution for 'demo==0.1'.
+Got demo 0.1.
+Generated script '/sample-buildout/bin/demo'.
+""", N)
     assert_output(system(join('bin', 'demo')), '1 1', N)
 
 def test_exit_codes(easy_install_env):
@@ -644,13 +1085,40 @@ def test_exit_codes(easy_install_env):
         print_(p.stdout.read().decode())
         print_('Exit:', bool(p.wait()))
         p.stdout.close()
-    assert_output(capture_print(lambda: call(buildout)), '\nExit: False', N)
+    assert_output(capture_print(lambda: call(buildout)), """
+
+Exit: False
+""", N)
     write('buildout.cfg', '\n[buildout]\nparts = x\n')
-    assert_output(capture_print(lambda: call(buildout)), "While:\n    Installing.\n    Getting section x.\nError: The referenced section, 'x', was not defined.\n\nExit: True", N)
+    assert_output(capture_print(lambda: call(buildout)), """
+While:
+    Installing.
+    Getting section x.
+Error: The referenced section, 'x', was not defined.
+
+Exit: True
+""", N)
     write('setup.py', "\nfrom setuptools import setup\nsetup(name='zc.buildout.testexit',\n      py_modules=['testexitrecipe'],\n      entry_points={'zc.buildout': ['default = testexitrecipe:x']})\n")
     write('testexitrecipe.py', '\nx y\n')
     write('buildout.cfg', '\n[buildout]\nparts = x\ndevelop = .\n\n[x]\nrecipe = zc.buildout.testexit\n')
-    assert_output(capture_print(lambda: call(buildout)), "Develop: '/sample-buildout/.'\nWhile:\n    Installing.\n    Getting section x.\n    Initializing section x.\n    Loading zc.buildout recipe entry zc.buildout.testexit:default.\n\nAn internal error occurred due to a bug in either zc.buildout or in a\nrecipe being used:\nTraceback (most recent call last):\n...\n        x y\n...^...\n    SyntaxError...\n\nExit: True", N)
+    assert_output(capture_print(lambda: call(buildout)), """
+Develop: '/sample-buildout/.'
+While:
+    Installing.
+    Getting section x.
+    Initializing section x.
+    Loading zc.buildout recipe entry zc.buildout.testexit:default.
+
+An internal error occurred due to a bug in either zc.buildout or in a
+recipe being used:
+Traceback (most recent call last):
+...
+        x y
+...^...
+    SyntaxError...
+
+Exit: True
+""", N)
 
 def test_bug_59270_recipes_always_start_in_buildout_dir(easy_install_env):
     join = easy_install_env['join']
@@ -666,7 +1134,17 @@ def test_bug_59270_recipes_always_start_in_buildout_dir(easy_install_env):
     write('setup.py', "\nfrom setuptools import setup\nsetup(name='bad.test',\n      py_modules=['bad_recipe'],\n      entry_points={'zc.buildout': ['default=bad_recipe:Bad']},)\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = .\nparts = b1 b2\n[b1]\nrecipe = bad.test\n[b2]\nrecipe = bad.test\n')
     os.chdir('bad_start')
-    assert_output(system(join(sample_buildout, 'bin', 'buildout') + ' -c ' + join(sample_buildout, 'buildout.cfg')), "Develop: '/sample-buildout/.'\n/sample-buildout\n/sample-buildout\nInstalling b1.\n/sample-buildout\n/sample-buildout/bad_start\nInstalling b2.\n/sample-buildout\n/sample-buildout/bad_start", N)
+    assert_output(system(join(sample_buildout, 'bin', 'buildout') + ' -c ' + join(sample_buildout, 'buildout.cfg')), """
+Develop: '/sample-buildout/.'
+/sample-buildout
+/sample-buildout
+Installing b1.
+/sample-buildout
+/sample-buildout/bad_start
+Installing b2.
+/sample-buildout
+/sample-buildout/bad_start
+""", N)
 
 def test_bug_61890_file_urls_dont_seem_to_work_in_find_dash_links(easy_install_env):
     link_server = easy_install_env['link_server']
@@ -683,7 +1161,10 @@ def test_bug_61890_file_urls_dont_seem_to_work_in_find_dash_links(easy_install_e
     for dist in ws:
         print_(dist)
     # TODO assert: 'demoneeded 1.1\ndemo 0.2'
-    assert_output(capture_print(ls, dest), 'd  demo-0.2-py2.4.egg\nd  demoneeded-1.1-py2.4.egg', N)
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+""", N)
 
 def test_bug_75607_buildout_should_not_run_if_it_creates_an_empty_buildout_cfg(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -692,7 +1173,11 @@ def test_bug_75607_buildout_should_not_run_if_it_creates_an_empty_buildout_cfg(e
     system = easy_install_env['system']
 
     remove('buildout.cfg')
-    assert_output(system(buildout), "While:\n  Initializing.\nError: Couldn't open /sample-buildout/buildout.cfg", N)
+    assert_output(system(buildout), """
+While:
+  Initializing.
+Error: Couldn't open /sample-buildout/buildout.cfg
+""", N)
 
 def test_dealing_with_extremely_insane_dependencies(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -710,8 +1195,72 @@ def test_dealing_with_extremely_insane_dependencies(easy_install_env):
         mkdir(p)
         write(p, 'setup.py', 'from setuptools import setup\nsetup(name=%r, install_requires=%r,\n      url="u", author="a", author_email="e")\n' % (p, deps))
     write('buildout.cfg', '\n[buildout]\ndevelop = pack0 pack1 pack2 pack3 pack4\nparts = pack1\n\n[pack1]\nrecipe = zc.recipe.egg:eggs\neggs = pack0\n')
-    assert_output(system(buildout), "Develop: '/sample-buildout/pack0'\nDevelop: '/sample-buildout/pack1'\nDevelop: '/sample-buildout/pack2'\nDevelop: '/sample-buildout/pack3'\nDevelop: '/sample-buildout/pack4'\nInstalling pack1.\n...\nWhile:\n  Installing pack1.\n  Getting distribution for 'pack5'.\nError: Couldn't find a distribution for 'pack5'.", N)
-    assert_output(system(buildout + ' -v'), "Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.\n...\nMaking editable install of /sample-buildout/pack0\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/pack0.egg-link\n...\nMaking editable install of /sample-buildout/pack1\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/pack1.egg-link\n...\nMaking editable install of /sample-buildout/pack2\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/pack2.egg-link\n...\nMaking editable install of /sample-buildout/pack3\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/pack3.egg-link\n...\nMaking editable install of /sample-buildout/pack4\n...\nSuccessfully made editable install: /sample-buildout/develop-eggs/pack4.egg-link\n...\nInstalling pack1.\nInstalling 'pack0'.\nWe have a develop egg: pack0 0.0.0\nGetting required 'pack4'\n  required by pack0 0.0.0.\nWe have a develop egg: pack4 0.0.0\nGetting required 'pack3'\n  required by pack0 0.0.0.\n  required by pack4 0.0.0.\nWe have a develop egg: pack3 0.0.0\nGetting required 'pack2'\n  required by pack0 0.0.0.\n  required by pack3 0.0.0.\n  required by pack4 0.0.0.\nWe have a develop egg: pack2 0.0.0\nGetting required 'pack1'\n  required by pack0 0.0.0.\n  required by pack2 0.0.0.\n  required by pack3 0.0.0.\n  required by pack4 0.0.0.\nWe have a develop egg: pack1 0.0.0\nGetting required 'pack5'\n  required by pack4 0.0.0.\nWe have no distributions for pack5 that satisfies 'pack5'.\n...\nWhile:\n  Installing pack1.\n  Getting distribution for 'pack5'.\nError: Couldn't find a distribution for 'pack5'.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/pack0'
+Develop: '/sample-buildout/pack1'
+Develop: '/sample-buildout/pack2'
+Develop: '/sample-buildout/pack3'
+Develop: '/sample-buildout/pack4'
+Installing pack1.
+...
+While:
+  Installing pack1.
+  Getting distribution for 'pack5'.
+Error: Couldn't find a distribution for 'pack5'.
+""", N)
+    assert_output(system(buildout + ' -v'), """
+Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+...
+Making editable install of /sample-buildout/pack0
+...
+Successfully made editable install: /sample-buildout/develop-eggs/pack0.egg-link
+...
+Making editable install of /sample-buildout/pack1
+...
+Successfully made editable install: /sample-buildout/develop-eggs/pack1.egg-link
+...
+Making editable install of /sample-buildout/pack2
+...
+Successfully made editable install: /sample-buildout/develop-eggs/pack2.egg-link
+...
+Making editable install of /sample-buildout/pack3
+...
+Successfully made editable install: /sample-buildout/develop-eggs/pack3.egg-link
+...
+Making editable install of /sample-buildout/pack4
+...
+Successfully made editable install: /sample-buildout/develop-eggs/pack4.egg-link
+...
+Installing pack1.
+Installing 'pack0'.
+We have a develop egg: pack0 0.0.0
+Getting required 'pack4'
+  required by pack0 0.0.0.
+We have a develop egg: pack4 0.0.0
+Getting required 'pack3'
+  required by pack0 0.0.0.
+  required by pack4 0.0.0.
+We have a develop egg: pack3 0.0.0
+Getting required 'pack2'
+  required by pack0 0.0.0.
+  required by pack3 0.0.0.
+  required by pack4 0.0.0.
+We have a develop egg: pack2 0.0.0
+Getting required 'pack1'
+  required by pack0 0.0.0.
+  required by pack2 0.0.0.
+  required by pack3 0.0.0.
+  required by pack4 0.0.0.
+We have a develop egg: pack1 0.0.0
+Getting required 'pack5'
+  required by pack4 0.0.0.
+We have no distributions for pack5 that satisfies 'pack5'.
+...
+While:
+  Installing pack1.
+  Getting distribution for 'pack5'.
+Error: Couldn't find a distribution for 'pack5'.
+""", N)
 
 def test_read_find_links_to_load_extensions(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -725,10 +1274,17 @@ def test_read_find_links_to_load_extensions(easy_install_env):
     src = tmpdir('src')
     write(src, 'wacky_handler.py', '\nimport sys\ndef install(buildout=None):\n    sys.stdout.write("I am a wacky extension\\n")\n')
     write(src, 'setup.py', "\nfrom setuptools import setup\nsetup(name='wackyextension', version='1',\n      py_modules=['wacky_handler'],\n      entry_points = {'zc.buildout.extension':\n            ['default = wacky_handler:install']\n            },\n      )\n")
-    assert_output(system(buildout + ' setup ' + src + ' bdist_egg'), "Running setup ...\ncreating 'dist/wackyextension-1-...", N)
+    assert_output(system(buildout + ' setup ' + src + ' bdist_egg'), """
+Running setup ...
+creating 'dist/wackyextension-1-...
+""", N)
     dist = 'file://' + join(src, 'dist').replace(os.path.sep, '/')
     write('buildout.cfg', '\n[buildout]\nparts =\nextensions = wackyextension\nfind-links = %(dist)s\n' % {**easy_install_env, 'dist': dist})
-    assert_output(system(buildout), "Getting distribution for 'wackyextension'.\nGot wackyextension 1.\nI am a wacky extension", N)
+    assert_output(system(buildout), """
+Getting distribution for 'wackyextension'.
+Got wackyextension 1.
+I am a wacky extension
+""", N)
 
 def test_distributions_from_local_find_links_make_it_to_download_cache(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -741,7 +1297,10 @@ def test_distributions_from_local_find_links_make_it_to_download_cache(easy_inst
 
     mkdir('test')
     write('test', 'setup.py', "\nfrom setuptools import setup\nsetup(name='foo')\n")
-    assert_output(system(buildout + ' setup test bdist_egg'), "Running setup script 'test/setup.py'.\n...", N)
+    assert_output(system(buildout + ' setup test bdist_egg'), """
+Running setup script 'test/setup.py'.
+...
+""", N)
     mkdir('cache')
     old_cache = zc.buildout.easy_install.download_cache('cache')
     assert_output(str(list(zc.buildout.easy_install.install(['foo'], 'eggs',
@@ -786,19 +1345,53 @@ def test_buildout_prefer_final_option(easy_install_env):
     _val = (zc.buildout.easy_install.prefer_final())
     assert repr(_val) == 'True' or str(_val) == 'True'
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
-    assert_output(system(buildout), 'Installing ...\n... written to versions-picked.cfg', N)
-    assert_output(capture_print(cat, 'versions-picked.cfg'), '[versions]\ndemo = 0.3\n\n# Required by:\n# demo==0.3\ndemoneeded = 1.1', N)
+    assert_output(system(buildout), """
+Installing ...
+... written to versions-picked.cfg
+""", N)
+    assert_output(capture_print(cat, 'versions-picked.cfg'), """
+[versions]
+demo = 0.3
+
+# Required by:
+# demo==0.3
+demoneeded = 1.1
+""", N)
     remove('versions-picked.cfg')
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = true\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
-    assert_output(system(buildout), 'Updating ...\n... written to versions-picked.cfg', N)
-    assert_output(capture_print(cat, 'versions-picked.cfg'), '[versions]\ndemo = 0.3\n\n# Required by:\n# demo==0.3\ndemoneeded = 1.1', N)
+    assert_output(system(buildout), """
+Updating ...
+... written to versions-picked.cfg
+""", N)
+    assert_output(capture_print(cat, 'versions-picked.cfg'), """
+[versions]
+demo = 0.3
+
+# Required by:
+# demo==0.3
+demoneeded = 1.1
+""", N)
     remove('versions-picked.cfg')
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = false\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
-    assert_output(system(buildout), 'Updating ...\n... written to versions-picked.cfg', N)
-    assert_output(capture_print(cat, 'versions-picked.cfg'), '[versions]\ndemo = 0.4rc1\n\n# Required by:\n# demo==0.4rc1\ndemoneeded = 1.2rc1', N)
+    assert_output(system(buildout), """
+Updating ...
+... written to versions-picked.cfg
+""", N)
+    assert_output(capture_print(cat, 'versions-picked.cfg'), """
+[versions]
+demo = 0.4rc1
+
+# Required by:
+# demo==0.4rc1
+demoneeded = 1.2rc1
+""", N)
     remove('versions-picked.cfg')
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = no\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
-    assert_output(system(buildout + ' -v'), "While:\n  Initializing.\nError: Invalid value for 'prefer-final' option: 'no'", N)
+    assert_output(system(buildout + ' -v'), """
+While:
+  Initializing.
+Error: Invalid value for 'prefer-final' option: 'no'
+""", N)
 
 def test_wont_downgrade_due_to_prefer_final(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -818,7 +1411,10 @@ def test_wont_downgrade_due_to_prefer_final(easy_install_env):
        if l.startswith('zc.buildout =')])
     assert repr(_val) == "['0.1']" or str(_val) == "['0.1']"
     write('buildout.cfg', '\n[buildout]\nparts =\nversions = versions\n[versions]\nzc.buildout = 43\n')
-    assert_output(system(buildout), "Getting distribution for 'zc.buildout==43'.\n...", N)
+    assert_output(system(buildout), """
+Getting distribution for 'zc.buildout==43'.
+...
+""", N)
 
 def test_develop_with_modules(easy_install_env):
     join = easy_install_env['join']
@@ -833,7 +1429,10 @@ def test_develop_with_modules(easy_install_env):
     write('foo', 'setup.py', '\nimport bar\nfrom setuptools import setup\nsetup(name="foo")\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
     assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/foo'", N)
-    assert_output(capture_print(ls, 'develop-eggs'), '-  foo.egg-link\n-  zc.recipe.egg.egg-link', N)
+    assert_output(capture_print(ls, 'develop-eggs'), """
+-  foo.egg-link
+-  zc.recipe.egg.egg-link
+""", N)
 
 def test_dont_pick_setuptools_if_version_is_specified_when_required_by_src_dist(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -847,7 +1446,11 @@ def test_dont_pick_setuptools_if_version_is_specified_when_required_by_src_dist(
     write('foo.py', '')
     _ = system(buildout + ' setup . sdist')
     write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = dist\nversions = versions\nallow-picked-versions = false\n\n[versions]\nwtf = %s\nfoo = 1\n\n[foo]\nrecipe = zc.recipe.egg\neggs = foo\n' % '\n'.join(('%s = %s' % (d.key, d.version) for d in zc.buildout.easy_install.buildout_and_setuptools_dists)))
-    assert_output(system(buildout), "Installing foo.\nGetting distribution for 'foo==1'.\nGot foo 1.", N)
+    assert_output(system(buildout), """
+Installing foo.
+Getting distribution for 'foo==1'.
+Got foo 1.
+""", N)
 
 def test_pyc_and_pyo_files_have_correct_paths(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -859,7 +1462,10 @@ def test_pyc_and_pyo_files_have_correct_paths(easy_install_env):
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = demo\ninterpreter = py\n' % easy_install_env)
     _ = system(buildout)
     write('t.py', "\nimport eggrecipedemo, eggrecipedemoneeded, sys\ncode = lambda f: f.__code__\nsys.stdout.write(code(eggrecipedemo.main).co_filename+'\\n')\nsys.stdout.write(code(eggrecipedemoneeded.f).co_filename+'\\n')\n")
-    assert_output(system(join('bin', 'py') + ' t.py'), '/sample-buildout/eggs/v5/demo-0.3-py2.4.egg/eggrecipedemo.py\n/sample-buildout/eggs/v5/demoneeded-1.1-py2.4.egg/eggrecipedemoneeded.py', N)
+    assert_output(system(join('bin', 'py') + ' t.py'), """
+/sample-buildout/eggs/v5/demo-0.3-py2.4.egg/eggrecipedemo.py
+/sample-buildout/eggs/v5/demoneeded-1.1-py2.4.egg/eggrecipedemoneeded.py
+""", N)
 
 def test_dont_mess_with_standard_dirs_with_variable_refs(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -880,7 +1486,11 @@ def test_expand_shell_patterns_in_develop_paths(easy_install_env):
     make_dist_that_requires(sample_buildout, 'sampley')
     make_dist_that_requires(sample_buildout, 'samplez')
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sample*\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n' % easy_install_env)
-    assert_output(system(buildout), "Develop: '/sample-buildout/sampley'\nDevelop: '/sample-buildout/samplez'\nInstalling eggs.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/sampley'
+Develop: '/sample-buildout/samplez'
+Installing eggs.
+""", N)
 
 def test_warn_users_when_expanding_shell_patterns_yields_no_results(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -891,7 +1501,11 @@ def test_warn_users_when_expanding_shell_patterns_yields_no_results(easy_install
 
     make_dist_that_requires(sample_buildout, 'samplea')
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = samplea grumble*\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n' % easy_install_env)
-    assert_output(system(buildout), "Develop: '/sample-buildout/samplea'\nCouldn't develop '/sample-buildout/grumble*' (not found)\nInstalling eggs.", N)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/samplea'
+Couldn't develop '/sample-buildout/grumble*' (not found)
+Installing eggs.
+""", N)
 
 def test_make_sure_versions_dont_cancel_extras(easy_install_env):
     mkdir = easy_install_env['mkdir']
@@ -916,7 +1530,14 @@ def test_increment_buildout_options(easy_install_env):
 
     write('b1.cfg', '\n[buildout]\nparts = p1\nx = 1\ny = a\n    b\n\n[p1]\nrecipe = zc.buildout:debug\nfoo = ${buildout:x} ${buildout:y}\n')
     write('buildout.cfg', '\n[buildout]\nextends = b1.cfg\nparts += p2\nx += 2\ny -= a\n\n[p2]\n<= p1\n')
-    assert_output(system(buildout), "Installing p1.\n  foo='1\\n2 b'\n  recipe='zc.buildout:debug'\nInstalling p2.\n  foo='1\\n2 b'\n  recipe='zc.buildout:debug'", N)
+    assert_output(system(buildout), """
+Installing p1.
+  foo='1\\n2 b'
+  recipe='zc.buildout:debug'
+Installing p2.
+  foo='1\\n2 b'
+  recipe='zc.buildout:debug'
+""", N)
 
 def test_increment_buildout_with_multiple_extended_files_421022(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -927,7 +1548,15 @@ def test_increment_buildout_with_multiple_extended_files_421022(easy_install_env
     write('foo.cfg', '\n[buildout]\nfoo-option = foo\n[other]\nfoo-option = foo\n')
     write('bar.cfg', '\n[buildout]\nbar-option = bar\n[other]\nbar-option = bar\n')
     write('buildout.cfg', '\n[buildout]\nparts = p other\nextends = bar.cfg foo.cfg\nbar-option += baz\nfoo-option += ham\n\n[other]\nrecipe = zc.buildout:debug\nbar-option += baz\nfoo-option += ham\n\n[p]\nrecipe = zc.buildout:debug\nx = ${buildout:bar-option} ${buildout:foo-option}\n')
-    assert_output(system(buildout), "Installing p.\n  recipe='zc.buildout:debug'\n  x='bar\\nbaz foo\\nham'\nInstalling other.\n  bar-option='bar\\nbaz'\n  foo-option='foo\\nham'\n  recipe='zc.buildout:debug'", N)
+    assert_output(system(buildout), """
+Installing p.
+  recipe='zc.buildout:debug'
+  x='bar\\nbaz foo\\nham'
+Installing other.
+  bar-option='bar\\nbaz'
+  foo-option='foo\\nham'
+  recipe='zc.buildout:debug'
+""", N)
 
 def test_increment_on_command_line(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -936,7 +1565,14 @@ def test_increment_on_command_line(easy_install_env):
     write = easy_install_env['write']
 
     write('buildout.cfg', '\n[buildout]\nparts = p1\nx = 1\ny = a\n    b\n\n[p1]\nrecipe = zc.buildout:debug\nfoo = ${buildout:x} ${buildout:y}\n\n[p2]\n<= p1\n')
-    assert_output(system(buildout + ' buildout:parts+=p2 p1:foo+=bar'), "Installing p1.\n  foo='1 a\\nb\\nbar'\n  recipe='zc.buildout:debug'\nInstalling p2.\n  foo='1 a\\nb\\nbar'\n  recipe='zc.buildout:debug'", N)
+    assert_output(system(buildout + ' buildout:parts+=p2 p1:foo+=bar'), """
+Installing p1.
+  foo='1 a\\nb\\nbar'
+  recipe='zc.buildout:debug'
+Installing p2.
+  foo='1 a\\nb\\nbar'
+  recipe='zc.buildout:debug'
+""", N)
 
 def test_constrained_requirement(easy_install_env):
     print_ = easy_install_env['print_']
@@ -1002,7 +1638,16 @@ def test_want_new_zcrecipeegg(easy_install_env):
     write = easy_install_env['write']
 
     write('buildout.cfg', '\n[buildout]\nparts = egg\n[egg]\nrecipe = zc.recipe.egg <2dev\neggs = demo\n')
-    assert_output(system(join('bin', 'buildout')), "Getting distribution for 'zc.recipe.egg<2dev,>=2.0.6'...\nWhile:\n  Installing.\n  Getting section egg.\n  Initializing section egg.\n  Installing recipe zc.recipe.egg <2dev.\n  Getting distribution for 'zc.recipe.egg<2dev,>=2.0.6'.\nError: Couldn't find a distribution for 'zc.recipe.egg<2dev,>=2.0.6'.", N)
+    assert_output(system(join('bin', 'buildout')), """
+Getting distribution for 'zc.recipe.egg<2dev,>=2.0.6'...
+While:
+  Installing.
+  Getting section egg.
+  Initializing section egg.
+  Installing recipe zc.recipe.egg <2dev.
+  Getting distribution for 'zc.recipe.egg<2dev,>=2.0.6'.
+Error: Couldn't find a distribution for 'zc.recipe.egg<2dev,>=2.0.6'.
+""", N)
 
 def test_macro_inheritance_bug(easy_install_env):
     join = easy_install_env['join']
@@ -1012,8 +1657,17 @@ def test_macro_inheritance_bug(easy_install_env):
     write = easy_install_env['write']
 
     write('buildout.cfg', '\n[buildout]\nparts = foo bar\n[base]\nrecipe = zc.recipe.egg\n[foo]\n<=base\neggs = zc.buildout\ninterpreter = python\n[bar]\n<=foo\ninterpreter = py\n')
-    assert_output(system(join('bin', 'buildout')), 'Installing foo.\n...\nInstalling bar.\n...', N)
-    assert_output(capture_print(ls, './bin'), '-  buildout\n-  py\n-  python', N)
+    assert_output(system(join('bin', 'buildout')), """
+Installing foo.
+...
+Installing bar.
+...
+""", N)
+    assert_output(capture_print(ls, './bin'), """
+-  buildout
+-  py
+-  python
+""", N)
 
 def test_bootstrap_honors_relative_paths(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -1027,7 +1681,25 @@ def test_bootstrap_honors_relative_paths(easy_install_env):
     cd(working)
     write('buildout.cfg', '\n[buildout]\nparts =\nrelative-paths = true\n')
     _ = system(buildout + ' bootstrap')
-    assert_output(capture_print(cat, 'bin', 'buildout'), "#!/usr/local/bin/python2.7\n\nimport os\n\njoin = os.path.join\nbase = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))\nbase = os.path.dirname(base)\n\nimport sys\nsys.path[0:0] = [\n  ...\n  ]\n\nimport zc.buildout.buildout\n\nif __name__ == '__main__':\n    sys.exit(zc.buildout.buildout.main())", N)
+    assert_output(capture_print(cat, 'bin', 'buildout'), """
+#!/usr/local/bin/python2.7
+
+import os
+
+join = os.path.join
+base = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
+base = os.path.dirname(base)
+
+import sys
+sys.path[0:0] = [
+  ...
+  ]
+
+import zc.buildout.buildout
+
+if __name__ == '__main__':
+    sys.exit(zc.buildout.buildout.main())
+""", N)
 
 def test_cant_use_install_from_cache_and_offline_together(easy_install_env):
     join = easy_install_env['join']
@@ -1036,7 +1708,13 @@ def test_cant_use_install_from_cache_and_offline_together(easy_install_env):
     write = easy_install_env['write']
 
     write('buildout.cfg', '\n[buildout]\nparts =\noffline = true\ninstall-from-cache = true\n')
-    assert_output(system(join('bin', 'buildout')), "While:\n  Initializing.\nError: install-from-cache can't be used with offline mode.\nNothing is installed, even from cache, in offline\nmode, which might better be called 'no-install mode'.\n", N)
+    assert_output(system(join('bin', 'buildout')), """
+While:
+  Initializing.
+Error: install-from-cache can't be used with offline mode.
+Nothing is installed, even from cache, in offline
+mode, which might better be called 'no-install mode'.
+""", N)
 
 def test_error_installing_in_offline_mode_if_dont_have_needed_dist(easy_install_env):
     link_server = easy_install_env['link_server']
@@ -1090,7 +1768,10 @@ def test_parse_with_section_expr(easy_install_env):
             buildout.parse('\n[foo : sys.version_info[0] > 0]\nx = 1\n')
     buildout = zc.buildout.testing.Buildout()
     buildout.parse('\n[foo : sys.version_info[0] > 0]\nx = 1\n')
-    assert_output(capture_print(lambda: buildout.print_options()), '[foo]\nx = 1', N)
+    assert_output(capture_print(lambda: buildout.print_options()), """
+[foo]
+x = 1
+""", N)
 
 def test_abi_tag_eggs(easy_install_env):
     join = easy_install_env['join']
@@ -1108,7 +1789,10 @@ def test_abi_tag_eggs(easy_install_env):
     assert repr(_val) == 'False' or str(_val) == 'False'
     _val = (abi_tag in os.listdir(join(sample_buildout, 'eggs', 'v5')))
     assert repr(_val) == 'True' or str(_val) == 'True'
-    assert_output(capture_print(ls, 'eggs', 'v5', abi_tag), 'd  demo-0.3-py3.7.egg\nd  demoneeded-1.1-py3.7.egg', N)
+    assert_output(capture_print(ls, 'eggs', 'v5', abi_tag), """
+d  demo-0.3-py3.7.egg
+d  demoneeded-1.1-py3.7.egg
+""", N)
 
 def test_buildout_doesnt_keep_adding_itself_to_versions(easy_install_env):
     cat = easy_install_env['cat']

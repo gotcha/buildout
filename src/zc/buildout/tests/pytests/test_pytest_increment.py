@@ -103,12 +103,19 @@ parts =
 
     assert_output(
         system(buildout),
-        "Develop: '/sample-buildout/demo'\nDevelop: '/sample-buildout/demo2'",
+        """
+Develop: '/sample-buildout/demo'
+Develop: '/sample-buildout/demo2'
+""",
         N,
     )
     assert_output(
         capture_print(ls, 'develop-eggs'),
-        '-  demo.egg-link\n-  demo2.egg-link\n-  zc.recipe.egg.egg-link',
+        """
+-  demo.egg-link
+-  demo2.egg-link
+-  zc.recipe.egg.egg-link
+""",
         N,
     )
 

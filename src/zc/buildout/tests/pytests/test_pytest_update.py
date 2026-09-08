@@ -32,7 +32,11 @@ def test_update(update_env):
     tmpdir = update_env['tmpdir']
     write = update_env['write']
 
-    assert_output(capture_print(ls, new_releases), '-  zc_buildout-...-py3-none-any.whl\n-  zc_buildout-91.0-py3-none-any.whl\n-  zc_buildout-NINETYNINE.NINETYNINE-py3-none-any.whl', N)
+    assert_output(capture_print(ls, new_releases), """
+-  zc_buildout-...-py3-none-any.whl
+-  zc_buildout-91.0-py3-none-any.whl
+-  zc_buildout-NINETYNINE.NINETYNINE-py3-none-any.whl
+""", N)
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -72,10 +76,46 @@ def test_update(update_env):
         entry_points = {'zc.buildout': ['default = showversions:Recipe']},
         )
     """)
-    assert_output(system(buildout), 'Develop:...\nInstalling show-versions.\nzc.buildout V.V', N)
-    assert_output(system(buildout + ' versions:zc.buildout=91.0'), "Getting distribution for 'zc.buildout==91.0'.\nGot zc.buildout V.V\nUpgraded:\n  zc.buildout V.V\nRestarting.\nGenerated script '/sample-buildout/bin/buildout'.\nDevelop: '/sample-buildout/showversions'\nUpdating show-versions.\nzc.buildout V.V", N)
-    assert_output(system(buildout), "Got zc.buildout NINETYNINE.NINETYNINE.\nUpgraded:\n  zc.buildout version NINETYNINE.NINETYNINE;\nRestarting.\nGenerated script '/sample-buildout/bin/buildout'.\nDevelop: '/sample-buildout/showversions'\nUpdating show-versions.\nzc.buildout NINETYNINE.NINETYNINE", N)
-    assert_output(capture_print(cat, sample_buildout, 'bin', 'buildout'), "#!/usr/local/bin/python2.7\n\nimport sys\nsys.path[0:0] = [\n  '/sample-buildout/eggs/v5/zc.buildout-NINETYNINE.NINETYNINE-pyN.N.egg',\n...\n  ]\n\nimport zc.buildout.buildout\n\nif __name__ == '__main__':\n    sys.exit(zc.buildout.buildout.main())", N)
+    assert_output(system(buildout), """
+Develop:...
+Installing show-versions.
+zc.buildout V.V
+""", N)
+    assert_output(system(buildout + ' versions:zc.buildout=91.0'), """
+Getting distribution for 'zc.buildout==91.0'.
+Got zc.buildout V.V
+Upgraded:
+  zc.buildout V.V
+Restarting.
+Generated script '/sample-buildout/bin/buildout'.
+Develop: '/sample-buildout/showversions'
+Updating show-versions.
+zc.buildout V.V
+""", N)
+    assert_output(system(buildout), """
+Got zc.buildout NINETYNINE.NINETYNINE.
+Upgraded:
+  zc.buildout version NINETYNINE.NINETYNINE;
+Restarting.
+Generated script '/sample-buildout/bin/buildout'.
+Develop: '/sample-buildout/showversions'
+Updating show-versions.
+zc.buildout NINETYNINE.NINETYNINE
+""", N)
+    assert_output(capture_print(cat, sample_buildout, 'bin', 'buildout'), """
+#!/usr/local/bin/python2.7
+
+import sys
+sys.path[0:0] = [
+  '/sample-buildout/eggs/v5/zc.buildout-NINETYNINE.NINETYNINE-pyN.N.egg',
+...
+  ]
+
+import zc.buildout.buildout
+
+if __name__ == '__main__':
+    sys.exit(zc.buildout.buildout.main())
+""", N)
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -90,7 +130,15 @@ def test_update(update_env):
     [show-versions]
     recipe = showversions
     """ % dict(new_releases=new_releases))
-    assert_output(system(buildout), "Upgraded:\n  zc.buildout V.V\nRestarting.\nGenerated script '/sample-buildout/bin/buildout'.\nDevelop: '/sample-buildout/showversions'\nUpdating show-versions.\nzc.buildout V.V", N)
+    assert_output(system(buildout), """
+Upgraded:
+  zc.buildout V.V
+Restarting.
+Generated script '/sample-buildout/bin/buildout'.
+Develop: '/sample-buildout/showversions'
+Updating show-versions.
+zc.buildout V.V
+""", N)
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -102,8 +150,16 @@ def test_update(update_env):
     [show-versions]
     recipe = showversions
     """ % dict(new_releases=new_releases))
-    assert_output(system(buildout + ' -o'), "Develop: '/sample-buildout/showversions'\nUpdating show-versions.\nzc.buildout 1.0.0", N)
-    assert_output(system(buildout + ' -N'), "Develop: '/sample-buildout/showversions'\nUpdating show-versions.\nzc.buildout 1.0.0", N)
+    assert_output(system(buildout + ' -o'), """
+Develop: '/sample-buildout/showversions'
+Updating show-versions.
+zc.buildout 1.0.0
+""", N)
+    assert_output(system(buildout + ' -N'), """
+Develop: '/sample-buildout/showversions'
+Updating show-versions.
+zc.buildout 1.0.0
+""", N)
     sample_buildout2 = tmpdir('sample_buildout2')
     write(sample_buildout2, 'buildout.cfg',
     """
@@ -116,7 +172,15 @@ def test_update(update_env):
     zc.buildout = 99.99
     """ % dict(new_releases=new_releases))
     cd(sample_buildout2)
-    assert_output(system(buildout), "Creating directory '/sample_buildout2/eggs/v5'.\nCreating directory '/sample_buildout2/bin'.\nCreating directory '/sample_buildout2/parts'.\nCreating directory '/sample_buildout2/develop-eggs'.\nGetting distribution for 'zc.buildout==NINETYNINE.NINETYNINE'.\nGot zc.buildout NINETYNINE.NINETYNINE.\nNot upgrading because not running a local buildout command.", N)
+    assert_output(system(buildout), """
+Creating directory '/sample_buildout2/eggs/v5'.
+Creating directory '/sample_buildout2/bin'.
+Creating directory '/sample_buildout2/parts'.
+Creating directory '/sample_buildout2/develop-eggs'.
+Getting distribution for 'zc.buildout==NINETYNINE.NINETYNINE'.
+Got zc.buildout NINETYNINE.NINETYNINE.
+Not upgrading because not running a local buildout command.
+""", N)
     ls('bin')
     cd(sample_buildout)
     write(sample_buildout, 'buildout.cfg',
@@ -131,8 +195,37 @@ def test_update(update_env):
     [show-versions]
     recipe = showversions
     """ % dict(new_releases=new_releases))
-    assert_output(system(buildout), "Upgraded:\n  zc.buildout version NINETYNINE.NINETYNINE;\nRestarting.\nGenerated script '/sample-buildout/bin/buildout'.\nDevelop: '/sample-buildout/showversions'\nSection `buildout` contains unused option(s): 'relative-paths'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.\nUpdating show-versions.\nzc.buildout NINETYNINE.NINETYNINE", N)
-    assert_output(capture_print(cat, 'bin', 'buildout'), "#!/usr/local/bin/python2.7\n\nimport os\n\njoin = os.path.join\nbase = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))\nbase = os.path.dirname(base)\n\nimport sys\nsys.path[0:0] = [\n  join(base, 'eggs/v5/zc.buildout-NINETYNINE.NINETYNINE-pyN.N.egg'),\n...\n  ]\n\nimport zc.buildout.buildout\n\nif __name__ == '__main__':\n    sys.exit(zc.buildout.buildout.main())", N)
+    assert_output(system(buildout), """
+Upgraded:
+  zc.buildout version NINETYNINE.NINETYNINE;
+Restarting.
+Generated script '/sample-buildout/bin/buildout'.
+Develop: '/sample-buildout/showversions'
+Section `buildout` contains unused option(s): 'relative-paths'.
+This may be an indication for either a typo in the option's name or a bug in the used recipe.
+Updating show-versions.
+zc.buildout NINETYNINE.NINETYNINE
+""", N)
+    assert_output(capture_print(cat, 'bin', 'buildout'), """
+#!/usr/local/bin/python2.7
+
+import os
+
+join = os.path.join
+base = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
+base = os.path.dirname(base)
+
+import sys
+sys.path[0:0] = [
+  join(base, 'eggs/v5/zc.buildout-NINETYNINE.NINETYNINE-pyN.N.egg'),
+...
+  ]
+
+import zc.buildout.buildout
+
+if __name__ == '__main__':
+    sys.exit(zc.buildout.buildout.main())
+""", N)
     mkdir(sample_buildout, 'failrecipe')
     write(sample_buildout, 'failrecipe', 'failrecipe.py',
     """
@@ -173,4 +266,12 @@ def test_update(update_env):
     [fail]
     recipe = failrecipe
     """ % dict(new_releases=new_releases))
-    assert_output(system(buildout, with_exit_code=True), "Upgraded:\n  zc.buildout V.V\nRestarting.\nGenerated script '/sample-buildout/bin/buildout'.\nDevelop: '/sample-buildout/failrecipe'\nrecipe sys-exits\nEXIT CODE: 1", N)
+    assert_output(system(buildout, with_exit_code=True), """
+Upgraded:
+  zc.buildout V.V
+Restarting.
+Generated script '/sample-buildout/bin/buildout'.
+Develop: '/sample-buildout/failrecipe'
+recipe sys-exits
+EXIT CODE: 1
+""", N)
