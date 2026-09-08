@@ -1013,13 +1013,14 @@ Section `foo` contains unused option(s): 'z'.
 This may be an indication for either a typo in the option's name or a bug in the used recipe.
 """, N)
 
-def test_abnormal_exit(easy_install_env):
+
+def test_abnormal_exit_during_install(easy_install_env):
     buildout = easy_install_env['buildout']
+    ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
+    os = easy_install_env['os']
     system = easy_install_env['system']
     write = easy_install_env['write']
-
     # People sometimes hit control-c while running a builout. We need to make
     # sure that the installed database Isn't corrupted.  To test this, we'll create
     # some evil recipes that exit uncleanly:
@@ -1028,6 +1029,7 @@ def test_abnormal_exit(easy_install_env):
     write('recipes', 'setup.py', "\nimport setuptools\nsetuptools.setup(name='recipes',\n   entry_points = {\n     'zc.buildout': [\n         'clean = recipes:Clean',\n         'evil_install = recipes:EvilInstall',\n         'evil_update = recipes:EvilUpdate',\n         'evil_uninstall = recipes:Clean',\n         ],\n      },\n    )\n")
     # Now let's look at 3 cases:
     #
+
     # 1. We exit during installation after installing some other parts:
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:clean\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:evil_install\n\n[p4]\nrecipe = recipes:clean\n')
     assert_output(system(buildout), """
@@ -1047,6 +1049,24 @@ Develop: '/sample-buildout/recipes'
 Uninstalling p2.
 Uninstalling p1.
 """, N)
+
+
+def test_abnormal_exit_while_updating(easy_install_env):
+    buildout = easy_install_env['buildout']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    system = easy_install_env['system']
+    write = easy_install_env['write']
+    # People sometimes hit control-c while running a builout. We need to make
+    # sure that the installed database Isn't corrupted.  To test this, we'll create
+    # some evil recipes that exit uncleanly:
+    mkdir('recipes')
+    write('recipes', 'recipes.py', '\nimport os\n\nclass Clean:\n    def __init__(*_): pass\n    def install(_): return ()\n    def update(_): pass\n\nclass EvilInstall(Clean):\n    def install(_): os._exit(1)\n\nclass EvilUpdate(Clean):\n    def update(_): os._exit(1)\n')
+    write('recipes', 'setup.py', "\nimport setuptools\nsetuptools.setup(name='recipes',\n   entry_points = {\n     'zc.buildout': [\n         'clean = recipes:Clean',\n         'evil_install = recipes:EvilInstall',\n         'evil_update = recipes:EvilUpdate',\n         'evil_uninstall = recipes:Clean',\n         ],\n      },\n    )\n")
+    # Now let's look at 3 cases:
+    #
+
     # 2. We exit while updating:
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:clean\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:evil_update\n\n[p4]\nrecipe = recipes:clean\n')
     assert_output(system(buildout), """
@@ -1069,6 +1089,24 @@ Uninstalling p1.
 Uninstalling p4.
 Uninstalling p3.
 """, N)
+
+
+def test_abnormal_exit_after_uninstall(easy_install_env):
+    buildout = easy_install_env['buildout']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    system = easy_install_env['system']
+    write = easy_install_env['write']
+    # People sometimes hit control-c while running a builout. We need to make
+    # sure that the installed database Isn't corrupted.  To test this, we'll create
+    # some evil recipes that exit uncleanly:
+    mkdir('recipes')
+    write('recipes', 'recipes.py', '\nimport os\n\nclass Clean:\n    def __init__(*_): pass\n    def install(_): return ()\n    def update(_): pass\n\nclass EvilInstall(Clean):\n    def install(_): os._exit(1)\n\nclass EvilUpdate(Clean):\n    def update(_): os._exit(1)\n')
+    write('recipes', 'setup.py', "\nimport setuptools\nsetuptools.setup(name='recipes',\n   entry_points = {\n     'zc.buildout': [\n         'clean = recipes:Clean',\n         'evil_install = recipes:EvilInstall',\n         'evil_update = recipes:EvilUpdate',\n         'evil_uninstall = recipes:Clean',\n         ],\n      },\n    )\n")
+    # Now let's look at 3 cases:
+    #
+
     # 3. We exit while installing or updating after uninstalling:
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:evil_update\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:clean\n\n[p4]\nrecipe = recipes:clean\n')
     assert_output(system(buildout), """
@@ -1093,6 +1131,7 @@ Updating p2.
 Updating p3.
 Installing p4.
 """, N)
+
 
 def test_install_source_dist_with_bad_py(easy_install_env):
     buildout = easy_install_env['buildout']
