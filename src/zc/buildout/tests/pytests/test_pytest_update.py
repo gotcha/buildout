@@ -35,10 +35,18 @@ def test_update(update_env):
     tmpdir = update_env['tmpdir']
     write = update_env['write']
 
+    # Automatic Buildout Updates
+    # ==========================
+    #
+    # When a buildout is run, one of the first steps performed is to check for
+    # updates to either zc.buildout or setuptools.  To
+    # demonstrate this, we've created some "new releases" of buildout and
+    # setuptools in a new_releases folder:
     assert_output(capture_print(ls, new_releases), """
 -  zc_buildout-91.0-py3-none-any.whl
 -  zc_buildout-99.99-py3-none-any.whl
 """, N)
+    # Let's update the sample buildout.cfg to look in this area:
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -50,6 +58,8 @@ def test_update(update_env):
     [show-versions]
     recipe = showversions
     """ % dict(new_releases=new_releases))
+    # We'll also include a recipe that echos the versions of setuptools and
+    # zc.buildout used:
     mkdir(sample_buildout, 'showversions')
     write(sample_buildout, 'showversions', 'showversions.py',
     """
@@ -78,11 +88,13 @@ def test_update(update_env):
         entry_points = {'zc.buildout': ['default = showversions:Recipe']},
         )
     """)
+    # The installed zc.buildout version is in development mode, so it won't upgrade itself.
     assert_output(system(buildout), """
 Develop:...
 Installing show-versions.
 zc.buildout V.V
 """, N)
+    # But if we run the buildout and tell it to use version 50, the buildout will upgrade itself:
     assert_output(system(buildout + ' versions:zc.buildout=91.0'), """
 Getting distribution for 'zc.buildout==91.0'.
 Got zc.buildout V.V
@@ -94,6 +106,8 @@ Develop: '/sample-buildout/showversions'
 Updating show-versions.
 zc.buildout V.V
 """, N)
+    # Now if we run the buildout without explicit version, the buildout will upgrade itself to the
+    # newest version found in new releases:
     assert_output(system(buildout), """
 Got zc.buildout 99.99.
 Upgraded:
@@ -104,6 +118,7 @@ Develop: '/sample-buildout/showversions'
 Updating show-versions.
 zc.buildout 99.99
 """, N)
+    # Our buildout script has been updated to use the new eggs:
     assert_output(capture_print(cat, sample_buildout, 'bin', 'buildout'), """
 #!/usr/local/bin/python2.7
 
@@ -118,6 +133,9 @@ import zc.buildout.buildout
 if __name__ == '__main__':
     sys.exit(zc.buildout.buildout.main())
 """, N)
+    # Now, let's recreate the sample buildout. If we specify constraints on
+    # the versions of zc.buildout and setuptools to use, running the buildout
+    # will install earlier versions of these packages:
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -132,6 +150,7 @@ if __name__ == '__main__':
     [show-versions]
     recipe = showversions
     """ % dict(new_releases=new_releases))
+    # Now we can see that we actually "upgrade" to an earlier version.
     assert_output(system(buildout), """
 Upgraded:
   zc.buildout V.V
@@ -141,6 +160,10 @@ Develop: '/sample-buildout/showversions'
 Updating show-versions.
 zc.buildout V.V
 """, N)
+    # There are a number of cases, described below, in which the updates
+    # don't happen.
+    #
+    # We won't upgrade in offline mode:
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -157,11 +180,15 @@ Develop: '/sample-buildout/showversions'
 Updating show-versions.
 zc.buildout 1.0.0
 """, N)
+    # Or in non-newest mode:
     assert_output(system(buildout + ' -N'), """
 Develop: '/sample-buildout/showversions'
 Updating show-versions.
 zc.buildout 1.0.0
 """, N)
+    # We also won't upgrade if the buildout script being run isn't in the
+    # buildouts bin directory.  To see this we'll create a new buildout
+    # directory:
     sample_buildout2 = tmpdir('sample_buildout2')
     write(sample_buildout2, 'buildout.cfg',
     """
@@ -184,6 +211,7 @@ Got zc.buildout 99.99.
 Not upgrading because not running a local buildout command.
 """, N)
     ls('bin')
+    # .. The relative-paths option is honored:
     cd(sample_buildout)
     write(sample_buildout, 'buildout.cfg',
     """
@@ -228,6 +256,12 @@ import zc.buildout.buildout
 if __name__ == '__main__':
     sys.exit(zc.buildout.buildout.main())
 """, N)
+    # When buildout restarts and the restarted buildout exits with an error code,
+    # the original buildout that called the second buildout also exits with that
+    # error code. Otherwise build scripts can erroneously detect a successful
+    # buildout run even if it failed.
+    #
+    # Make a recipe that fails:
     mkdir(sample_buildout, 'failrecipe')
     write(sample_buildout, 'failrecipe', 'failrecipe.py',
     """
@@ -254,6 +288,8 @@ if __name__ == '__main__':
         entry_points = {'zc.buildout': ['default = failrecipe:Recipe']},
         )
     """)
+    # Let's downgrade again, triggering a restart. And use the failing recipe that
+    # gives us a sys.exit:
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -268,6 +304,7 @@ if __name__ == '__main__':
     [fail]
     recipe = failrecipe
     """ % dict(new_releases=new_releases))
+    # Run the buildout:
     assert_output(system(buildout, with_exit_code=True), """
 Upgraded:
   zc.buildout V.V
