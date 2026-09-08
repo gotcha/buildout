@@ -304,9 +304,11 @@ def test_configuration(buildout_txt_env):
 
     from io import StringIO
     import pprint, zc.buildout.configparser
+    text = "[foo]\nbar = 1\nbaz = a\n      b\n\n      c\n"
     _val = (pprint.pprint(zc.buildout.configparser.parse(StringIO(
     text), 'test')))
     assert repr(_val) == "{'foo': {'bar': '1', 'baz': 'a\\nb\\nc'}}" or str(_val) == "{'foo': {'bar': '1', 'baz': 'a\\nb\\nc'}}"
+    text = "[foo]\nbar =\nbaz =\n\n  a\n    b\n\n  c\n"
     _val = (pprint.pprint(zc.buildout.configparser.parse(StringIO(
     text), 'test')))
     assert repr(_val) == "{'foo': {'bar': '', 'baz': 'a\\n  b\\n\\nc'}}" or str(_val) == "{'foo': {'bar': '', 'baz': 'a\\n  b\\n\\nc'}}"

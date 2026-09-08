@@ -110,6 +110,7 @@ NORMALIZERS_BUILDOUT = [
     (re.compile(r'zc\.buildout\.buildout\.MissingOption'), 'MissingOption'),
     (re.compile(r'\S+buildout\.py'), 'buildout.py'),
     (re.compile(r'line \d+'), 'line NNN'),
+    (re.compile(r'\((\d+)\)(__\w+__)'), r'(NNN)\2'),
     (re.compile(r'Got zc\.recipe\.egg \S+'), 'Got zc.recipe.egg'),
     (re.compile(r'We have a develop egg: (\S+) (\S+)'), r'We have a develop egg: \1 V'),
 ]

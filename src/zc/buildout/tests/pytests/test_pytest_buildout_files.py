@@ -318,7 +318,7 @@ def test_repeatable(buildout_env):
     [foo]
     recipe = spam
     """)
-    assert_output(system(buildout), "While:\n  Installing.\n  Loading extensions.\n  Error: Buildout now includes 'buildout-versions'\n  (and part of the older 'buildout.dumppickedversions').\n  Remove the extension from your configuration and look at the\n  'show-picked-versions' option in buildout's documentation.", N)
+    assert_output(system(buildout), "While:\n  Installing.\n  Loading extensions.\n  Error: Buildout now includes 'buildout-versions' (and part of the older 'buildout.dumppickedversions').\n  Remove the extension from your configuration and look at the 'show-picked-versions' option in buildout's documentation.", N)
 
 def test_setup(buildout_env):
     buildout = buildout_env['buildout']
