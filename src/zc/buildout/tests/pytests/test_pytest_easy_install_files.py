@@ -1727,14 +1727,11 @@ d  eggs
 d  parts
 """, N)
 
-def test_dependencylinks(easy_install_env):
+
+def test_dependencylinks_metadata_followed(easy_install_env):
     buildout = easy_install_env['buildout']
     get = easy_install_env['get']
-    join = easy_install_env['join']
-    link_server = easy_install_env['link_server']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
-    remove = easy_install_env['remove']
     sample_buildout = easy_install_env['sample_buildout']
     sample_eggs = easy_install_env['sample_eggs']
     start_server = easy_install_env['start_server']
@@ -1799,6 +1796,67 @@ Got demoneeded 1.1...
     #     Not found: /demoneeded/
     #     Not found: /.VolumeIcon.icns
     #
+
+
+def test_dependencylinks_fallback(easy_install_env):
+    buildout = easy_install_env['buildout']
+    get = easy_install_env['get']
+    join = easy_install_env['join']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    remove = easy_install_env['remove']
+    sample_buildout = easy_install_env['sample_buildout']
+    sample_eggs = easy_install_env['sample_eggs']
+    start_server = easy_install_env['start_server']
+    system = easy_install_env['system']
+    write = easy_install_env['write']
+    # Let's see this feature in action.  To begin, let's create a new egg
+    # repository. This repository uses the same sample eggs as the normal
+    # testing repository.
+    link_server2 = start_server(sample_eggs)
+    # Turn on logging on this server so that we can see when eggs are pulled
+    # from it.
+    _ = get(link_server2 + 'enable_server_logging')
+    # TODO assert: 'GET 200 /enable_server_logging'
+    # Let's create a develop egg in our buildout that specifies
+    # dependency_links which point to the new server.
+    mkdir(sample_buildout, 'depdemo')
+    write(sample_buildout, 'depdemo', 'dependencydemo.py',
+          'import eggrecipedemoneeded')
+    write(sample_buildout, 'depdemo', 'setup.py',
+    '''from setuptools import setup; setup(
+        name='depdemo', py_modules=['dependencydemo'],
+        install_requires = 'demoneeded',
+        dependency_links = ['%s'],
+        zip_safe=True, version='1')
+    ''' % link_server2)
+    # Now let's configure the buildout to use the develop egg.
+    write(sample_buildout, 'buildout.cfg',
+    '''
+    [buildout]
+    develop = depdemo
+    parts = eggs
+    
+    [eggs]
+    recipe = zc.recipe.egg:eggs
+    eggs = depdemo
+    ''')
+    # Now we can run the buildout.
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/depdemo'
+Installing eggs.
+Getting distribution for 'demoneeded'.
+Got demoneeded 1.1...
+""", N)
+    # Notice that the egg was retrieved from the logging server.
+    # The output may have extra lines like this, at least on setuptools 63, which we ignore:
+    #
+    #     Not found: /demoneeded/
+    #     Not found: /.VolumeIcon.icns
+    #
+
     # Now let's change the egg so that it doesn't specify dependency links.
     write(sample_buildout, 'depdemo', 'setup.py',
     '''from setuptools import setup; setup(
@@ -1848,6 +1906,51 @@ Got demoneeded 1.1.
     # This time the dependency egg was found on the server without logging
     # configured.
     #
+
+
+def test_dependencylinks_option(easy_install_env):
+    buildout = easy_install_env['buildout']
+    get = easy_install_env['get']
+    join = easy_install_env['join']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    remove = easy_install_env['remove']
+    sample_buildout = easy_install_env['sample_buildout']
+    sample_eggs = easy_install_env['sample_eggs']
+    start_server = easy_install_env['start_server']
+    system = easy_install_env['system']
+    write = easy_install_env['write']
+    link_server2 = start_server(sample_eggs)
+    _ = get(link_server2 + 'enable_server_logging')
+    mkdir(sample_buildout, 'depdemo')
+    write(sample_buildout, 'depdemo', 'dependencydemo.py',
+          'import eggrecipedemoneeded')
+    write(sample_buildout, 'depdemo', 'setup.py',
+    '''from setuptools import setup; setup(
+        name='depdemo', py_modules=['dependencydemo'],
+        install_requires = 'demoneeded',
+        zip_safe=True, version='1')
+    ''')
+    write(sample_buildout, 'buildout.cfg',
+    '''
+    [buildout]
+    develop = depdemo
+    parts = eggs
+    find-links = %s
+    
+    [eggs]
+    recipe = zc.recipe.egg:eggs
+    eggs = depdemo
+    ''' % link_server)
+    _ = system(buildout)
+    from glob import glob
+    from os.path import join
+    def remove_demoneeded_egg():
+        for egg in glob(join(sample_buildout, 'eggs', 'v5', 'demoneeded*.egg')):
+            remove(sample_buildout, 'eggs', egg)
+
     # Now let's change things once again so that both buildout and setup
     # specify different places to look for the dependency egg.
     write(sample_buildout, 'depdemo', 'setup.py',
@@ -1915,6 +2018,7 @@ Updating eggs.
 Getting distribution for 'demoneeded'.
 Got demoneeded 1.1...
 """, N)
+
 
 def test_allowhosts(easy_install_env):
     buildout = easy_install_env['buildout']
