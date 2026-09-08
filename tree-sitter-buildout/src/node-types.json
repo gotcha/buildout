@@ -7,7 +7,21 @@
   {
     "type": "dependency_annotation",
     "named": true,
-    "fields": {}
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "continuation",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "option",

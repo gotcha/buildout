@@ -36,6 +36,7 @@ module.exports = grammar({
   conflicts: $ => [
     [$.section],
     [$.option],
+    [$.dependency_annotation],
   ],
 
   rules: {
@@ -119,9 +120,12 @@ module.exports = grammar({
     // '$$' escapes a literal dollar in the source parser.
     escape: $ => token('$$'),
 
+    // The reference parser accumulates indented continuation lines after
+    // '=>' into the <part-dependencies> value, just like option values.
     dependency_annotation: $ => seq(
       token(seq('=>', /[^\n]*/)),
       $._newline,
+      repeat(choice($.continuation, $.comment, $._blank_line)),
     ),
 
     continuation: $ => seq(

@@ -324,6 +324,26 @@
         {
           "type": "SYMBOL",
           "name": "_newline"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "continuation"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "comment"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_blank_line"
+              }
+            ]
+          }
         }
       ]
     },
@@ -391,6 +411,9 @@
     ],
     [
       "option"
+    ],
+    [
+      "dependency_annotation"
     ]
   ],
   "precedences": [],

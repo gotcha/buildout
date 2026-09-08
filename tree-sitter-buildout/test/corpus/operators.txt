@@ -83,3 +83,21 @@ a = 1
     (section_header (section_name))
     (option (option_name) (assignment) (value))
     (dependency_annotation)))
+
+================================================================================
+dependency annotation with indented continuation
+================================================================================
+
+[s]
+a = 1
+=> [alias]
+    run = x
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header (section_name))
+    (option (option_name) (assignment) (value))
+    (dependency_annotation
+      (continuation))))
