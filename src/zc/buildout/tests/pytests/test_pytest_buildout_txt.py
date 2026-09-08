@@ -692,13 +692,8 @@ data-dir: Creating directory bins
     # - init.txt
     # - extensions.txt
 
-def test_configuration(buildout_txt_env):
-    buildout = buildout_txt_env['buildout']
-    cat = buildout_txt_env['cat']
-    print_ = buildout_txt_env['print_']
-    sample_buildout = buildout_txt_env['sample_buildout']
-    system = buildout_txt_env['system']
-    write = buildout_txt_env['write']
+
+def test_configuration_file_syntax(buildout_txt_env):
 
     # Configuration file syntax
     # -------------------------
@@ -790,6 +785,12 @@ def test_configuration(buildout_txt_env):
     # - option values can be appended or removed using the - and +
     #   operators.
     #
+
+
+def test_configuration_annotated_sections(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    system = buildout_txt_env['system']
+
     # Annotated sections
     # ------------------
     #
@@ -1018,6 +1019,14 @@ zc.buildout= >=1.99
 zc.recipe.egg= >=1.99
     DEFAULT_VALUE
 """, N)
+
+
+def test_configuration_query_values(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+
     # Query values
     # ------------
     #
@@ -1066,6 +1075,14 @@ Error: Key not found: versionx
 ${specific:port}
 Error: Section not found: specific
 """, N)
+
+
+def test_configuration_variable_substitutions(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+
     # Variable substitutions
     # ----------------------
     #
@@ -1184,6 +1201,34 @@ File-2 /sample-buildout/mydata/file/log
 my_name debug
 recipe recipes:debug
 """, N)
+
+
+def test_configuration_part_selection(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    cat = buildout_txt_env['cat']
+    mkdir = buildout_txt_env['mkdir']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = data-dir debug
+    log-level = INFO
+    
+    [debug]
+    recipe = recipes:debug
+    File-1 = ${data-dir:path}/file
+    File-2 = ${:File-1}/log
+    my_name = ${:_buildout_section_name_}
+    
+    [data-dir]
+    recipe = recipes:mkdir
+    path = mydata
+    """)
+    _ = system(buildout)
+
     # Automatic part selection and ordering
     # -------------------------------------
     #
@@ -1257,6 +1302,32 @@ installed_develop_eggs = /sample-buildout/develop-eggs/recipes.egg-link
 parts = data-dir debug
 ...
 """, N)
+
+
+def test_configuration_macros(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    mkdir = buildout_txt_env['mkdir']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug data-dir
+    log-level = INFO
+    
+    [debug]
+    recipe = recipes:debug
+    File-1 = ${data-dir:path}/file
+    File-2 = ${debug:File-1}/log
+    
+    [data-dir]
+    recipe = recipes:mkdir
+    path = mydata
+    """)
+    _ = system(buildout)
+
     # Extending sections (macros)
     # ---------------------------
     #
@@ -1317,6 +1388,7 @@ recipe recipes:debug
     parts =
     """)
     _ = system(buildout)
+
 
 def test_extending_macros(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
