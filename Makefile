@@ -33,12 +33,12 @@ lint:
 	if [ ! -x venvs/linter/bin/buildout-lint ]; then \
 		python3 -m venv venvs/linter && \
 		venvs/linter/bin/pip install -q --upgrade pip && \
-		venvs/linter/bin/pip install -q -e '.[linter]' pytest; \
+		venvs/linter/bin/pip install -q -e '.[linter]'; \
 	fi
 	PYTHONWARNINGS=ignore venvs/linter/bin/buildout-lint \
 		buildout.cfg .github/workflows/scripts*.cfg
-	PYTHONWARNINGS=ignore venvs/linter/bin/python -m pytest \
-		tree-sitter-buildout/linter/ -q
+	PYTHONWARNINGS=ignore venvs/linter/bin/python -m unittest \
+		discover -s tree-sitter-buildout/linter -p 'test_*.py'
 
 help:
 	./prepare.sh --help

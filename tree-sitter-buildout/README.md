@@ -17,7 +17,8 @@ mirrors).
 - `src/` — generated parser (`tree-sitter generate --abi=14`), committed so
   consumers do not need the CLI
 - `test/corpus/` — tree-sitter corpus tests (`tree-sitter test`)
-- `linter/` — pytest suite and lint corpus for the *packaged* linter
+- `linter/` — unittest suite (stdlib, no pytest) and lint corpus for the
+  *packaged* linter
   (`zc.buildout.lint`, see below); `corpus/clean` files must lint without
   any finding, `corpus/warnings` must produce WARNINGs but no ERROR,
   `corpus/errors` must produce an ERROR
@@ -58,8 +59,8 @@ make lint           # lint repo configs + run linter/corpus tests
 (`.github/workflows/lint.yml`) when the vendored copy drifts from
 `tree-sitter-buildout/src/`.
 
-Tests: `python -m pytest tree-sitter-buildout/linter/` (skips if
-py-tree-sitter is not installed).
+Tests: `python -m unittest discover -s tree-sitter-buildout/linter`
+(skips if py-tree-sitter is not installed).
 
 ## Gotchas discovered while writing this
 
