@@ -14,4 +14,6 @@ dist
 .tox
 .coverage
 .coverage.*
-.vscode/
+.vscode/.venv-grammar/
+tree-sitter-buildout/*.dylib
+tree-sitter-buildout/*.so
