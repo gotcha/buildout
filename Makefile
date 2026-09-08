@@ -17,7 +17,10 @@ test-small: bin/test
 	PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
 
 pytest: bin/buildout
-	PYTHONWARNINGS=ignore bin/py -m pytest src/zc/buildout/tests/pytests/ -v
+	# xdist workers are bare-interpreter subprocesses: they do not inherit
+	# bin/py's baked sys.path, so pass the eggs via PYTHONPATH.
+	PYTHONWARNINGS=ignore PYTHONPATH="$$(ls -d $(PWD)/eggs/v5/*.egg | tr '\n' ':')" \
+		bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
 
 help:
 	./prepare.sh --help
