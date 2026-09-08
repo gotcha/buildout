@@ -18,3 +18,4 @@ dist
 .venv-grammar/
 tree-sitter-buildout/*.dylib
 tree-sitter-buildout/*.so
+editors/nvim/parser/
