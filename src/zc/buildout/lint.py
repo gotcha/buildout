@@ -1,5 +1,11 @@
-#!/usr/bin/env python3
-"""buildout-lint: lint zc.buildout configuration files via the tree-sitter CST.
+"""buildout-lint: lint zc.buildout configuration files via a tree-sitter CST.
+
+Install with the ``linter`` extra and use the console script::
+
+    pip install zc.buildout[linter]
+    buildout-lint FILE [FILE ...]
+
+Exit status: 1 if any ERROR-level finding, 0 otherwise.
 
 Checks, in order of severity:
 
@@ -12,7 +18,8 @@ Checks, in order of severity:
           option does not exist in this file, ${:option} shorthand with no
           such option in the current section, '<=' macro referencing an
           unknown section
-- WARNING duplicate section name (the reference parser merges them)
+- WARNING duplicate section name (the reference parser merges them;
+          conditional variants of one section are exempt)
 - WARNING conditional header expression is neither a PEP 508 marker nor
           valid Python syntax
 
@@ -20,50 +27,85 @@ Note: resolution is file-local only. Options injected by recipes, macros
 ('<='), 'extends' layering or '[buildout] versions' can produce false
 positives — this is a linter, not the parser.
 
-Usage: buildout_lint.py FILE [FILE ...]
-Exit status: 1 if any ERROR, 0 otherwise.
+The grammar (tree-sitter-buildout/ in the source distribution) is generated
+to C; the generated ``parser.c`` is vendored under ``zc/buildout/grammar/``
+and compiled with the system C compiler (override with the ``CC``
+environment variable) into a cache in the system temp dir on first use.
 """
 import argparse
+import os
 import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-GRAMMAR_DIR = HERE.parent
-PARSER_C = GRAMMAR_DIR / 'src' / 'parser.c'
+GRAMMAR_DIR = Path(__file__).resolve().parent / 'grammar'
+PARSER_C = GRAMMAR_DIR / 'parser.c'
 
 _SUB_SHAPE = re.compile(r'^\$\{([-a-zA-Z0-9 ._]*):([-a-zA-Z0-9 ._]+)\}$')
 _SUB_ANY = re.compile(r'^\$\{[^}]*\}$')
 
 
 def build_parser_lib():
-    """Compile the generated parser with the system C compiler.
+    """Compile the vendored generated parser with the system C compiler.
 
     Cached under the system temp dir, keyed by parser.c's mtime.
     """
     stamp = str(int(PARSER_C.stat().st_mtime))
     lib = Path(tempfile.gettempdir()) / f'tree-sitter-buildout-{stamp}.so'
     if not lib.exists():
-        subprocess.run(
-            ['cc', '-O2', '-shared', '-fPIC',
-             '-o', str(lib), str(PARSER_C), '-I', str(PARSER_C.parent)],
-            check=True)
+        cc = os.environ.get('CC', 'cc')
+        try:
+            subprocess.run(
+                [cc, '-O2', '-shared', '-fPIC',
+                 '-o', str(lib), str(PARSER_C), '-I', str(PARSER_C.parent)],
+                check=True)
+        except FileNotFoundError:
+            raise SystemExit(
+                f'buildout-lint: C compiler {cc!r} not found. '
+                'Install one (e.g. gcc/clang) or set the CC environment '
+                'variable.')
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(
+                f'buildout-lint: failed to compile {PARSER_C}: {e}')
     return lib
 
 
 def load_language():
+    try:
+        from tree_sitter import Language
+    except ImportError:
+        raise SystemExit(
+            'buildout-lint requires the py-tree-sitter package: '
+            'pip install zc.buildout[linter]')
     import ctypes
-    from tree_sitter import Language
     lib_path = build_parser_lib()
     dll = ctypes.CDLL(str(lib_path))
     dll.tree_sitter_buildout.restype = ctypes.c_void_p
     import warnings
     with warnings.catch_warnings():
-        # py-tree-sitter 0.26 still requires the raw pointer as int
+        # constructing a Language from a raw pointer is deprecated but
+        # still the only way with py-tree-sitter 0.23-0.26
         warnings.simplefilter('ignore', DeprecationWarning)
         return Language(dll.tree_sitter_buildout())
+
+
+def make_parser(language=None):
+    """Return a tree_sitter.Parser for the buildout grammar.
+
+    Works across py-tree-sitter 0.23 (Parser() + set_language) and
+    0.24+ (Parser(language)).
+    """
+    from tree_sitter import Parser
+    if language is None:
+        language = load_language()
+    try:
+        return Parser(language)
+    except TypeError:
+        parser = Parser()
+        parser.set_language(language)
+        return parser
 
 
 class Finding:
@@ -110,7 +152,6 @@ def lint_file(path, parser):
     section_nodes = []  # (section_node, name) in order
 
     def section_name_of(header):
-        name_node = header.child_by_field_name('name')
         for child in header.children:
             if child.type == 'section_name':
                 return _text(child)
@@ -241,12 +282,12 @@ def lint_file(path, parser):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog='buildout-lint', description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(prog='buildout-lint',
+                                 description=__doc__.splitlines()[0])
     ap.add_argument('files', nargs='+', help='configuration files to lint')
     args = ap.parse_args(argv)
 
-    from tree_sitter import Parser
-    parser = Parser(load_language())
+    parser = make_parser()
 
     findings = []
     for path in args.files:

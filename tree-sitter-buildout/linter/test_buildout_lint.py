@@ -1,24 +1,24 @@
-"""Tests for buildout_lint. Standalone: needs the tree-sitter Python package
-(py-tree-sitter) importable; skips cleanly otherwise.
+"""Tests for zc.buildout.lint (the buildout-lint console script).
 
-Run with: python -m pytest tree-sitter-buildout/linter/test_buildout_lint.py
+Needs the tree-sitter Python package (py-tree-sitter) importable; skips
+cleanly otherwise. Run with: python -m pytest tree-sitter-buildout/linter/
 """
 import pytest
 
-tree_sitter = pytest.importorskip('tree_sitter')
+pytest.importorskip('tree_sitter')
 
-import buildout_lint  # noqa: E402
+from zc.buildout import lint  # noqa: E402
 
 
 @pytest.fixture(scope='module')
 def parser():
-    return tree_sitter.Parser(buildout_lint.load_language())
+    return lint.make_parser()
 
 
 def lint_text(parser, tmp_path, text):
     path = tmp_path / 'test.cfg'
     path.write_text(text)
-    return buildout_lint.lint_file(str(path), parser)
+    return lint.lint_file(str(path), parser)
 
 
 def levels(findings):
