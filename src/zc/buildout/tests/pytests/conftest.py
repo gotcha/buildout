@@ -12,7 +12,7 @@ from zope.testing import renormalizing
 
 import zc.buildout.easy_install  # ensure submodule is loaded before tests/__init__.py runs
 import zc.buildout.testing
-from zc.buildout.tests import easy_install_SetUp, normalize_bang, create_sample_eggs
+from zc.buildout.tests import add_source_dist, normalize_bang, create_sample_eggs
 
 _TESTS_DIR = Path(__file__).parent.parent
 
@@ -182,11 +182,54 @@ def reset_easy_install_globals():
     tempfile.tempdir = old_tempdir
 
 
-@pytest.fixture
-def easy_install_env():
-    """Full sandbox: sample eggs + link server + buildout bootstrap."""
+@pytest.fixture(scope='session')
+def _sample_eggs_cache(tmp_path_factory):
+    """Sample-eggs tree built once per test-run process (xdist worker).
+
+    Building the sample dists (demo, demoneeded, MIXEDCASE, other,
+    du_zipped, extdemo, ...) costs ~1.5-2.4s; the dists are immutable
+    inputs, so they are built once and the function-scoped fixtures below
+    hand each test a private copy.
+    """
+    cache = tmp_path_factory.mktemp('sample-eggs-cache')
     fake = _FakeTest()
-    easy_install_SetUp(fake)
+    zc.buildout.testing.buildoutSetUp(fake)
+    dest = str(cache / 'sample_eggs')
+    os.mkdir(dest)
+    os.mkdir(os.path.join(dest, 'index'))
+    fake.globs['sample_eggs'] = dest
+    create_sample_eggs(fake)
+    add_source_dist(fake)
+    # Keep the extdemo staging dir too: tests reference the 'extdemo' glob
+    # (and update_extdemo rewrites it) — it lives in the fake test's tmpdir,
+    # which buildoutTearDown removes, so stash a copy in the cache.
+    extdemo_src = str(cache / 'extdemo-src')
+    shutil.copytree(fake.globs['extdemo'], extdemo_src)
+    # Restore process state (cwd, HOME, tempfile.tempdir, loggers) right
+    # away; the cache tree lives outside the fake test's tmpdirs.
+    zc.buildout.testing.buildoutTearDown(fake)
+    return dest, extdemo_src
+
+
+@pytest.fixture
+def easy_install_env(_sample_eggs_cache):
+    """Full sandbox: sample eggs + link server + buildout bootstrap.
+
+    Same result as easy_install_SetUp, but the sample-eggs tree is copied
+    from the per-worker session cache instead of being rebuilt per test.
+    """
+    fake = _FakeTest()
+    zc.buildout.testing.buildoutSetUp(fake)
+    sample_eggs_cache, extdemo_src = _sample_eggs_cache
+    sample_eggs = fake.globs['tmpdir']('sample_eggs')
+    fake.globs['sample_eggs'] = sample_eggs
+    shutil.copytree(sample_eggs_cache, sample_eggs, dirs_exist_ok=True)
+    extdemo = fake.globs['tmpdir']('extdemo')
+    shutil.copytree(extdemo_src, extdemo, dirs_exist_ok=True)
+    fake.globs['extdemo'] = extdemo
+    fake.globs['link_server'] = fake.globs['start_server'](sample_eggs)
+    fake.globs['update_extdemo'] = lambda: add_source_dist(fake, 1.5)
+    zc.buildout.testing.install_develop('zc.recipe.egg', fake)
     fake.globs['write'] = _dedenting_write(fake.globs['write'])
     yield fake.globs
     zc.buildout.testing.buildoutTearDown(fake)
@@ -214,21 +257,24 @@ def buildout_env():
     zc.buildout.testing.buildoutTearDown(fake)
 
 
-@pytest.fixture
-def buildout_txt_env():
-    """Sandbox for buildout.txt / configuration.txt / etc.
+@pytest.fixture(scope='session')
+def _buildout_txt_index_cache(_sample_eggs_cache, tmp_path_factory):
+    """PyPI-layout index with the zc.recipe.egg wheel, once per process.
 
-    Mirrors buildout_txt_setup from test_all.py: runs buildoutSetUp, creates
-    sample eggs, reorganises the index into a PyPI-like layout, builds a
-    zc.recipe.egg wheel, and copies the recipes directory.
+    Contents match what buildout_txt_env used to build per test: the
+    sample eggs (without the easy_install-specific 'index' subdir and
+    without the extdemo sdist), reorganised into per-project directories,
+    plus a freshly built zc.recipe.egg wheel.
     """
-    fake = _FakeTest()
-    zc.buildout.testing.buildoutSetUp(fake)
+    import tempfile
 
-    index_url = os.environ['buildout_testing_index_url']
-    index = Path(index_url[len('file://'):])
-    fake.globs['sample_eggs'] = str(index)
-    create_sample_eggs(fake)
+    cache = tmp_path_factory.mktemp('buildout-txt-index-cache')
+    index = cache / 'index'
+    shutil.copytree(
+        _sample_eggs_cache[0],
+        str(index),
+        ignore=shutil.ignore_patterns('index', 'extdemo*'),
+    )
 
     for name in os.listdir(index):
         if '-' in name:
@@ -241,11 +287,10 @@ def buildout_txt_env():
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse('zc.recipe.egg'))
     (index / 'zc.recipe.egg').mkdir(exist_ok=True)
-    # Build the wheel from a per-test copy of the source tree: running
+    # Build the wheel from a private copy of the source tree: running
     # ``setup.py bdist_wheel`` in the shared checkout would collide when
     # tests run in parallel (pytest-xdist workers share the filesystem).
-    import tempfile as _tempfile
-    recipe_src = Path(_tempfile.mkdtemp(prefix='zc.recipe.egg-src')) / 'src'
+    recipe_src = Path(tempfile.mkdtemp(prefix='zc.recipe.egg-src')) / 'src'
     shutil.copytree(
         os.path.dirname(dist.location),
         str(recipe_src),
@@ -256,6 +301,30 @@ def buildout_txt_env():
         str(recipe_src),
         str(index / 'zc.recipe.egg'),
     )
+    shutil.rmtree(str(recipe_src.parent))
+    return str(index)
+
+
+@pytest.fixture
+def buildout_txt_env(_buildout_txt_index_cache):
+    """Sandbox for buildout.txt / configuration.txt / etc.
+
+    Mirrors buildout_txt_setup from test_all.py, but the index content
+    (sample eggs in PyPI layout + zc.recipe.egg wheel) is copied from the
+    per-worker session cache instead of being rebuilt per test.
+    """
+    fake = _FakeTest()
+    zc.buildout.testing.buildoutSetUp(fake)
+
+    index_url = os.environ['buildout_testing_index_url']
+    index = Path(index_url[len('file://'):])
+    for name in os.listdir(_buildout_txt_index_cache):
+        src = Path(_buildout_txt_index_cache) / name
+        if src.is_dir():
+            shutil.copytree(str(src), str(index / name))
+        else:
+            shutil.copy2(str(src), str(index / name))
+    fake.globs['sample_eggs'] = str(index)
 
     fake.globs['write'] = _dedenting_write(fake.globs['write'])
     sample_buildout = fake.globs['sample_buildout']
