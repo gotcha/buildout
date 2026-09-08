@@ -206,6 +206,10 @@ jobs:
         TEMP: C:\tmp
       run: make
     - name: Run pytest suite
+      # bash, not the default pwsh: the Makefile pytest recipe is POSIX sh
+      # (command substitution). Under pwsh, make has to discover Git's
+      # sh.exe on PATH itself, and PWD is not exported.
+      shell: bash
       env:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
