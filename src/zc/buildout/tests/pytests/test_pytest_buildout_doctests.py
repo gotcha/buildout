@@ -73,6 +73,7 @@ def test_develop_w_non_setuptools_setup_scripts(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # We should be able to deal with setup scripts that aren't setuptools based.
     mkdir('foo')
     write('foo', 'setup.py', '\nfrom distutils.core import setup\nsetup(name="foo")\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
@@ -90,6 +91,10 @@ def test_develop_verbose(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Check how we deal with multiple times the verbose option.
+    #
+    #     We don't really test the output anymore: this is just too different
+    #     depending on which setuptools version you use.
     mkdir('foo')
     write('foo', 'setup.py', '\nfrom setuptools import setup\nsetup(name="foo")\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
@@ -122,6 +127,9 @@ def test_buildout_error_handling(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Buildout error handling
+    #
+    # Asking for a section that doesn't exist, yields a missing section error:
     import os
     os.chdir(sample_buildout)
     import zc.buildout.buildout
@@ -131,11 +139,13 @@ def test_buildout_error_handling(easy_install_env):
         assert False, "Expected MissingSection not raised"
     except Exception as _exc:
         assert_output(type(_exc).__name__ + ": " + str(_exc), "MissingSection: The referenced section, 'eek', was not defined.", N)
+    # Asking for an option that doesn't exist, a MissingOption error is raised:
     try:
         buildout['buildout']['eek']
         assert False, "Expected MissingOption not raised"
     except Exception as _exc:
         assert_output(type(_exc).__name__ + ": " + str(_exc), 'MissingOption: Missing option: buildout:eek', N)
+    # It is an error to create a variable-reference cycle:
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\nparts =\nx = ${buildout:y}\ny = ${buildout:z}\nz = ${buildout:x}\n')
     assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
 While:
@@ -148,6 +158,7 @@ While:
   Getting option buildout:x.
 Error: Circular reference in substitutions.
 """, N)
+    # It is an error to use funny characters in variable references:
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = data_dir debug\nx = ${bui$ldout:y}\n')
     assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
 While:
@@ -168,6 +179,7 @@ While:
 Error: The option name in substitution, ${buildout:y{z},
 has invalid characters.
 """, N)
+    # and too have too many or too few colons:
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = data_dir debug\nx = ${parts}\n')
     assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
 While:
@@ -188,6 +200,7 @@ While:
 Error: The substitution, ${buildout:y:z},
 has too many colons.
 """, N)
+    # All parts have to have a section:
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\nparts = x\n')
     assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
 While:
@@ -195,6 +208,7 @@ While:
   Getting section x.
 Error: The referenced section, 'x', was not defined.
 """, N)
+    # and all parts have to have a specified recipe:
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\nparts = x\n\n[x]\nfoo = 1\n')
     assert_output(system(os.path.join(sample_buildout, 'bin', 'buildout')), """
 While:
@@ -209,8 +223,14 @@ def test_show_who_requires_when_there_is_a_conflict(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # It's a pain when we require eggs that have requirements that are
+    # incompatible. We want the error we get to tell us what is missing.
+    #
+    # Let's make a few develop distros, some of which have incompatible
+    # requirements.
     make_dist_that_requires(sample_buildout, 'sampley', ['demoneeded ==1.0'])
     make_dist_that_requires(sample_buildout, 'samplez', ['demoneeded ==1.1'])
+    # Now, let's create a buildout that requires y and z:
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n' % easy_install_env)
     assert_output(system(buildout), """
 Develop: '/sample-buildout/sampley'
@@ -227,9 +247,12 @@ Error: There is a version conflict.
 We already have: demoneeded 1.1
 but sampley 1 requires 'demoneeded==1.0'.
 """, N)
+    # Here, we see that sampley required an older version of demoneeded. What
+    # if we hadn't required sampley ourselves:
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez samplea sampleb\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n       samplez\n' % easy_install_env)
+    # If we use the verbose switch, we can see where requirements are coming from:
     assert_output(system(buildout + ' -v'), """
 Installing 'zc.buildout', 'wheel'...
 ...
@@ -275,9 +298,13 @@ but sampley 1 requires 'demoneeded==1.0'.
 def test_version_conflict_rendering(easy_install_env):
     print_ = easy_install_env['print_']
 
+    # We use the arguments passed by pkg_resources.VersionConflict to construct a
+    # nice error message:
     error = pkg_resources.VersionConflict('pkg1 2.1', 'pkg1 1.0')
     ws = []
     assert_output(str(zc.buildout.easy_install.VersionConflict(error, ws)), 'There is a version conflict...', N)
+    # But sometimes pkg_resources passes a nicely formatted string itself already.
+    # Extracting the original arguments fails in that case, so we just show the string.
     error = pkg_resources.VersionConflict('pkg1 2.1 is simply wrong')
     ws = []
     assert_output(str(zc.buildout.easy_install.VersionConflict(error, ws)), """
@@ -292,6 +319,10 @@ def test_show_who_requires_missing_distributions(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # When working with a lot of eggs, which require eggs recursively, it
+    # can be hard to tell why we're requiring things we can't
+    # find. Fortunately, buildout will tell us who's asking for something
+    # that we can't find. when run in verbose mode
     make_dist_that_requires(sample_buildout, 'sampley', ['demoneeded'])
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
@@ -323,6 +354,9 @@ def test_show_who_requires_picked_versions(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # The show-picked-versions prints the versions, but it also prints who
+    # required the picked distributions.
+    # We do not need to run in verbose mode for that to work:
     make_dist_that_requires(sample_buildout, 'sampley', ['demo'])
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
@@ -352,6 +386,8 @@ def test_comparing_saved_options_with_funny_characters(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # If an option has newlines, extra/odd spaces or a %, we need to make sure
+    # the comparison with the saved value works correctly.
     mkdir(sample_buildout, 'recipes')
     write(sample_buildout, 'recipes', 'debug.py', '\nclass Debug:\n    def __init__(self, buildout, name, options):\n        options[\'debug\'] = """  <zodb>\n\n  <filestorage>\n    path foo\n  </filestorage>\n\n</zodb>\n     """\n        options[\'debug1\'] = """\n<zodb>\n\n  <filestorage>\n    path foo\n  </filestorage>\n\n</zodb>\n"""\n        options[\'debug2\'] = \'  x  \'\n        options[\'debug3\'] = \'42\'\n        options[\'format\'] = \'%3d\'\n\n    def install(self):\n        with open(\'t\', \'w\') as f: f.write(\'t\')\n        return \'t\'\n\n    update = install\n')
     write(sample_buildout, 'recipes', 'setup.py', '\nfrom setuptools import setup\nsetup(\n    name = "recipes",\n    entry_points = {\'zc.buildout\': [\'default = debug:Debug\']},\n    )\n')
@@ -363,6 +399,8 @@ def test_comparing_saved_options_with_funny_characters(easy_install_env):
 Develop: '/sample-buildout/recipes'
 Installing debug.
 """, N)
+    # If we run the buildout again, we shouldn't get a message about
+    # uninstalling anything because the configuration hasn't changed.
     assert_output(system(buildout), """
 Develop: '/sample-buildout/recipes'
 Updating debug.
@@ -375,14 +413,18 @@ def test_finding_eggs_as_local_directories(easy_install_env):
     tmpdir = easy_install_env['tmpdir']
     write = easy_install_env['write']
 
+    # It is possible to set up find-links so that we could install from
+    # a local directory that may contained unzipped eggs.
     src = tmpdir('src')
     write(src, 'setup.py', "\nfrom setuptools import setup\nsetup(name='demo', py_modules=[''],\n   zip_safe=False, version='1.0', author='bob', url='bob',\n   author_email='bob')\n")
     write(src, 't.py', '#\n')
     write(src, 'README.txt', '')
     _ = system(join('bin', 'buildout') + ' setup ' + src + ' bdist_egg')
+    # Install it so it gets unzipped:
     d1 = tmpdir('d1')
     ws = zc.buildout.easy_install.install(['demo'], d1, links=[join(src, 'dist')])
     assert_output(capture_print(ls, d1), 'd  demo-1.0-py2.4.egg', N)
+    # Then try to install it again:
     d2 = tmpdir('d2')
     ws = zc.buildout.easy_install.install(['demo'], d2, links=[d1])
     assert_output(capture_print(ls, d2), 'd  demo-1.0-py2.4.egg', N)
@@ -455,6 +497,9 @@ def test_bootstrap_with_extension(easy_install_env):
     tmpdir = easy_install_env['tmpdir']
     write = easy_install_env['write']
 
+    # We had a problem running a bootstrap with an extension.  Let's make
+    # sure it is fixed.  Basically, we don't load extensions when
+    # bootstrapping.
     d = tmpdir('sample-bootstrap')
     write(d, 'buildout.cfg', '\n[buildout]\nextensions = some_awsome_extension\nparts =\n')
     os.chdir(d)
@@ -500,6 +545,7 @@ def test_removing_eggs_from_develop_section_causes_egg_link_to_be_removed(easy_i
     write = easy_install_env['write']
 
     cd(sample_buildout)
+    # Create a develop egg:
     mkdir('foo')
     write('foo', 'setup.py', "\nfrom setuptools import setup\nsetup(name='foox')\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = foo\nparts =\n')
@@ -508,6 +554,7 @@ def test_removing_eggs_from_develop_section_causes_egg_link_to_be_removed(easy_i
 -  foox.egg-link
 -  zc.recipe.egg.egg-link
 """, N)
+    # Create another:
     mkdir('bar')
     write('bar', 'setup.py', "\nfrom setuptools import setup\nsetup(name='fooy')\n")
     write('buildout.cfg', '\n[buildout]\ndevelop = foo bar\nparts =\n')
@@ -520,14 +567,18 @@ Develop: '/sample-buildout/bar'
 -  fooy.egg-link
 -  zc.recipe.egg.egg-link
 """, N)
+    # Remove one:
     write('buildout.cfg', '\n[buildout]\ndevelop = bar\nparts =\n')
     assert_output(system(join('bin', 'buildout')), "Develop: '/sample-buildout/bar'", N)
+    # It is gone
     assert_output(capture_print(ls, 'develop-eggs'), """
 -  fooy.egg-link
 -  zc.recipe.egg.egg-link
 """, N)
+    # Remove the other:
     write('buildout.cfg', '\n[buildout]\nparts =\n')
     print_(system(join('bin', 'buildout')), end='')
+    # All gone
     assert_output(capture_print(ls, 'develop-eggs'), '-  zc.recipe.egg.egg-link', N)
 
 def test_add_setuptools_to_dependencies_when_namespace_packages(easy_install_env):
@@ -540,6 +591,13 @@ def test_add_setuptools_to_dependencies_when_namespace_packages(easy_install_env
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Often, a package depends on setuptools solely by virtue of using
+    # namespace packages. In this situation, package authors often forget to
+    # declare setuptools as a dependency. This is a mistake, but,
+    # unfortunately, a common one that we need to work around.  If an egg
+    # uses namespace packages and does not include setuptools as a dependency,
+    # we will still include setuptools in the working set.  If we see this for
+    # a develop egg, we will also generate a warning.
     mkdir('foo')
     mkdir('foo', 'src')
     mkdir('foo', 'src', 'stuff')
@@ -561,6 +619,11 @@ The following list shows the affected packages and their namespaces:
 
 * foox:...
 """, N)
+    # Depending on the pip and setuptools versions used, the last line may either
+    # be `foox: stuff` or `foox:`.
+    #
+    # Now, if we generate a working set using the egg link, we will get a warning
+    # and we will get setuptools included in the working set.
     import logging, zope.testing.loggingsupport
     handler = zope.testing.loggingsupport.InstalledHandler('zc.buildout.easy_install', level=logging.WARNING)
     logging.getLogger('zc.buildout.easy_install').propagate = False
@@ -575,6 +638,7 @@ zc.buildout.easy_install WARNING
 uses namespace packages but the distribution does not require setuptools.
 """, N)
     handler.clear()
+    # On the other hand, if we have a zipped egg, rather than a develop egg:
     os.remove(join('develop-eggs', 'foox.egg-link'))
     _ = system(join('bin', 'buildout') + ' setup foo bdist_egg')
     foox_dist = join('foo', 'dist')
@@ -591,9 +655,11 @@ uses namespace packages but the distribution does not require setuptools.
 -  wheel.egg-link
 -  zc.buildout.egg-link
 """, N)
+    # We do not get a warning, but we do get setuptools included in the working set:
     _val = (get_working_set('foox'))
     assert repr(_val) == "['foox', 'setuptools']" or str(_val) == "['foox', 'setuptools']"
     print_(handler, end='')
+    # Likewise for an unzipped egg:
     foox_egg_basename = os.path.basename(foox_egg)
     os.remove(join(sample_buildout, 'eggs', 'v5', foox_egg_basename))
     _ = zc.buildout.easy_install.install(['foox'], join(sample_buildout, 'eggs', 'v5'), links=[foox_dist], index='file://' + foox_dist)
@@ -601,6 +667,8 @@ uses namespace packages but the distribution does not require setuptools.
     _val = (get_working_set('foox'))
     assert repr(_val) == "['foox', 'setuptools']" or str(_val) == "['foox', 'setuptools']"
     print_(handler, end='')
+    # We get the same behavior if it is a dependency that uses a
+    # namespace package.
     mkdir('bar')
     write('bar', 'setup.py', "\nfrom setuptools import setup\nsetup(name='bar', install_requires = ['foox'])\n")
     write('bar', 'README.txt', '')
@@ -625,6 +693,10 @@ zc.buildout.easy_install WARNING
   Develop distribution: foox 0.0.0
 uses namespace packages but the distribution does not require setuptools.
 """, N)
+    # On the other hand, if the distribution uses ``pkgutil.extend_path()`` to
+    # implement its namespaces, even if just as fallback from the absence of
+    # ``pkg_resources``, then ``setuptools`` should not be added as requirement to
+    # its unzipped egg:
     foox_installed_egg = join(sample_buildout, 'eggs', 'v5', foox_egg_basename)
     namespace_init = join(foox_installed_egg, 'stuff', '__init__.py')
     write(namespace_init, "try:\n    __import__('pkg_resources').declare_namespace(__name__)\nexcept ImportError:\n    __path__ = __import__('pkgutil').extend_path(__path__, __name__)\n")
@@ -632,9 +704,11 @@ uses namespace packages but the distribution does not require setuptools.
     os.remove(join('develop-eggs', 'bar.egg-link'))
     _val = (get_working_set('foox'))
     assert repr(_val) == "['foox']" or str(_val) == "['foox']"
+    # The same goes for packages using PEP420 namespaces
     os.remove(namespace_init)
     _val = (get_working_set('foox'))
     assert repr(_val) == "['foox']" or str(_val) == "['foox']"
+    # Cleanup:
     logging.getLogger('zc.buildout.easy_install').propagate = True
     handler.uninstall()
 
@@ -648,6 +722,9 @@ def test_develop_preserves_existing_setup_cfg(easy_install_env):
     tmpdir = easy_install_env['tmpdir']
     write = easy_install_env['write']
 
+    # See "Handling custom build options for extensions in develop eggs" in
+    # easy_install.txt.  This will be very similar except that we'll have an
+    # existing setup.cfg:
     write(extdemo, 'setup.cfg', '\n# sampe cfg file\n\n[foo]\nbar = 1\n\n[build_ext]\ndefine = X,Y\n')
     mkdir('include')
     write('include', 'extdemo.h', '\n#define EXTDEMO 42\n')
@@ -672,6 +749,7 @@ def test_uninstall_recipes_used_for_removal(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Uninstall recipes need to be called when a part is removed too:
     mkdir('recipes')
     write('recipes', 'setup.py', '\nfrom setuptools import setup\nsetup(name=\'recipes\',\n      entry_points={\n         \'zc.buildout\': ["demo=demo:Install"],\n         \'zc.buildout.uninstall\': ["demo=demo:uninstall"],\n         })\n')
     write('recipes', 'demo.py', "\nimport sys\nclass Install:\n    def __init__(*args): pass\n    def install(self):\n        sys.stdout.write('installing\\n')\n        return ()\ndef uninstall(name, options):\n    sys.stdout.write('uninstalling\\n')\n")
@@ -722,6 +800,10 @@ def test_changes_in_svn_or_git_dont_affect_sig(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # If we have a develop recipe, it's signature shouldn't be affected to
+    # changes in .git, .svn directories.
+    #
+    # CVS directories used to work as well but do not anymore.
     mkdir('recipe')
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe',\n      entry_points={'zc.buildout': ['default=foo:Foo']})\n")
     write('recipe', 'foo.py', '\nclass Foo:\n    def __init__(*args): pass\n    def install(*args): return ()\n    update = install\n')
@@ -747,6 +829,7 @@ def test_unicode_filename_doesnt_break_hash(easy_install_env):
     mkdir = easy_install_env['mkdir']
     write = easy_install_env['write']
 
+    # Buildout's _dir_hash() used to break on non-ascii filenames on python 2.
     mkdir('héhé')
     write('héhé', 'héhé.py', "\nprint('Example filename from pyramid tests')\n")
     from zc.buildout.buildout import _dir_hash
@@ -774,6 +857,9 @@ def test_recipe_upgrade(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # The buildout will upgrade recipes in newest (and non-offline) mode.
+    #
+    # Let's create a recipe egg
     mkdir('recipe')
     write('recipe', 'recipe.py', "\nimport sys\nclass Recipe:\n    def __init__(*a): pass\n    def install(self):\n        sys.stdout.write('recipe v1\\n')\n        return ()\n    update = install\n")
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe', version='1', py_modules=['recipe'],\n      entry_points={'zc.buildout': ['default = recipe:Recipe']},\n      )\n")
@@ -783,6 +869,7 @@ Running setup script 'recipe/setup.py'.
 ...
 """, N)
     rmdir('recipe', 'build')
+    # And update our buildout to use it.
     write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = %s\n\n[foo]\nrecipe = recipe\n' % join('recipe', 'dist'))
     assert_output(system(buildout), """
 Getting distribution for 'recipe'.
@@ -790,20 +877,24 @@ Got recipe 1.
 Installing foo.
 recipe v1
 """, N)
+    # Now, if we update the recipe egg:
     write('recipe', 'recipe.py', "\nimport sys\nclass Recipe:\n    def __init__(*a): pass\n    def install(self):\n        sys.stdout.write('recipe v2\\n')\n        return ()\n    update = install\n")
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe', version='2', py_modules=['recipe'],\n      entry_points={'zc.buildout': ['default = recipe:Recipe']},\n      )\n")
     assert_output(system(buildout + ' setup recipe bdist_egg'), """
 Running setup script 'recipe/setup.py'.
 ...
 """, N)
+    # We won't get the update if we specify -N:
     assert_output(system(buildout + ' -N'), """
 Updating foo.
 recipe v1
 """, N)
+    # or if we use -o:
     assert_output(system(buildout + ' -o'), """
 Updating foo.
 recipe v1
 """, N)
+    # But we will if we use neither of these:
     assert_output(system(buildout), """
 Getting distribution for 'recipe'.
 Got recipe 2.
@@ -811,6 +902,7 @@ Uninstalling foo.
 Installing foo.
 recipe v2
 """, N)
+    # We can also select a particular recipe version:
     write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = %s\n\n[foo]\nrecipe = recipe ==1\n' % join('recipe', 'dist'))
     assert_output(system(buildout), """
 Uninstalling foo.
@@ -826,6 +918,8 @@ def test_update_adds_to_uninstall_list(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Paths returned by the update method are added to the list of paths to
+    # uninstall
     mkdir('recipe')
     write('recipe', 'setup.py', "\nfrom setuptools import setup\nsetup(name='recipe',\n      entry_points={'zc.buildout': ['default = recipe:Recipe']},\n      )\n")
     write('recipe', 'recipe.py', "\nimport os\nclass Recipe:\n    def __init__(*_): pass\n    def install(self):\n        r = ('a', 'b', 'c')\n        for p in r: os.mkdir(p)\n        return r\n    def update(self):\n        r = ('c', 'd', 'e')\n        for p in r:\n            if not os.path.exists(p):\n               os.mkdir(p)\n        return r\n")
@@ -882,6 +976,7 @@ def test_internal_errors(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Internal errors are clearly marked and don't generate tracebacks:
     mkdir(sample_buildout, 'recipes')
     write(sample_buildout, 'recipes', 'mkdir.py', "\nclass Mkdir:\n    def __init__(self, buildout, name, options):\n        self.name, self.options = name, options\n        options['path'] = os.path.join(\n                              buildout['buildout']['directory'],\n                              options['path'],\n                              )\n")
     write(sample_buildout, 'recipes', 'setup.py', '\nfrom setuptools import setup\nsetup(name = "recipes",\n      entry_points = {\'zc.buildout\': [\'mkdir = mkdir:Mkdir\']},\n      )\n')
@@ -925,9 +1020,15 @@ def test_abnormal_exit(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # People sometimes hit control-c while running a builout. We need to make
+    # sure that the installed database Isn't corrupted.  To test this, we'll create
+    # some evil recipes that exit uncleanly:
     mkdir('recipes')
     write('recipes', 'recipes.py', '\nimport os\n\nclass Clean:\n    def __init__(*_): pass\n    def install(_): return ()\n    def update(_): pass\n\nclass EvilInstall(Clean):\n    def install(_): os._exit(1)\n\nclass EvilUpdate(Clean):\n    def update(_): os._exit(1)\n')
     write('recipes', 'setup.py', "\nimport setuptools\nsetuptools.setup(name='recipes',\n   entry_points = {\n     'zc.buildout': [\n         'clean = recipes:Clean',\n         'evil_install = recipes:EvilInstall',\n         'evil_update = recipes:EvilUpdate',\n         'evil_uninstall = recipes:Clean',\n         ],\n      },\n    )\n")
+    # Now let's look at 3 cases:
+    #
+    # 1. We exit during installation after installing some other parts:
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:clean\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:evil_install\n\n[p4]\nrecipe = recipes:clean\n')
     assert_output(system(buildout), """
 Develop: '/sample-buildout/recipes'
@@ -946,6 +1047,7 @@ Develop: '/sample-buildout/recipes'
 Uninstalling p2.
 Uninstalling p1.
 """, N)
+    # 2. We exit while updating:
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:clean\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:evil_update\n\n[p4]\nrecipe = recipes:clean\n')
     assert_output(system(buildout), """
 Develop: '/sample-buildout/recipes'
@@ -967,6 +1069,7 @@ Uninstalling p1.
 Uninstalling p4.
 Uninstalling p3.
 """, N)
+    # 3. We exit while installing or updating after uninstalling:
     write('buildout.cfg', '\n[buildout]\ndevelop = recipes\nparts = p1 p2 p3 p4\n\n[p1]\nrecipe = recipes:evil_update\n\n[p2]\nrecipe = recipes:clean\n\n[p3]\nrecipe = recipes:clean\n\n[p4]\nrecipe = recipes:clean\n')
     assert_output(system(buildout), """
 Develop: '/sample-buildout/recipes'
@@ -1057,6 +1160,14 @@ def test_bug_105081_Specific_egg_versions_are_ignored_when_newer_eggs_are_around
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Buildout might ignore a specific egg requirement for a recipe:
+    #
+    # - Have a newer version of an egg in your eggs directory
+    # - Use 'recipe==olderversion' in your buildout.cfg to request an
+    #   older version
+    #
+    # Buildout will go and fetch the older version, but it will *use*
+    # the newer version when installing a part with this recipe.
     write('buildout.cfg', '\n[buildout]\nparts = x\nfind-links = %(sample_eggs)s\n\n[x]\nrecipe = zc.recipe.egg\neggs = demo\n' % easy_install_env)
     assert_output(system(buildout), """
 Installing x.
@@ -1133,6 +1244,7 @@ def test_bug_59270_recipes_always_start_in_buildout_dir(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Recipes can rely on running from buildout directory
     mkdir('bad_start')
     write('bad_recipe.py', "\nimport os, sys\ndef print_(*args):\n    sys.stdout.write(' '.join(map(str, args)) + '\\n')\nclass Bad:\n    def __init__(self, *_):\n        print_(os.getcwd())\n    def install(self):\n        sys.stdout.write(os.getcwd()+'\\n')\n        os.chdir('bad_start')\n        sys.stdout.write(os.getcwd()+'\\n')\n        return ()\n")
     write('setup.py', "\nfrom setuptools import setup\nsetup(name='bad.test',\n      py_modules=['bad_recipe'],\n      entry_points={'zc.buildout': ['default=bad_recipe:Bad']},)\n")
@@ -1158,6 +1270,9 @@ def test_bug_61890_file_urls_dont_seem_to_work_in_find_dash_links(easy_install_e
     sample_eggs = easy_install_env['sample_eggs']
     tmpdir = easy_install_env['tmpdir']
 
+    # This bug arises from the fact that setuptools is overly restrictive
+    # about file urls, requiring that file urls pointing at directories
+    # must end in a slash.
     dest = tmpdir('sample-install')
     import zc.buildout.easy_install
     sample_eggs = sample_eggs.replace(os.path.sep, '/')
@@ -1190,6 +1305,10 @@ def test_dealing_with_extremely_insane_dependencies(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # There was a problem with analysis of dependencies taking a long
+    # time, in part because the analysis would get repeated every time a
+    # package was encountered in a dependency list.  Now, we don't do
+    # the analysis any more:
     import os
     for i in range(5):
         p = 'pack%s' % i
@@ -1212,6 +1331,7 @@ While:
   Getting distribution for 'pack5'.
 Error: Couldn't find a distribution for 'pack5'.
 """, N)
+    # However, if we run in verbose mode, we can see why packages were included:
     assert_output(system(buildout + ' -v'), """
 Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
 ...
@@ -1275,6 +1395,7 @@ def test_read_find_links_to_load_extensions(easy_install_env):
     tmpdir = easy_install_env['tmpdir']
     write = easy_install_env['write']
 
+    # We'll create a wacky buildout extension that just announces itself when used:
     src = tmpdir('src')
     write(src, 'wacky_handler.py', '\nimport sys\ndef install(buildout=None):\n    sys.stdout.write("I am a wacky extension\\n")\n')
     write(src, 'setup.py', "\nfrom setuptools import setup\nsetup(name='wackyextension', version='1',\n      py_modules=['wacky_handler'],\n      entry_points = {'zc.buildout.extension':\n            ['default = wacky_handler:install']\n            },\n      )\n")
@@ -1283,8 +1404,11 @@ Running setup ...
 ...
 creating 'dist/wackyextension-1-...
 """, N)
+    # Now we'll create a buildout that uses this extension to load other packages:
     dist = 'file://' + join(src, 'dist').replace(os.path.sep, '/')
     write('buildout.cfg', '\n[buildout]\nparts =\nextensions = wackyextension\nfind-links = %(dist)s\n' % {**easy_install_env, 'dist': dist})
+    # When we run the buildout. it will load the extension from the dist
+    # directory and then use the wacky extension to load the demo package
     assert_output(system(buildout), """
 Getting distribution for 'wackyextension'.
 Got wackyextension 1.
@@ -1300,6 +1424,8 @@ def test_distributions_from_local_find_links_make_it_to_download_cache(easy_inst
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # If we specify a local directory in find links, distros found there
+    # need to make it to the download cache.
     mkdir('test')
     write('test', 'setup.py', "\nfrom setuptools import setup\nsetup(name='foo')\n")
     assert_output(system(buildout + ' setup test bdist_egg'), """
@@ -1314,28 +1440,56 @@ Running setup script 'test/setup.py'.
     _ = zc.buildout.easy_install.download_cache(old_cache)
 
 def test_prefer_final(easy_install_env):
+    # This test tests several permutations:
+    #
+    # Using different version numbers to work around zip importer cache problems. :(
+    #
+    # - With prefer final:
+    #
+    #     - Check that we indeed currently prefer final releases.
     _val = (zc.buildout.easy_install.prefer_final())
     assert repr(_val) == 'True' or str(_val) == 'True'
+    # - no existing and newer dev available
     assert_output(capture_print(lambda: prefer_final_permutation((), [1, '2a1'])), 'downloaded 1', N)
+    # - no existing and only dev available
     assert_output(capture_print(lambda: prefer_final_permutation((), ['3a1'])), 'downloaded 3a1', N)
+    # - final existing and only dev acailable
     assert_output(capture_print(lambda: prefer_final_permutation([4], ['5a1'])), 'had 4', N)
+    # - final existing and newer final available
     assert_output(capture_print(lambda: prefer_final_permutation([6], [7])), 'downloaded 7', N)
+    # - final existing and same final available
     assert_output(capture_print(lambda: prefer_final_permutation([8], [8])), 'had 8', N)
+    # - final existing and older final available
     assert_output(capture_print(lambda: prefer_final_permutation([10], [9])), 'had 10', N)
+    # - only dev existing and final available
     assert_output(capture_print(lambda: prefer_final_permutation(['12a1'], [11])), 'downloaded 11', N)
+    # - only dev existing and no final available newer dev available
     assert_output(capture_print(lambda: prefer_final_permutation(['13a1'], ['13a2'])), 'downloaded 13a2', N)
+    # - only dev existing and no final available older dev available
     assert_output(capture_print(lambda: prefer_final_permutation(['15a1'], ['14a1'])), 'had 15a1', N)
+    # - only dev existing and no final available same dev available
     assert_output(capture_print(lambda: prefer_final_permutation(['16a1'], ['16a1'])), 'had 16a1', N)
+    # - Without prefer final:
     _ = zc.buildout.easy_install.prefer_final(False)
+    # - no existing and newer dev available
     assert_output(capture_print(lambda: prefer_final_permutation((), [18, '19a1'])), 'downloaded 19a1', N)
+    # - no existing and only dev available
     assert_output(capture_print(lambda: prefer_final_permutation((), ['20a1'])), 'downloaded 20a1', N)
+    # - final existing and only dev acailable
     assert_output(capture_print(lambda: prefer_final_permutation([21], ['22a1'])), 'downloaded 22a1', N)
+    # - final existing and newer final available
     assert_output(capture_print(lambda: prefer_final_permutation([23], [24])), 'downloaded 24', N)
+    # - final existing and same final available
     assert_output(capture_print(lambda: prefer_final_permutation([25], [25])), 'had 25', N)
+    # - final existing and older final available
     assert_output(capture_print(lambda: prefer_final_permutation([27], [26])), 'had 27', N)
+    # - only dev existing and final available
     assert_output(capture_print(lambda: prefer_final_permutation(['29a1'], [28])), 'had 29a1', N)
+    # - only dev existing and no final available newer dev available
     assert_output(capture_print(lambda: prefer_final_permutation(['30a1'], ['30a2'])), 'downloaded 30a2', N)
+    # - only dev existing and no final available older dev available
     assert_output(capture_print(lambda: prefer_final_permutation(['32a1'], ['31a1'])), 'had 32a1', N)
+    # - only dev existing and no final available same dev available
     assert_output(capture_print(lambda: prefer_final_permutation(['33a1'], ['33a1'])), 'had 33a1', N)
     _ = zc.buildout.easy_install.prefer_final(True)
 
@@ -1347,6 +1501,10 @@ def test_buildout_prefer_final_option(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # The prefer-final buildout option can be used for override the default
+    # preference for newer distributions.
+    #
+    # The default is prefer-final = true:
     _val = (zc.buildout.easy_install.prefer_final())
     assert repr(_val) == 'True' or str(_val) == 'True'
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
@@ -1364,6 +1522,8 @@ demo = 0.3
 demoneeded = 1.1
 """, N)
     remove('versions-picked.cfg')
+    # Here we see that the final versions of demo and demoneeded are used.
+    # We get the same behavior if we add prefer-final = true
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = true\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
     assert_output(system(buildout), """
 Updating ...
@@ -1379,6 +1539,8 @@ demo = 0.3
 demoneeded = 1.1
 """, N)
     remove('versions-picked.cfg')
+    # If we specify prefer-final = false, we'll get the newest
+    # distributions:
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = false\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
     assert_output(system(buildout), """
 Updating ...
@@ -1394,6 +1556,7 @@ demo = 0.4rc1
 demoneeded = 1.2rc1
 """, N)
     remove('versions-picked.cfg')
+    # We get an error if we specify anything but true or false:
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = no\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
     assert_output(system(buildout + ' -v'), """
 While:
@@ -1407,6 +1570,10 @@ def test_wont_downgrade_due_to_prefer_final(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # If we install a non-final buildout version, we don't want to
+    # downgrade just because we prefer-final.  If a buildout version
+    # isn't specified using a versions entry, then buildout's version
+    # requirement gets set to >=CURRENT_VERSION.
     write('buildout.cfg', '\n[buildout]\nparts =\n')
     [v] = [l.split('= >=', 1)[1].strip() for l in system(buildout + ' -vv').split('\n') if l.startswith('zc.buildout = >=')]
     _val = (v == pkg_resources.working_set.find(
@@ -1432,6 +1599,7 @@ def test_develop_with_modules(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Distribution setup scripts can import modules in the distribution directory:
     mkdir('foo')
     write('foo', 'bar.py', '# empty\n')
     write('foo', 'setup.py', '\nimport bar\nfrom setuptools import setup\nsetup(name="foo")\n')
@@ -1449,6 +1617,8 @@ def test_dont_pick_setuptools_if_version_is_specified_when_required_by_src_dist(
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # When installing a source distribution, we got setuptools without
+    # honoring our version specification.
     mkdir('dist')
     write('setup.py', "\nfrom setuptools import setup\nsetup(name='foo', version='1', py_modules=['foo'], zip_safe=True)\n")
     write('foo.py', '')
@@ -1491,9 +1661,15 @@ def test_expand_shell_patterns_in_develop_paths(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Sometimes we want to include a number of eggs in some directory as
+    # develop eggs, without explicitly listing all of them in our
+    # buildout.cfg
     make_dist_that_requires(sample_buildout, 'sampley')
     make_dist_that_requires(sample_buildout, 'samplez')
+    # Now, let's create a buildout that has a shell pattern that matches
+    # both:
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sample*\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n' % easy_install_env)
+    # We can see that both eggs were found:
     assert_output(system(buildout), """
 Develop: '/sample-buildout/sampley'
 Develop: '/sample-buildout/samplez'
@@ -1507,8 +1683,14 @@ def test_warn_users_when_expanding_shell_patterns_yields_no_results(easy_install
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # Sometimes shell patterns do not match anything, so we want to warn
+    # our users about it...
     make_dist_that_requires(sample_buildout, 'samplea')
+    # So if we have 2 patterns, one that has a matching directory, and
+    # another one that does not
     write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = samplea grumble*\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n' % easy_install_env)
+    # We should get one of the eggs, and a warning for the pattern that
+    # did not match anything.
     assert_output(system(buildout), """
 Develop: '/sample-buildout/samplea'
 Couldn't develop '/sample-buildout/grumble*' (not found)
@@ -1520,6 +1702,7 @@ def test_make_sure_versions_dont_cancel_extras(easy_install_env):
     sample_eggs = easy_install_env['sample_eggs']
     sdist = easy_install_env['sdist']
 
+    # There was a bug that caused extras in requirements to be lost.
     with open('setup.py', 'w') as f:
         _ = f.write("\nfrom setuptools import setup\nsetup(name='extraversiondemo', version='1.0',\n      url='x', author='x', author_email='x',\n      extras_require=dict(foo=['demo']), py_modules=['t'])\n")
     open('README', 'w').close()
@@ -1585,6 +1768,11 @@ Installing p2.
 def test_constrained_requirement(easy_install_env):
     print_ = easy_install_env['print_']
 
+    # zc.buildout.easy_install._constrained_requirement(constraint, requirement)
+    #
+    # Transforms an environment by applying a constraint.
+    #
+    # Here's a table of examples:
     from zc.buildout.easy_install import IncompatibleConstraintError
     examples = [('x', '1', 'x==1'), ('x>1', '2', 'x==2'), ('x>3', '2', IncompatibleConstraintError), ('x>1', '>2', 'x>1,>2')]
     from zc.buildout.easy_install import _constrained_requirement
@@ -1602,6 +1790,11 @@ def test_constrained_requirement(easy_install_env):
 def test_distutils_scripts_using_import_are_properly_parsed(easy_install_env):
     cat = easy_install_env['cat']
 
+    # zc.buildout.easy_install._distutils_script(path, dest, script_content, initialization, rsetup):
+    #
+    # Creates a script for a distutils based project. In this example for a
+    # hypothetical code quality checker called 'pyflint' that uses an import
+    # statement to import its code.
     pyflint_script = '#!/path/to/bin/python\nimport pyflint.do_something\npyflint.do_something()\n'
     import sys
     original_executable = sys.executable
@@ -1622,6 +1815,11 @@ def test_distutils_scripts_using_import_are_properly_parsed(easy_install_env):
 def test_distutils_scripts_using_from_are_properly_parsed(easy_install_env):
     cat = easy_install_env['cat']
 
+    # zc.buildout.easy_install._distutils_script(path, dest, script_content, initialization, rsetup):
+    #
+    # Creates a script for a distutils based project. In this example for a
+    # hypothetical code quality checker called 'pyflint' that uses a from
+    # statement to import its code.
     pyflint_script = '#!/path/to/bin/python\nfrom pyflint import do_something\ndo_something()\n'
     import sys
     original_executable = sys.executable
@@ -1664,6 +1862,10 @@ def test_macro_inheritance_bug(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # There was a bug preventing a section from using another section as a macro
+    # if that section was extended with macros, and both sections were listed as
+    # parts (phew!).  The following contrived example demonstrates that this
+    # now works.
     write('buildout.cfg', '\n[buildout]\nparts = foo bar\n[base]\nrecipe = zc.recipe.egg\n[foo]\n<=base\neggs = zc.buildout\ninterpreter = python\n[bar]\n<=foo\ninterpreter = py\n')
     assert_output(system(join('bin', 'buildout')), """
 Installing foo.
@@ -1759,6 +1961,7 @@ def test_buildout_section_shorthand_for_command_line_assignments(easy_install_en
 def test_buildout_honors_umask(easy_install_env):
     os = easy_install_env['os']
 
+    # For setting the executable permission, the user's umask is honored:
     orig_umask = os.umask(63)
     _val = (zc.buildout.easy_install._execute_permission() == 0o700)
     assert repr(_val) == 'True' or str(_val) == 'True'
@@ -1808,14 +2011,17 @@ def test_buildout_doesnt_keep_adding_itself_to_versions(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
+    # We were constantly writing to versions.cfg for buildout and setuptools
     write('buildout.cfg', '\n[buildout]\nparts =\nextends = versions.cfg\nshow-picked-versions = true\nupdate-versions-file = versions.cfg\nextends = versions.cfg\n')
     write('versions.cfg', '[versions]\n')
     _ = system(join('bin', 'buildout'))
     with open('versions.cfg') as f:
         versions = f.read()
     _ = system(join('bin', 'buildout'))
+    # On the first run, some pins were added:
     assert_output(capture_print(cat, 'versions.cfg'), '[versions]', N)
     _ = system(join('bin', 'buildout'))
     _ = system(join('bin', 'buildout'))
+    # Subsequent runs didn't add additional text:
     with open('versions.cfg') as f:
         versions == f.read()

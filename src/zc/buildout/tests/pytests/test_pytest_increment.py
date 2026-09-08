@@ -57,6 +57,7 @@ def test_default_cfg_extensions(easy_install_env):
     write = easy_install_env['write']
     ls = easy_install_env['ls']
 
+    # Add two extensions as develop eggs
     mkdir('demo')
     write('demo', 'demo.py', '''
 import sys
@@ -101,6 +102,8 @@ develop = demo demo2
 parts =
 ''')
 
+    # Run buildout once without extensions to actually develop the eggs.
+    # (Develop happens after loading extensions.)
     assert_output(
         system(buildout),
         """
@@ -119,6 +122,8 @@ Develop: '/sample-buildout/demo2'
         N,
     )
 
+    # extensions in .buildout/default.cfg
+    # incremented in buildout.cfg
     home = tmpdir('home')
     mkdir(home, '.buildout')
     default_cfg = join(home, '.buildout', 'default.cfg')

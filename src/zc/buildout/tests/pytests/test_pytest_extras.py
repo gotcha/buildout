@@ -10,6 +10,7 @@ def test_install_extras_with_greater_than_constrains(easy_install_env):
     mkdir = easy_install_env['mkdir']
     sdist = easy_install_env['sdist']
 
+    # There was a bug that caused extras in requirements to be lost.
     working = tmpdir('working')
     cd(working)
     mkdir('dependency')
