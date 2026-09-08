@@ -32,7 +32,7 @@ def test_update(update_env):
     tmpdir = update_env['tmpdir']
     write = update_env['write']
 
-    assert_output(capture_print(ls, new_releases), '...\n-  zc_buildout-91.0-py3-none-any.whl\n-  zc_buildout-NINETYNINE.NINETYNINE-py3-none-any.whl', N)
+    assert_output(capture_print(ls, new_releases), '-  zc_buildout-...-py3-none-any.whl\n-  zc_buildout-91.0-py3-none-any.whl\n-  zc_buildout-NINETYNINE.NINETYNINE-py3-none-any.whl', N)
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]

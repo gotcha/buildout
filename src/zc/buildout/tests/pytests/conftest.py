@@ -23,6 +23,7 @@ _TESTS_DIR = Path(__file__).parent.parent
 
 NORMALIZERS_EASY_INSTALL = [
     (re.compile(r'http://localhost:[0-9]{4,5}/'), 'http://localhost/'),
+    (re.compile(r'[0-9a-f]{32}'), '<MD5 CHECKSUM>'),
     zc.buildout.testing.normalize_path,
     zc.buildout.testing.normalize_endings,
     zc.buildout.testing.normalize_script,
@@ -274,6 +275,7 @@ def update_env():
     if location.name == 'src':
         location = location.parent
 
+    original_ver = old_ver
     versions = ['91.0', '99.99']
     for version in versions:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -289,7 +291,7 @@ def update_env():
             extracted = tmpdir / os.listdir(tmpdir)[0]
             setup_py = extracted / 'setup.py'
             info = setup_py.read_text()
-            old_line = f'version = "{old_ver}"'
+            old_line = f'version = "{original_ver}"'
             new_line = f'version = "{version}"'
             if old_line in info:
                 info = info.replace(old_line, new_line)
@@ -298,7 +300,6 @@ def update_env():
                 [sys.executable, '-m', 'build', '--wheel', str(extracted), '--outdir', new_releases],
                 stderr=_sp.STDOUT,
             )
-            old_ver = version
 
     yield fake.globs
     zc.buildout.testing.buildoutTearDown(fake)

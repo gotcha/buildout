@@ -113,7 +113,7 @@ def test_easy_install(easy_install_env):
             versions = dict(demo='0.2', demoneeded='1.0'))
         assert False, "Expected IncompatibleConstraintError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "IncompatibleConstraintError: The requirement ('demo>0.2') is not allowed by your [versions] constraint (0.2)", N)
+        assert_output(str(_exc), "The requirement ('demo>0.2') is not allowed by your [versions] constraint (0.2)", N)
     assert_output(str(handler), "zc.buildout.easy_install DEBUG\n  Installing 'demo >0.2'.\nzc.buildout.easy_install INFO\n  Version and requirements information containing demo:\n  [versions] constraint on demo: 0.2\n  Base installation request: 'demo >0.2'", N)
     handler.clear()
     ws = zc.buildout.easy_install.install(
@@ -416,7 +416,7 @@ def test_easy_install(easy_install_env):
         versions = dict(demo='0.3'))
         assert False, "Expected zc.buildout.easy_install.IncompatibleConstraintError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "zc.buildout.easy_install.IncompatibleConstraintError: The requirement ('demo==0...", N)
+        assert_output(str(_exc), "The requirement ('demo==0...", N)
 
 def test_downloadcache(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -772,7 +772,7 @@ def test_download(easy_install_env):
                  md5('The wrong text.'.encode()).hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "ChecksumError: MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
+        assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     _val = (download(join(server_data, 'foo.txt'),
               md5('This is a foo text.'.encode()).hexdigest()))
     assert_output(str(_val), "('/sample_files/foo.txt', False)", N)
@@ -781,7 +781,7 @@ def test_download(easy_install_env):
                  md5('The wrong text.'.encode()).hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "ChecksumError: MD5 checksum mismatch for local resource at '/sample_files/foo.txt'.", N)
+        assert_output(str(_exc), "MD5 checksum mismatch for local resource at '/sample_files/foo.txt'.", N)
     target_dir = tmpdir('download-target')
     path, is_temp = download(server_url+'foo.txt',
                              path=join(target_dir, 'downloaded.txt'))
@@ -794,7 +794,7 @@ def test_download(easy_install_env):
         download(server_url+'foo.txt')
         assert False, "Expected UserError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "UserError: Couldn't download 'http://localhost/foo.txt' in offline mode.", N)
+        assert_output(str(_exc), "Couldn't download 'http://localhost/foo.txt' in offline mode.", N)
     assert_output(capture_print(cat, download(join(server_data, 'foo.txt'))[0]), 'This is a foo text.', N)
     assert_output(capture_print(cat, download('file:' + join(server_data, 'foo.txt'))[0]), 'This is a foo text.', N)
     remove(path)
@@ -855,7 +855,7 @@ def test_download(easy_install_env):
         download(server_url+'foo.txt', md5('The wrong text.'.encode()).hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "ChecksumError: MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
+        assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     ls(cache)
     remove(path)
     try:
@@ -889,9 +889,9 @@ def test_download(easy_install_env):
     write(server_data, 'foo.txt', 'This is a foo text.')
     download = Download(cache=cache, hash_name=True)
     path, is_temp = download(server_url+'foo.txt')
-    assert_output(str(path), '/download-cache/09f5793fcdc1716727f72d49519c688d', N)
+    assert_output(str(path), '/download-cache/<MD5 CHECKSUM>', N)
     assert_output(capture_print(cat, path), 'This is a foo text.', N)
-    assert_output(capture_print(ls, cache), '- 09f5793fcdc1716727f72d49519c688d', N)
+    assert_output(capture_print(ls, cache), '- <MD5 CHECKSUM>', N)
     _val = ((path.lower() ==
  join(cache, md5((server_url+'foo.txt').encode()).hexdigest()).lower()))
     assert repr(_val) == 'True' or str(_val) == 'True'
@@ -899,9 +899,9 @@ def test_download(easy_install_env):
     _val = ((path, is_temp) == download(server_url+'foo.txt'))
     assert repr(_val) == 'True' or str(_val) == 'True'
     assert_output(capture_print(cat, path), 'This is a foo text.', N)
-    assert_output(capture_print(ls, cache), '- 09f5793fcdc1716727f72d49519c688d', N)
+    assert_output(capture_print(ls, cache), '- <MD5 CHECKSUM>', N)
     path2, is_temp = download(server_url+'other/foo.txt')
-    assert_output(str(path2), '/download-cache/537b6d73267f8f4447586989af8c470e', N)
+    assert_output(str(path2), '/download-cache/<MD5 CHECKSUM>', N)
     _val = (path == path2)
     assert repr(_val) == 'False' or str(_val) == 'False'
     _val = ((path2.lower() ==
@@ -910,7 +910,7 @@ def test_download(easy_install_env):
     assert repr(_val) == 'True' or str(_val) == 'True'
     assert_output(capture_print(cat, path), 'This is a foo text.', N)
     assert_output(capture_print(cat, path2), 'The wrong text.', N)
-    assert_output(capture_print(ls, cache), '- 09f5793fcdc1716727f72d49519c688d\n- 537b6d73267f8f4447586989af8c470e', N)
+    assert_output(capture_print(ls, cache), '- <MD5 CHECKSUM>\n- <MD5 CHECKSUM>', N)
     remove(path)
     remove(path2)
     write(server_data, 'foo.txt', 'This is a foo text.')
@@ -947,7 +947,7 @@ def test_download(easy_install_env):
         download(server_url+'foo.txt', md5('The wrong text.'.encode()).hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "ChecksumError: MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
+        assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     assert_output(capture_print(cat, cache, 'foo.txt'), 'The wrong text.', N)
     download = Download({'download-cache': cache}, namespace='cmmi')
     assert_output(str(download.cache_dir), '/download-cache/cmmi', N)
@@ -1043,7 +1043,7 @@ def test_extends_cache(easy_install_env):
     """ % server_url)
     assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
     cache = join(sample_buildout, 'cache')
-    assert_output(capture_print(ls, cache), '-  5aedc98d7e769290a29d654a591a3a45', N)
+    assert_output(capture_print(ls, cache), '-  <MD5 CHECKSUM>', N)
     import os
     assert_output(capture_print(cat, cache, os.listdir(cache)[0]), '[buildout]\nparts =\nfoo = bar', N)
     assert_output(system(buildout + ' -o'), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
@@ -1094,9 +1094,9 @@ def test_extends_cache(easy_install_env):
     offline = false
     """)
     assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(capture_print(ls, 'user-cache'), '-  10e772cf422123ef6c64ae770f555740', N)
+    assert_output(capture_print(ls, 'user-cache'), '-  <MD5 CHECKSUM>', N)
     assert_output(capture_print(cat, 'user-cache', os.listdir('user-cache')[0]), '[buildout]\nfoo = bar\noffline = false', N)
-    assert_output(capture_print(ls, 'cache'), '-  c72213127e6eb2208a3e1fc1dba771a7', N)
+    assert_output(capture_print(ls, 'cache'), '-  <MD5 CHECKSUM>', N)
     assert_output(capture_print(cat, 'cache', os.listdir('cache')[0]), '[buildout]\nparts =\noffline = false', N)
     write('home', '.buildout', 'default.cfg', """\
     [buildout]
@@ -1119,7 +1119,7 @@ def test_extends_cache(easy_install_env):
     remove('user-cache', os.listdir('user-cache')[0])
     remove('cache', os.listdir('cache')[0])
     assert_output(system(buildout), "Section `buildout` contains unused option(s): 'foo'.\nThis may be an indication for either a typo in the option's name or a bug in the used recipe.", N)
-    assert_output(capture_print(ls, 'user-cache'), '-  0548bad6002359532de37385bb532e26', N)
+    assert_output(capture_print(ls, 'user-cache'), '-  <MD5 CHECKSUM>', N)
     assert_output(capture_print(cat, 'user-cache', os.listdir('user-cache')[0]), '[buildout]\nparts =\noffline = false', N)
     ls('cache')
     rmdir('user-cache')
@@ -1209,7 +1209,7 @@ def test_extends_cache(easy_install_env):
     extends = %sbase.cfg
     """ % server_url)
     print_(system(buildout))
-    assert_output(capture_print(ls, 'cache'), '-  5aedc98d7e769290a29d654a591a3a45', N)
+    assert_output(capture_print(ls, 'cache'), '-  <MD5 CHECKSUM>', N)
     assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), '[buildout]\nparts =', N)
     write(server_data, 'base.cfg', """\
     [buildout]
