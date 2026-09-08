@@ -241,8 +241,19 @@ def buildout_txt_env():
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse('zc.recipe.egg'))
     (index / 'zc.recipe.egg').mkdir(exist_ok=True)
-    zc.buildout.testing.bdist_wheel(
+    # Build the wheel from a per-test copy of the source tree: running
+    # ``setup.py bdist_wheel`` in the shared checkout would collide when
+    # tests run in parallel (pytest-xdist workers share the filesystem).
+    import tempfile as _tempfile
+    recipe_src = Path(_tempfile.mkdtemp(prefix='zc.recipe.egg-src')) / 'src'
+    shutil.copytree(
         os.path.dirname(dist.location),
+        str(recipe_src),
+        ignore=shutil.ignore_patterns(
+            'build', 'dist', '*.egg-info', '__pycache__', '*.pyc'),
+    )
+    zc.buildout.testing.bdist_wheel(
+        str(recipe_src),
         str(index / 'zc.recipe.egg'),
     )
 
