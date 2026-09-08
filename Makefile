@@ -1,4 +1,4 @@
-.PHONY: all test help
+.PHONY: all test pytest help
 all: test
 
 bin/buildout: setup.py prepare.sh dev.py
@@ -15,6 +15,9 @@ test-recipe: bin/test
 
 test-small: bin/test
 	PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
+
+pytest: bin/buildout
+	PYTHONWARNINGS=ignore bin/py -m pytest src/zc/buildout/tests/pytests/ -v
 
 help:
 	./prepare.sh --help
