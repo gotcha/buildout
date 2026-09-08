@@ -1,4 +1,7 @@
-"""Pytest port of easy_install.txt, downloadcache.txt, dependencylinks.txt, allowhosts.txt, allow-unknown-extras.txt, download.txt, extends-cache.txt, testing_bugfix.txt — no DocTestRunner."""
+"""Pytest port of easy_install.txt, downloadcache.txt, dependencylinks.txt, allowhosts.txt, allow-unknown-extras.txt, download.txt, extends-cache.txt, testing_bugfix.txt — no DocTestRunner.
+
+easy_install.txt is split into one test per prose section
+(test_easy_install_*); the other legacy files map 1:1 to tests below."""
 import os
 import re
 import shutil
@@ -19,24 +22,13 @@ from zc.buildout.tests.pytests.conftest import (
 N = NORMALIZERS_EASY_INSTALL
 
 
-def test_easy_install(easy_install_env):
-    cat = easy_install_env['cat']
+def test_easy_install_distribution_installation(easy_install_env):
     get = easy_install_env['get']
-    join = easy_install_env['join']
     link_server = easy_install_env['link_server']
     ls = easy_install_env['ls']
-    mkdir = easy_install_env['mkdir']
-    os = easy_install_env['os']
     print_ = easy_install_env['print_']
-    remove = easy_install_env['remove']
     rmdir = easy_install_env['rmdir']
-    sample_buildout = easy_install_env['sample_buildout']
-    start_server = easy_install_env['start_server']
-    system = easy_install_env['system']
     tmpdir = easy_install_env['tmpdir']
-    update_extdemo = easy_install_env['update_extdemo']
-    extdemo = easy_install_env['extdemo']
-    write = easy_install_env['write']
 
     # Python API for egg and script installation
     # ==========================================
@@ -277,6 +269,13 @@ d  mixedcase-0.5-pyN.N.egg
     # And cleanup.
     _ = get(link_server + 'disable_server_logging')
     rmdir(dest)
+
+
+def test_easy_install_specifying_versions(easy_install_env):
+    link_server = easy_install_env['link_server']
+    tmpdir = easy_install_env['tmpdir']
+    dest = tmpdir('sample-install')
+
     # Specifying version information independent of requirements
     # ----------------------------------------------------------
     #
@@ -406,6 +405,15 @@ zc.buildout.easy_install DEBUG
         )
     _val = ([d.version for d in ws])
     assert repr(_val) == "['0.3', '1.1']" or str(_val) == "['0.3', '1.1']"
+
+
+def test_easy_install_use_dependency_links(easy_install_env):
+    get = easy_install_env['get']
+    link_server = easy_install_env['link_server']
+    rmdir = easy_install_env['rmdir']
+    start_server = easy_install_env['start_server']
+    tmpdir = easy_install_env['tmpdir']
+
     # Dependency links
     # ----------------
     #
@@ -499,6 +507,26 @@ zc.buildout.easy_install DEBUG
         ['hasdeps'], example_dest, index=link_server+'index/',
         links=[link_server, link_server3])
     # TODO assert: 'GET 200 /demoneeded-1.2-py3-none-any.whl'
+
+
+def test_easy_install_script_generation(easy_install_env):
+    cat = easy_install_env['cat']
+    join = easy_install_env['join']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    os = easy_install_env['os']
+    system = easy_install_env['system']
+    tmpdir = easy_install_env['tmpdir']
+    write = easy_install_env['write']
+    dest = tmpdir('sample-install')
+    zc.buildout.easy_install.install(
+        ['demo'], dest, links=[link_server], index=link_server+'index/',
+        versions=dict(demo='0.2', demoneeded='1.0'))
+    zc.buildout.easy_install.install(
+        ['demo'], dest, links=[link_server], index=link_server+'index/')
+    ws = zc.buildout.easy_install.install(
+        ['demo'], dest, links=[link_server], index=link_server+'index/')
+
     # Script generation
     # -----------------
     #
@@ -803,6 +831,16 @@ os.chdir("foo")
 _interactive = True
 ...
 """, N)
+
+
+def test_easy_install_relative_paths(easy_install_env):
+    cat = easy_install_env['cat']
+    join = easy_install_env['join']
+    link_server = easy_install_env['link_server']
+    mkdir = easy_install_env['mkdir']
+    system = easy_install_env['system']
+    tmpdir = easy_install_env['tmpdir']
+
     # Relative paths
     # --------------
     #
@@ -1038,6 +1076,27 @@ if _interactive:
     # #     True
     #
     #
+
+
+def test_easy_install_build_options(easy_install_env):
+    get = easy_install_env['get']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    remove = easy_install_env['remove']
+    sample_buildout = easy_install_env['sample_buildout']
+    tmpdir = easy_install_env['tmpdir']
+    update_extdemo = easy_install_env['update_extdemo']
+    extdemo = easy_install_env['extdemo']
+    write = easy_install_env['write']
+    dest = tmpdir('sample-install')
+    zc.buildout.easy_install.install(
+        ['demo'], dest, links=[link_server], index=link_server+'index/',
+        versions=dict(demo='0.2', demoneeded='1.0'))
+    zc.buildout.easy_install.install(
+        ['demo'], dest, links=[link_server], index=link_server+'index/')
+
     # Handling custom build options for extensions provided in source distributions
     # -----------------------------------------------------------------------------
     #
@@ -1256,6 +1315,26 @@ d  extdemo-1.4-py2.4-unix-i686.egg
     contents = os.listdir(extdemo)
     _val = (bool([f for f in contents if f.endswith('.so') or f.endswith('.pyd')]))
     assert repr(_val) == 'True' or str(_val) == 'True'
+
+
+def test_easy_install_download_cache(easy_install_env):
+    get = easy_install_env['get']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    remove = easy_install_env['remove']
+    sample_buildout = easy_install_env['sample_buildout']
+    tmpdir = easy_install_env['tmpdir']
+    update_extdemo = easy_install_env['update_extdemo']
+    write = easy_install_env['write']
+    mkdir('include')
+    write('include', 'extdemo.h',
+    """
+    #define EXTDEMO 42
+    """)
+    update_extdemo()
+
     # Download cache
     # --------------
     #
@@ -1275,8 +1354,7 @@ d  extdemo-1.4-py2.4-unix-i686.egg
     # directory:
     cache = tmpdir('cache')
     zc.buildout.easy_install.download_cache(cache)
-    # We'll recreate our destination directory:
-    remove(dest)
+    # We create a destination directory:
     dest = tmpdir('sample-install')
     # We'd like to see what is being fetched from the server, so we'll
     # enable server logging:
@@ -1419,6 +1497,7 @@ d  demoneeded-1.1-py2.4.egg
         assert False, "Expected zc.buildout.easy_install.IncompatibleConstraintError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "The requirement ('demo==0...", N)
+
 
 def test_downloadcache(easy_install_env):
     buildout = easy_install_env['buildout']
