@@ -27,6 +27,23 @@ def test_runsetup(buildout_env):
     system = buildout_env['system']
     write = buildout_env['write']
 
+    # Running setup scripts
+    # =====================
+    #
+    # Buildouts are often used to work on packages that will be distributed
+    # as eggs. During development, we use develop eggs.  When you've
+    # completed a development cycle, you'll need to run your setup script to
+    # generate a distribution and, perhaps, uploaded it to the Python
+    # package index.  If your script uses setuptools, you'll need setuptools
+    # in your Python path, which may be an issue if you haven't installed
+    # setuptools into your Python installation.
+    #
+    # The buildout setup command is helpful in a situation like this.  It
+    # can be used to run a setup script and it does so with the setuptools
+    # egg in the Python path and with setuptools already imported.  The fact
+    # that setuptools is imported means that you can use setuptools-based
+    # commands, like bdist_egg even with packages that don't use setuptools.
+    # To illustrate this, we'll create a package in a sample buildout:
     mkdir('hello')
     write('hello', 'hello.py',
          'import sys; sys.stdout.write("Hello World!\\n")\n')
@@ -41,10 +58,12 @@ def test_runsetup(buildout_env):
           author_email="bob@foo.com",
           )
     """)
+    # We can use the buildout command to generate the hello egg:
     assert_output(system(buildout + ' setup hello -q bdist_egg'), """
 Running setup script 'hello/setup.py'.
 zip_safe flag not set; analyzing archive contents...
 """, N)
+    # The hello directory now has a hello egg in it's dist directory:
     assert_output(capture_print(ls, 'hello', 'dist'), '-  hello-1.0-py2.4.egg', N)
 
 def test_repeatable(buildout_env):
@@ -57,6 +76,25 @@ def test_repeatable(buildout_env):
     system = buildout_env['system']
     write = buildout_env['write']
 
+    # Repeatable buildouts: controlling eggs used
+    # ===========================================
+    #
+    # One of the goals of zc.buildout is to provide enough control to make
+    # buildouts repeatable.  It should be possible to check the buildout
+    # configuration files for a project into a version control system and
+    # later use the checked in files to get the same buildout, subject to
+    # changes in the environment outside the buildout.
+    #
+    # An advantage of using Python eggs is that dependencies of eggs used are
+    # automatically determined and used.  The automatic inclusion of
+    # dependent distributions is at odds with the goal of repeatable
+    # buildouts.
+    #
+    # To support repeatable buildouts, a versions section can be created
+    # with options for each distribution name who's version is to be fixed.
+    # The section can then be specified via the buildout versions option.
+    #
+    # To see how this works, we'll create two versions of a recipe egg:
     mkdir('recipe')
     write('recipe', 'recipe.py',
     '''
@@ -104,6 +142,7 @@ Running setup script 'recipe/setup.py'.
 Running setup script 'recipe/setup.py'.
 ...
 """, N)
+    # and we'll configure a buildout to use it:
     write('buildout.cfg',
     '''
     [buildout]
@@ -113,12 +152,15 @@ Running setup script 'recipe/setup.py'.
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
+    # If we run the buildout, it will use version 2:
     assert_output(system(buildout), """
 Getting distribution for 'spam'.
 Got spam 2.
 Installing foo.
 recipe v2
 """, N)
+    # We can specify a versions section that lists our recipe and name it in
+    # the buildout section:
     write('buildout.cfg',
     '''
     [buildout]
@@ -132,6 +174,11 @@ recipe v2
     [foo]
     recipe = spam
     ''' % join('recipe', 'dist'))
+    # Here we created a versions section listing the version 1 for the spam
+    # distribution.  We told the buildout to use it by specifying release-1
+    # as in the versions option.
+    #
+    # Now, if we run the buildout, we'll use version 1 of the spam recipe:
     assert_output(system(buildout), """
 Getting distribution for 'spam==1'.
 Got spam 1.
@@ -139,6 +186,9 @@ Uninstalling foo.
 Installing foo.
 recipe v1
 """, N)
+    # Running the buildout in verbose mode will help us get information
+    # about versions used. If we run the buildout in verbose mode without
+    # specifying a versions section:
     assert_output(system(buildout + ' buildout:versions= -v'), """
 Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
 ...
@@ -149,6 +199,15 @@ Uninstalling foo.
 Installing foo.
 recipe v2
 """, N)
+    # We'll get output that includes lines that tell us what versions
+    # buildout chose a for us, like::
+    #
+    #     zc.buildout.easy_install.picked: spam = 2
+    #
+    # This allows us to discover versions that are picked dynamically, so
+    # that we can fix them in a versions section.
+    #
+    # If we run the buildout with the versions section:
     assert_output(system(buildout + ' -v'), """
 Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
 ...
@@ -158,6 +217,11 @@ Uninstalling foo.
 Installing foo.
 recipe v1
 """, N)
+    # We won't get output for the spam distribution, which we didn't pick,
+    # but we will get output for setuptools, which we didn't specify
+    # versions for.
+    #
+    # .. Edge case: version applied to range requirement:
     write('buildout.cfg',
     '''
     [buildout]
@@ -180,6 +244,10 @@ Uninstalling foo.
 Installing foo.
 recipe v1
 """, N)
+    # Edge case (issue #577) where a substitution inside the buildout section
+    # which comes from a section with a recipe, then the versions versions
+    # specifications were ignored, and the latest version installed, even if
+    # allow-picked-versions is false.
     write('buildout.cfg',
     '''
     [buildout]
@@ -203,6 +271,8 @@ Section `buildout` contains unused option(s): 'test'.
 Installing foo.
 recipe v1
 """, N)
+    # You can request buildout to generate an error if it picks any
+    # versions:
     write('buildout.cfg',
     '''
     [buildout]
@@ -226,6 +296,7 @@ While:
 Error: Picked: spam = 2
 ...
 """, N)
+    # We can name a version something else, if we wish, using the versions option:
     write('buildout.cfg',
     '''
     [buildout]
@@ -245,6 +316,7 @@ Uninstalling foo.
 Installing foo.
 recipe v1
 """, N)
+    # We can also disable checking versions:
     write('buildout.cfg',
     '''
     [buildout]
@@ -264,11 +336,22 @@ Uninstalling foo.
 Installing foo.
 recipe v2
 """, N)
+    # Easier reporting and managing of versions (new in buildout 2.0)
+    # ---------------------------------------------------------------
+    #
+    # Since buildout 2.0, the functionality of the `buildout-versions
+    # <http://packages.python.org/buildout-versions/>`_ extension is part of
+    # buildout itself. This makes reporting and managing versions easier.
+    #
+    # Buildout picks versions for pip and setuptools and for the tests, we need to grab the
+    # version number:
     import pkg_resources
     req = pkg_resources.Requirement.parse('setuptools')
     setuptools_version = pkg_resources.working_set.find(req).version
     req = pkg_resources.Requirement.parse('pip')
     pip_version = pkg_resources.working_set.find(req).version
+    # If you set the ``show-picked-versions`` option, buildout will print
+    # versions it picked at the end of its run:
     write('buildout.cfg',
     '''
     [buildout]
@@ -289,6 +372,7 @@ The following part definition lists the versions picked:
 [versions]
 spam = 2
 """, N)
+    # When everything is pinned, no output is generated:
     write('buildout.cfg',
     '''
     [buildout]
@@ -308,6 +392,11 @@ spam = 2
 Updating foo.
 recipe v2
 """, N)
+    # The Python package index is case-insensitive. Both
+    # https://pypi.org/simple/Django/ and
+    # https://pypi.org/simple/dJaNgO/ work. And distributions aren't always
+    # naming themselves consistently case-wise. So all version names are normalized
+    # and case differences won't impact the pinning:
     write('buildout.cfg',
     '''
     [buildout]
@@ -327,6 +416,9 @@ recipe v2
 Updating foo.
 recipe v2
 """, N)
+    # Sometimes it is handy to have a separate file with versions. This is a regular
+    # buildout file with a single ``[versions]`` section. You include it by
+    # extending from that versions file:
     write('my_versions.cfg',
     '''
     [versions]
@@ -349,6 +441,9 @@ recipe v2
 Updating foo.
 recipe v2
 """, N)
+    # If not everything is pinned and buildout has to pick versions, you can tell
+    # buildout to append the versions to your versions file. It simply appends them
+    # at the end.
     write('my_versions.cfg',
     '''
     [versions]
@@ -376,10 +471,15 @@ The following part definition lists the versions picked:
 spam = 2
 Picked versions have been written to my_versions.cfg
 """, N)
+    # The versions file now contains the extra pin:
     with open('my_versions.cfg') as f: print_(f.read())
     # TODO assert: '\n...\n# Added by buildout at YYYY-MM-DD hh:mm:ss.dddddd\nspam '
+    # And re-running buildout doesn't report any picked versions anymore:
     _val = ('picked' in system(buildout))
     assert repr(_val) == 'False' or str(_val) == 'False'
+    # If you've enabled ``update-versions-file`` but not ``show-picked-versions``,
+    # buildout will append the versions to your versions file anyway (without
+    # printing them to the console):
     write('my_versions.cfg',
     '''
     [versions]
@@ -403,8 +503,12 @@ Updating foo.
 recipe v2
 Picked versions have been written to my_versions.cfg
 """, N)
+    # The versions file contains the extra pin:
     with open('my_versions.cfg') as f: print_(f.read())
     # TODO assert: '\n[versions]\n...\n\n# Added by buildout at YYYY-MM-DD hh:mm:ss.'
+    # Because buildout now includes buildout-versions' (and part of the older
+    # buildout.dumppickedversions') functionality, it warns if these extensions are
+    # configured.
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -431,6 +535,23 @@ def test_setup(buildout_env):
     system = buildout_env['system']
     write = buildout_env['write']
 
+    # Using zc.buildout to run setup scripts
+    # ======================================
+    #
+    # zc buildout has a convenience command for running setup scripts.  Why?
+    # There are two reasons.  If a setup script doesn't import setuptools,
+    # you can't use any setuptools-provided commands, like bdist_egg.  When
+    # buildout runs a setup script, it arranges to import setuptools before
+    # running the script so setuptools-provided commands are available.
+    #
+    # If you use a squeaky-clean Python to do your development, the setup
+    # script that would import setuptools because setuptools isn't in the
+    # path.  Because buildout requires setuptools and knows where it has
+    # installed a setuptools egg, it adds the setuptools egg to the Python
+    # path before running the script.  To run a setup script, use the
+    # buildout setup command, passing the name of a script or a directory
+    # containing a setup script and arguments to the script.  Let's look at
+    # an example:
     mkdir('test')
     cd('test')
     write('setup.py',
@@ -438,16 +559,22 @@ def test_setup(buildout_env):
     from distutils.core import setup
     setup(name='sample')
     ''')
+    # We've created a super simple (stupid) setup script.  Note that it
+    # doesn't import setuptools.  Let's try running it to create an egg.
+    # We'll use the buildout script from our sample buildout:
     assert_output(system(buildout + ' setup'), """
 Creating directory '/sample-buildout/test/eggs/v5'.
 Error: The setup command requires the path to a setup script or
 directory containing a setup script, and its arguments.
 """, N)
+    # Oops, we forgot to give the name of the setup script:
     assert_output(system(buildout + ' setup setup.py bdist_egg'), """
 Running setup script 'setup.py'.
 ...
 """, N)
     assert_output(capture_print(ls, 'dist'), '-  sample-0.0.0-py2.5.egg', N)
+    # Note that we can specify a directory name.  This is often shorter and
+    # preferred by the lazy :)
     assert_output(system(buildout + ' setup . bdist_egg'), """
 Running setup script './setup.py'.
 ...
@@ -461,6 +588,15 @@ def test_debugging(buildout_env):
     system = buildout_env['system']
     write = buildout_env['write']
 
+    # Debugging buildouts
+    # ===================
+    #
+    # Buildouts can be pretty complex.  When things go wrong, it isn't
+    # always obvious why.  Errors can occur due to problems in user input or
+    # due to bugs in zc.buildout or recipes.  When an error occurs, Python's
+    # post-mortem debugger can be used to inspect the state of the buildout
+    # or recipe code were there error occurred.  To enable this, use the -D
+    # option to the buildout.  Let's create a recipe that has a bug:
     mkdir(sample_buildout, 'recipes')
     write(sample_buildout, 'recipes', 'mkdir.py',
     """
@@ -491,6 +627,7 @@ def test_debugging(buildout_env):
           entry_points = {'zc.buildout': ['mkdir = mkdir:Mkdir']},
           )
     """)
+    # And create a buildout that uses it:
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
@@ -501,6 +638,7 @@ def test_debugging(buildout_env):
     recipe = recipes:mkdir
     path = mystuff
     """)
+    # If we run the buildout, we'll get an error:
     assert_output(system(buildout, with_exit_code=True), """
 Develop: '/sample-buildout/recipes'
 Installing data-dir.
@@ -509,6 +647,8 @@ While:
 Error: Missing option: data-dir:directory
 EXIT CODE: 1
 """, N)
+    # If we want to debug the error, we can add the -D option. Here's we'll
+    # supply some input:
     assert_output(system(buildout + ' -D', 'up\np sorted(self.options.keys())\nq\n', with_exit_code=True), """
 Develop: '/sample-buildout/recipes'
 Installing data-dir.
@@ -538,6 +678,17 @@ def test_windows(buildout_env):
     system = buildout_env['system']
     write = buildout_env['write']
 
+    # zc.buildout on MS-Windows
+    # =========================
+    #
+    # Certain aspects of every software project are dependent on the
+    # operating system used.
+    # The same - of course - applies to zc.buildout.
+    #
+    # To test that Windows doesn't get in the way, we'll test some system
+    # dependent aspects.
+    # The following recipe will create a read-only file which shutil.rmtree
+    # can't delete.
     mkdir('recipe')
     write('recipe', 'recipe.py',
     '''
@@ -574,6 +725,7 @@ def test_windows(buildout_env):
 Running setup script 'recipe/setup.py'.
 ...
 """, N)
+    # and we'll configure a buildout to use it:
     write('buildout.cfg',
     '''
     [buildout]
