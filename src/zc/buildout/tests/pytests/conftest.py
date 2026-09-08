@@ -352,11 +352,12 @@ def assert_output(actual, expected, normalizers=None):
         if not chunk:
             continue
         # Inline '...' within a line becomes a per-line '.*' regex.
+        # No re.DOTALL: inline '...' must not cross newlines.
         chunk_pattern = '\n'.join(
             re.escape(line).replace(r'\.\.\.', r'.*')
             for line in chunk.split('\n')
         )
-        m = re.search(chunk_pattern, actual[pos:], re.DOTALL)
+        m = re.search(chunk_pattern, actual[pos:])
         if not m:
             raise AssertionError(
                 f"Expected chunk not found in output after position {pos}:\n"
@@ -364,6 +365,7 @@ def assert_output(actual, expected, normalizers=None):
                 f"--- actual (from pos {pos}) ---\n{actual[pos:pos+300]}\n"
                 f"--- full actual ---\n{actual}"
             )
+        pos += m.end()
 
 
 def capture_print(fn, *args, **kwargs):
