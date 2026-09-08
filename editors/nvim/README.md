@@ -112,6 +112,33 @@ vim.api.nvim_create_autocmd({ 'BufRead', 'BufNewFile' }, {
 })
 ```
 
+## Tests
+
+```sh
+make test
+```
+
+`tests/run.sh` builds the parser if needed, then runs `tests/spec.lua`
+in a clean-room Neovim (`--headless --clean`, only this plugin on the
+runtimepath). The spec asserts:
+
+- filetype detection fires for `buildout.cfg` and `versions.cfg`, and
+  leaves an unrelated `random.cfg` alone
+- the parser loads (ABI compatibility with the running Neovim)
+- the ftplugin starts the tree-sitter highlighter
+- every capture group used by `queries/buildout/highlights.scm` lands
+  at least once on `tests/sample.cfg`
+- `injections.scm` targets exactly the old-style condition text
+  (`sys.version_info[0] == 3`) and nothing else — PEP 508 marker
+  expressions are deliberately not injected as Python
+
+When the tree-sitter CLI is on `PATH`, `run.sh` additionally compiles
+the queries against the grammar with `tree-sitter query`, which fails
+on stale node names after a grammar regeneration. (Without the CLI,
+Neovim itself still fails the spec: it refuses to compile a query that
+references a node the grammar doesn't have.) The `nvim-plugin` job in
+`.github/workflows/lint.yml` runs `make test` on every push.
+
 ## After grammar changes
 
 The parser is a build artifact: when `tree-sitter-buildout` is

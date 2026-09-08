@@ -35,3 +35,22 @@ jobs:
       run: |
         make sync-grammar
         git diff --exit-code
+
+  nvim-plugin:
+    name: nvim-plugin
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Install Neovim (stable release tarball)
+      run: |
+        if curl -fLO https://github.com/neovim/neovim/releases/download/stable/nvim-linux-x86_64.tar.gz; then
+          dist=nvim-linux-x86_64
+        else
+          # older stable asset name
+          curl -fLO https://github.com/neovim/neovim/releases/download/stable/nvim-linux64.tar.gz
+          dist=nvim-linux64
+        fi
+        sudo tar -C /opt -xzf nvim-*.tar.gz
+        echo "/opt/$dist/bin" >> "$GITHUB_PATH"
+    - name: Run the plugin tests
+      run: make -C editors/nvim test

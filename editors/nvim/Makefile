@@ -14,6 +14,10 @@ $(OUT): $(PARSER_C)
 	mkdir -p parser
 	$(CC) -O2 -shared -fPIC -o $@ $(PARSER_C) -I $(dir $(PARSER_C))
 
+.PHONY: test
+test: $(OUT)
+	bash tests/run.sh
+
 .PHONY: clean
 clean:
 	rm -rf parser
