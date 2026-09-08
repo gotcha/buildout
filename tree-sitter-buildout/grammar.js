@@ -55,30 +55,49 @@ module.exports = grammar({
       )),
     ),
 
-    section_header: $ => seq(
-      '[',
-      optional(/[ \t]+/),
-      $.section_name,
-      optional(/[ \t]+/),
-      optional(seq(':', optional(/[ \t]+/), $.condition)),
-      optional(/[ \t]+/),
-      ']',
-      optional(seq(/[ \t]+/, $.comment)),
-      $._newline,
+    section_header: $ => choice(
+      // plain: [name]
+      seq(
+        '[',
+        optional(/[ \t]+/),
+        $.section_name,
+        optional(/[ \t]+/),
+        ']',
+        optional($._trailing_comment),
+        $._newline,
+      ),
+      // conditional: [name: expression] — the source parser's expression
+      // regex ([^#;]*) is greedy and backtracks to the LAST ']' on the line,
+      // so expressions may themselves contain ']'. The condition token below
+      // mirrors that by maximal munch: it spans ': expr ]' including the
+      // closing bracket.
+      seq(
+        '[',
+        optional(/[ \t]+/),
+        $.section_name,
+        optional(/[ \t]+/),
+        $.condition,
+        optional($._trailing_comment),
+        $._newline,
+      ),
     ),
 
     section_name: $ => /[^\s#\[\]:;{}]+/,
 
-    // Opaque: arbitrary Python or PEP 508 marker expression. The source
-    // parser stops at '#' / ';' (escapes 3 / 3 are host-unescaped).
-    condition: $ => /[^#;\]\n]+/,
+    // Opaque: ': arbitrary Python or PEP 508 marker expression ]', keeping
+    // the leading colon and the closing bracket. Expressions may contain
+    // '[' and ']' but not '#' or ';' (write those as \x23 / \x3b).
+    condition: $ => token(seq(':', /[^#;\n]*\]/)),
 
+    // Comments and blank lines do NOT close an open option in the source
+    // parser (the comment check `continue`s without touching the current
+    // option), so an indented line after them still appends to the value.
     option: $ => seq(
       $.option_name,
       $.assignment,
       optional($.value),
       $._newline,
-      repeat(choice($.continuation, $._blank_line)),
+      repeat(choice($.continuation, $.comment, $._blank_line)),
     ),
 
     // The source parser folds a trailing '+'/'-' into the key ("b +"),
@@ -111,6 +130,9 @@ module.exports = grammar({
     ),
 
     comment: $ => token(/[#;][^\n]*/),
+
+    // after ']': either spaced or immediately attached ('[s]; c')
+    _trailing_comment: $ => choice(seq(/[ \t]+/, $.comment), $.comment),
 
     _blank_line: $ => token(/[ \t]*\r?\n/),
 

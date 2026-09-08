@@ -22,6 +22,10 @@
           "named": true
         },
         {
+          "type": "comment",
+          "named": true
+        },
+        {
           "type": "continuation",
           "named": true
         },
@@ -124,10 +128,6 @@
         }
       ]
     }
-  },
-  {
-    "type": ":",
-    "named": false
   },
   {
     "type": "[",
