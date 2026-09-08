@@ -252,11 +252,19 @@ def lint_file(path, parser):
                     f'substitution references unknown option {sec}:{opt}')
 
     def _check_condition(node):
-        expr = _text(node)
-        # token spans ': expr ]' — strip both ends
-        expr = expr[1:].rstrip()
-        if expr.endswith(']'):
-            expr = expr[:-1]
+        # condition children: ':' then marker_expression or condition_body,
+        # then ']'. A marker_expression is grammar-validated PEP 508, but
+        # re-check anyway — packaging stays the semantic authority and the
+        # Marker-first/ast-fallback path is shared with the loose body.
+        expr = None
+        for child in node.children:
+            if child.type in ('marker_expression', 'condition_body'):
+                expr = _text(child)
+                break
+        if expr is None:
+            # unparseable condition; the syntax error is already reported
+            return
+        expr = expr.strip()
         expr = expr.replace('\\x23', '#').replace('\\x3b', ';')
         try:
             from packaging.markers import Marker

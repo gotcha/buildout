@@ -30,10 +30,10 @@ b = 2
 
 (source_file
   (section
-    (section_header (section_name) (condition))
+    (section_header (section_name) (condition (marker_expression (marker_comparison (marker_variable) (marker_operator) (marker_string)))))
     (option (option_name) (assignment) (value)))
   (section
-    (section_header (section_name) (condition))
+    (section_header (section_name) (condition (condition_body (marker_variable) (marker_string))))
     (option (option_name) (assignment) (value))))
 
 ================================================================================
@@ -81,7 +81,7 @@ b = 1
 
 (source_file
   (section
-    (section_header (section_name) (condition))
+    (section_header (section_name) (condition (condition_body)))
     (option (option_name) (assignment) (value))))
 
 ================================================================================

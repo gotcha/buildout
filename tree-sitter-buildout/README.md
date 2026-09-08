@@ -6,10 +6,13 @@ friends), plus a linter built on top of it.
 Status: working. The grammar parses sections, conditional section headers,
 options (`=`, `+=`, `-=`), multiline values with continuations,
 `${section:option}` substitutions, `<=` macro options and `=>` dependency
-annotations (including their indented continuations). See `grammar.js` for
-the exact scope and the deliberate deviations from
-`src/zc/buildout/configparser.py` (the hand-rolled reference parser this
-mirrors).
+annotations (including their indented continuations). Conditional headers
+parse PEP 508 marker expressions structurally (`marker_expression` nodes)
+and fall back to a loose token stream (`condition_body`) for old-style
+arbitrary Python — mirroring the reference parser's Marker-first /
+eval-fallback strategy. See `grammar.js` for the exact scope and the
+deliberate deviations from `src/zc/buildout/configparser.py` (the
+hand-rolled reference parser this mirrors).
 
 ## Layout
 

@@ -1,0 +1,285 @@
+================================================================================
+marker: simple comparison
+================================================================================
+
+[a: python_version >= "3.13"]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (marker_expression
+          (marker_comparison
+            (marker_variable)
+            (marker_operator)
+            (marker_string)))))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+marker: 'and' binds tighter than 'or'
+================================================================================
+
+[a: python_version < "3.11" or python_version >= "3.12" and platform_system == "Windows"]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (marker_expression
+          (marker_or
+            (marker_expression
+              (marker_comparison
+                (marker_variable)
+                (marker_operator)
+                (marker_string)))
+            (marker_expression
+              (marker_and
+                (marker_expression
+                  (marker_comparison
+                    (marker_variable)
+                    (marker_operator)
+                    (marker_string)))
+                (marker_expression
+                  (marker_comparison
+                    (marker_variable)
+                    (marker_operator)
+                    (marker_string)))))))))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+marker: parenthesized group
+================================================================================
+
+[a: (python_version >= "3.9" and platform_system == "Linux") or os_name == "posix"]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (marker_expression
+          (marker_or
+            (marker_expression
+              (marker_group
+                (marker_expression
+                  (marker_and
+                    (marker_expression
+                      (marker_comparison
+                        (marker_variable)
+                        (marker_operator)
+                        (marker_string)))
+                    (marker_expression
+                      (marker_comparison
+                        (marker_variable)
+                        (marker_operator)
+                        (marker_string)))))))
+            (marker_expression
+              (marker_comparison
+                (marker_variable)
+                (marker_operator)
+                (marker_string)))))))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+marker: quoted string on the left, 'in' operator
+================================================================================
+
+[a: "nt" in os_name]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (marker_expression
+          (marker_comparison
+            (marker_string)
+            (marker_operator)
+            (marker_variable)))))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+marker: 'not in' operator
+================================================================================
+
+[a: python_full_version not in "3.9.0"]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (marker_expression
+          (marker_comparison
+            (marker_variable)
+            (marker_operator)
+            (marker_string)))))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+marker: '===' arbitrary equality (marker-only operator, not valid Python)
+================================================================================
+
+[a: python_version === "3.12.0"]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (marker_expression
+          (marker_comparison
+            (marker_variable)
+            (marker_operator)
+            (marker_string)))))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+marker: trailing comment may contain brackets
+================================================================================
+
+[a: python_version >= "3.9"] # ] ; [ still a comment
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (marker_expression
+          (marker_comparison
+            (marker_variable)
+            (marker_operator)
+            (marker_string))))
+      (comment))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+fallback: bare name is not a marker (old-style boolean)
+================================================================================
+
+[a: python3]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (condition_body)))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+fallback: old-style attribute, subscript and comparison
+================================================================================
+
+[a: sys.version_info[0] > 0]
+x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (condition_body)))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+fallback: whitespace around colon, arithmetic, bracketed trailing comment
+================================================================================
+
+[   s2 : 2 + 2 == 5  ]         # comment: ignored]
+long = a
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (condition_body))
+      (comment))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
+================================================================================
+fallback: lambda, comprehensions and escaped hash/semicolon literals
+================================================================================
+
+[g:2 in map(lambda i:i*2, ['''\x23\x3b)'''] + [i for i in range(10)] + list('\x23[]][\x3b\x23'))] # Complex #expressions; ][are [possible!]
+g = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (section
+    (section_header
+      (section_name)
+      (condition
+        (condition_body
+          (marker_string)
+          (marker_string)
+          (marker_string)
+          (marker_string)))
+      (comment))
+    (option
+      (option_name)
+      (assignment)
+      (value))))
+
