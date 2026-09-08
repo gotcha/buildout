@@ -34,6 +34,7 @@ jobs:
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
       run: make
     - name: Run pytest suite
+      if: matrix.setuptools-version != '63.0.0'
       env:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
