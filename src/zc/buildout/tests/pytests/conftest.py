@@ -351,13 +351,16 @@ def assert_output(actual, expected, normalizers=None):
         chunk = chunk.strip('\n')
         if not chunk:
             continue
-        # Inline '...' within a line becomes a per-line '.*' regex.
-        # No re.DOTALL: inline '...' must not cross newlines.
+        # Inline '...' within a line becomes a per-line pattern that
+        # matches anything on that line but does NOT cross newlines.
+        # Use [^\n]* so the match stays within a single line even with re.DOTALL.
         chunk_pattern = '\n'.join(
-            re.escape(line).replace(r'\.\.\.', r'.*')
+            re.escape(line).replace(r'\.\.\.', r'[^\n]*')
             for line in chunk.split('\n')
         )
-        m = re.search(chunk_pattern, actual[pos:])
+        # re.DOTALL so '.' in escaped content matches any char; [^\n]* for
+        # inline '...' already prevents newline crossing.
+        m = re.search(chunk_pattern, actual[pos:], re.DOTALL)
         if not m:
             raise AssertionError(
                 f"Expected chunk not found in output after position {pos}:\n"
