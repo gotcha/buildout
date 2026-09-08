@@ -2080,16 +2080,11 @@ recipe recipes:debug
     # ..
     stop_server(server_url)
 
-def test_options(buildout_txt_env):
+
+def test_options_socket_timeout(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
-    cat = buildout_txt_env['cat']
-    ls = buildout_txt_env['ls']
-    os = buildout_txt_env['os']
-    print_ = buildout_txt_env['print_']
-    rmdir = buildout_txt_env['rmdir']
     sample_buildout = buildout_txt_env['sample_buildout']
     system = buildout_txt_env['system']
-    tmpdir = buildout_txt_env['tmpdir']
     write = buildout_txt_env['write']
 
     # Socket timeout
@@ -2137,6 +2132,24 @@ Updating debug.
 op timeout
 recipe recipes:debug
 """, N)
+
+
+def test_options_uninstall_recipes(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    """)
+    _ = system(buildout)
+
     # Uninstall recipes
     # -----------------
     #
@@ -2358,6 +2371,55 @@ recipe recipes:debug
     ''')
     setup(name="recipes", entry_points=entry_points)
     """)
+
+
+def test_options_command_line(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    cat = buildout_txt_env['cat']
+    ls = buildout_txt_env['ls']
+    mkdir = buildout_txt_env['mkdir']
+    os = buildout_txt_env['os']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'recipes', 'setup.py',
+    """
+    from setuptools import setup
+    entry_points = (
+    '''
+    [zc.buildout]
+    mkdir = mkdir:Mkdir
+    debug = debug:Debug
+    service = service:Service
+    
+    [zc.buildout.uninstall]
+    uninstall_service = service:uninstall_service
+    mkdir = backup:backup_directory
+    ''')
+    setup(name="recipes", entry_points=entry_points)
+    """)
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    """)
+    _ = system(buildout)
+    write(sample_buildout, 'recipes', 'setup.py',
+    """
+    from setuptools import setup
+    entry_points = (
+    '''
+    [zc.buildout]
+    mkdir = mkdir:Mkdir
+    debug = debug:Debug
+    ''')
+    setup(name="recipes", entry_points=entry_points)
+    """)
+
     # Command-line usage
     # ------------------
     #
@@ -2660,6 +2722,43 @@ d  eggs
 d  parts
 d  recipes
 """, N)
+
+
+def test_options_alternate_locations(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    ls = buildout_txt_env['ls']
+    mkdir = buildout_txt_env['mkdir']
+    os = buildout_txt_env['os']
+    rmdir = buildout_txt_env['rmdir']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    tmpdir = buildout_txt_env['tmpdir']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug d2 d3 d4
+    
+    [d2]
+    recipe = recipes:mkdir
+    path = data2
+    
+    [d3]
+    recipe = recipes:mkdir
+    path = data3
+    
+    [d4]
+    recipe = recipes:mkdir
+    path = ${d2:path}-extra
+    
+    [debug]
+    recipe = recipes:debug
+    x = 1
+    
+    """)
+    _ = system(buildout)
+
     # Alternate directory and file locations
     # --------------------------------------
     #
@@ -2729,6 +2828,14 @@ d  eggs
 d  parts
 """, N)
     assert_output(capture_print(ls, alt, 'develop-eggs'), '-  recipes.egg-link', N)
+
+
+def test_options_logging_control(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+
     # Logging control
     # ---------------
     #
@@ -2762,6 +2869,14 @@ d  parts
     # configuration file.  Because the verbosity is subtracted from the log
     # level, we get a final log level of 20, which is the *INFO* level::
     assert_output(system(buildout), "INFO Develop: '/sample-buildout/recipes'", N)
+
+
+def test_options_predefined_options(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+
     # Predefined buildout options
     # ---------------------------
     #
@@ -3000,6 +3115,7 @@ zc.recipe.egg = >=1.99
     # ``verbosity``
     #    A log-level adjustment.  Typically, this is set via the ``-q`` and ``-v``
     #    command-line options.
+
 
 def test_init(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
