@@ -15,6 +15,24 @@ parser this mirrors).
 - `grammar.js` — the grammar definition (the source of truth)
 - `src/` — generated parser (`tree-sitter generate`), committed so consumers
   do not need the CLI
+- `test/corpus/` — tree-sitter corpus tests (`tree-sitter test`)
+- `linter/` — `buildout_lint.py`, a CLI linter on top of the CST, plus tests
+
+## Linter
+
+```sh
+python tree-sitter-buildout/linter/buildout_lint.py buildout.cfg [...]
+```
+
+Requires the `tree-sitter` Python package. The generated parser is compiled
+on first use with the system C compiler (cached in the temp dir), so the
+tree-sitter CLI is NOT needed for linting. Exit status 1 if any ERROR-level
+finding, 0 otherwise. See the module docstring for the exact checks;
+resolution is file-local, so reference checks are WARNING-level to tolerate
+options injected by recipes, macros and `extends` layering.
+
+Tests: `python -m pytest tree-sitter-buildout/linter/test_buildout_lint.py`
+(skips if py-tree-sitter is not installed).
 
 ## Regenerating
 
@@ -22,6 +40,7 @@ parser this mirrors).
 brew install tree-sitter-cli   # 0.27 used for the initial generation
 tree-sitter generate
 tree-sitter build -o /tmp/buildout.so
+tree-sitter test
 ```
 
 ## Gotchas discovered while writing this
