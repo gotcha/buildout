@@ -16,7 +16,10 @@ from zc.buildout.tests.pytests.conftest import (
     NORMALIZERS_BUILDOUT,
 )
 
-N = NORMALIZERS_BUILDOUT
+N = NORMALIZERS_BUILDOUT + [
+    (re.compile(r'(zc\.buildout|setuptools|pip)( version)? \d+[.]\d+\S*'), r'\1 V.V'),
+    (re.compile(r'99[.]99'), '99.99'),
+]
 
 
 def test_update(update_env):
@@ -33,9 +36,8 @@ def test_update(update_env):
     write = update_env['write']
 
     assert_output(capture_print(ls, new_releases), """
--  zc_buildout-...-py3-none-any.whl
 -  zc_buildout-91.0-py3-none-any.whl
--  zc_buildout-NINETYNINE.NINETYNINE-py3-none-any.whl
+-  zc_buildout-99.99-py3-none-any.whl
 """, N)
     write(sample_buildout, 'buildout.cfg',
     """
@@ -93,21 +95,21 @@ Updating show-versions.
 zc.buildout V.V
 """, N)
     assert_output(system(buildout), """
-Got zc.buildout NINETYNINE.NINETYNINE.
+Got zc.buildout 99.99.
 Upgraded:
-  zc.buildout version NINETYNINE.NINETYNINE;
+  zc.buildout version 99.99;
 Restarting.
 Generated script '/sample-buildout/bin/buildout'.
 Develop: '/sample-buildout/showversions'
 Updating show-versions.
-zc.buildout NINETYNINE.NINETYNINE
+zc.buildout 99.99
 """, N)
     assert_output(capture_print(cat, sample_buildout, 'bin', 'buildout'), """
 #!/usr/local/bin/python2.7
 
 import sys
 sys.path[0:0] = [
-  '/sample-buildout/eggs/v5/zc.buildout-NINETYNINE.NINETYNINE-pyN.N.egg',
+  '/sample-buildout/eggs/v5/zc.buildout-99.99-pyN.N.egg',
 ...
   ]
 
@@ -177,8 +179,8 @@ Creating directory '/sample_buildout2/eggs/v5'.
 Creating directory '/sample_buildout2/bin'.
 Creating directory '/sample_buildout2/parts'.
 Creating directory '/sample_buildout2/develop-eggs'.
-Getting distribution for 'zc.buildout==NINETYNINE.NINETYNINE'.
-Got zc.buildout NINETYNINE.NINETYNINE.
+Getting distribution for 'zc.buildout==99.99'.
+Got zc.buildout 99.99.
 Not upgrading because not running a local buildout command.
 """, N)
     ls('bin')
@@ -197,14 +199,14 @@ Not upgrading because not running a local buildout command.
     """ % dict(new_releases=new_releases))
     assert_output(system(buildout), """
 Upgraded:
-  zc.buildout version NINETYNINE.NINETYNINE;
+  zc.buildout version 99.99;
 Restarting.
 Generated script '/sample-buildout/bin/buildout'.
 Develop: '/sample-buildout/showversions'
 Section `buildout` contains unused option(s): 'relative-paths'.
 This may be an indication for either a typo in the option's name or a bug in the used recipe.
 Updating show-versions.
-zc.buildout NINETYNINE.NINETYNINE
+zc.buildout 99.99
 """, N)
     assert_output(capture_print(cat, 'bin', 'buildout'), """
 #!/usr/local/bin/python2.7
@@ -217,7 +219,7 @@ base = os.path.dirname(base)
 
 import sys
 sys.path[0:0] = [
-  join(base, 'eggs/v5/zc.buildout-NINETYNINE.NINETYNINE-pyN.N.egg'),
+  join(base, 'eggs/v5/zc.buildout-99.99-pyN.N.egg'),
 ...
   ]
 

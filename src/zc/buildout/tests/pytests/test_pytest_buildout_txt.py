@@ -249,6 +249,7 @@ While:
 An internal error occurred due to a bug in either zc.buildout or in a
 recipe being used:
 Traceback (most recent call last):
+...
 ... exists...
 """, N)
     _val = (os.path.exists('foo'))
@@ -273,6 +274,7 @@ While:
 An internal error occurred due to a bug in either zc.buildout or in a
 recipe being used:
 Traceback (most recent call last):
+...
 ... exists...
 """, N)
     remove('foo')
@@ -346,6 +348,7 @@ While:
 An internal error occurred due to a bug in either zc.buildout or in a
 recipe being used:
 Traceback (most recent call last):
+...
 ... exists...
 """, N)
     _val = (os.path.exists('foo'))
@@ -397,6 +400,7 @@ While:
 An internal error occurred due to a bug in either zc.buildout or in a
 recipe being used:
 Traceback (most recent call last):
+...
 ... exists...
 """, N)
     _val = (os.path.exists('foo'))

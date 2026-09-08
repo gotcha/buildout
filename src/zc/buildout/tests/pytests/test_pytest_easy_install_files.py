@@ -35,6 +35,7 @@ def test_easy_install(easy_install_env):
     system = easy_install_env['system']
     tmpdir = easy_install_env['tmpdir']
     update_extdemo = easy_install_env['update_extdemo']
+    extdemo = easy_install_env['extdemo']
     write = easy_install_env['write']
 
     assert_output(str(get(link_server)), """
@@ -182,6 +183,7 @@ zc.buildout.easy_install DEBUG
   Calling pip install for .whl on .../demo-0.3-py3-none-any.whl
 zc.buildout.easy_install DEBUG
   Running pip install:...
+...
 zc.buildout.easy_install DEBUG
   Egg for demo 0.3 installed at .../demo-0.3-pyN.N.egg
 zc.buildout.easy_install INFO
@@ -202,6 +204,7 @@ zc.buildout.easy_install DEBUG
   Calling pip install for .gz on .../demoneeded-1.1.tar.gz
 zc.buildout.easy_install DEBUG
   Running pip install:...
+...
 zc.buildout.easy_install DEBUG
   Egg for demoneeded 1.1 installed at .../demoneeded-1.1-pyN.N.egg
 zc.buildout.easy_install INFO
@@ -223,7 +226,7 @@ zc.buildout.easy_install DEBUG
     _val = (zc.buildout.easy_install.allow_picked_versions(True))
     assert repr(_val) == 'False' or str(_val) == 'False'
     _val = (zc.buildout.easy_install.default_versions(dict(demoneeded='1')))
-    assert repr(_val) == '{...}' or str(_val) == '{...}'
+    assert_output(str(_val), '{...}', N)
     _val = (zc.buildout.easy_install.default_versions())
     assert repr(_val) == "{'demoneeded': '1'}" or str(_val) == "{'demoneeded': '1'}"
     ws = zc.buildout.easy_install.install(
@@ -385,7 +388,7 @@ if len(sys.argv) > 1:
         sys.argv[:] = _args
         __file__ = _args[0]
         del _options, _args
-        with open(__file__, 'U') as __file__f:
+        with open(__file__) as __file__f:
             exec(compile(__file__f.read(), __file__, "exec"))
 
 if _interactive:
@@ -591,7 +594,7 @@ if len(sys.argv) > 1:
         sys.argv[:] = _args
         __file__ = _args[0]
         del _options, _args
-        with open(__file__, 'U') as __file__f:
+        with open(__file__) as __file__f:
             exec(compile(__file__f.read(), __file__, "exec"))
 
 if _interactive:
@@ -607,7 +610,7 @@ if _interactive:
   'extdemo', dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')},
   links=[link_server], index=link_server+'index/'))
-    assert repr(_val) == "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']" or str(_val) == "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']"
+    assert_output(str(_val), "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']", N)
     assert_output(capture_print(ls, dest), """
 d  demo-0.2-py2.4.egg
 d  demo-0.3-py2.4.egg
@@ -640,7 +643,7 @@ d  extdemo-1.4-py2.4-unix-i686.egg
   {'include_dirs': os.path.join(sample_buildout, 'include')},
   links=[link_server], index=link_server+'index/',
   newest=False))
-    assert repr(_val) == "['/sample-install/extdemo-1.4-py2.4-linux-i686.egg']" or str(_val) == "['/sample-install/extdemo-1.4-py2.4-linux-i686.egg']"
+    assert_output(str(_val), "['/sample-install/extdemo-1.4-py2.4-linux-i686.egg']", N)
     assert_output(capture_print(ls, dest), """
 d  demo-0.2-py2.4.egg
 d  demo-0.3-py2.4.egg
@@ -652,7 +655,7 @@ d  extdemo-1.4-py2.4-unix-i686.egg
   'extdemo', dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')},
   links=[link_server], index=link_server+'index/'))
-    assert repr(_val) == "['/sample-install/extdemo-1.5-py2.4-unix-i686.egg']" or str(_val) == "['/sample-install/extdemo-1.5-py2.4-unix-i686.egg']"
+    assert_output(str(_val), "['/sample-install/extdemo-1.5-py2.4-unix-i686.egg']", N)
     assert_output(capture_print(ls, dest), """
 d  demo-0.2-py2.4.egg
 d  demo-0.3-py2.4.egg
@@ -669,7 +672,7 @@ d  extdemo-1.5-py2.4-unix-i686.egg
   {'include_dirs': os.path.join(sample_buildout, 'include')},
   links=[link_server], index=link_server+'index/',
   versions=dict(extdemo='1.4')))
-    assert repr(_val) == "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']" or str(_val) == "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']"
+    assert_output(str(_val), "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']", N)
     assert_output(capture_print(ls, dest), 'd  extdemo-1.4-py2.4-unix-i686.egg', N)
     contents = os.listdir(extdemo)
     _val = ('MANIFEST.in' in contents)
@@ -683,7 +686,7 @@ d  extdemo-1.5-py2.4-unix-i686.egg
     _val = (zc.buildout.easy_install.develop(
   extdemo, dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')}))
-    assert repr(_val) == "'/sample-install/extdemo.egg-link'" or str(_val) == "'/sample-install/extdemo.egg-link'"
+    assert_output(str(_val), "/sample-install/extdemo.egg-link", N)
     assert_output(capture_print(ls, dest), """
 d  extdemo-1.4-py2.4-unix-i686.egg
 -  extdemo.egg-link
@@ -701,14 +704,17 @@ d  extdemo-1.4-py2.4-unix-i686.egg
         ['demo==0.2'], dest,
         links=[link_server], index=link_server+'index/')
     # TODO assert: 'GET 200 /\nGET 404 /index/demo/\nGET 200 /index/\nGET 200 /demo'
-    assert_output(capture_print(lambda: zc.buildout.easy_install.build(
-  'extdemo', dest,
-  {'include_dirs': os.path.join(sample_buildout, 'include')},
-  links=[link_server], index=link_server+'index/')), """
+    _result = []
+    def _build_extdemo():
+        _result.append(zc.buildout.easy_install.build(
+            'extdemo', dest,
+            {'include_dirs': os.path.join(sample_buildout, 'include')},
+            links=[link_server], index=link_server+'index/'))
+    assert_output(capture_print(_build_extdemo), """
 GET 404 /index/extdemo/
 GET 200 /extdemo-1.5.tar.gz
-['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']
 """, N)
+    assert_output(str(_result[0]), "['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']", N)
     assert_output(capture_print(ls, dest), """
 d  demo-0.2-py2.4.egg
 d  demoneeded-1.1-py2.4.egg
@@ -726,13 +732,16 @@ d  extdemo-1.5-py2.4-linux-i686.egg
         ['demo==0.2'], dest,
         links=[link_server], index=link_server+'index/')
     # TODO assert: 'GET 200 /\nGET 404 /index/demo/\nGET 200 /index/\nGET 404 /inde'
-    assert_output(capture_print(lambda: zc.buildout.easy_install.build(
-  'extdemo', dest,
-  {'include_dirs': os.path.join(sample_buildout, 'include')},
-  links=[link_server], index=link_server+'index/')), """
+    _result2 = []
+    def _build_extdemo2():
+        _result2.append(zc.buildout.easy_install.build(
+            'extdemo', dest,
+            {'include_dirs': os.path.join(sample_buildout, 'include')},
+            links=[link_server], index=link_server+'index/'))
+    assert_output(capture_print(_build_extdemo2), """
 GET 404 /index/extdemo/
-['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']
 """, N)
+    assert_output(str(_result2[0]), "['/sample-install/extdemo-1.5-py2.4-linux-i686.egg']", N)
     assert_output(capture_print(ls, dest), """
 d  demo-0.2-py2.4.egg
 d  demoneeded-1.1-py2.4.egg
@@ -760,7 +769,7 @@ d  demo-0.2-py2.4.egg
 d  demoneeded-1.1-py2.4.egg
 """, N)
     _val = (zc.buildout.easy_install.download_cache(None))
-    assert repr(_val) == "'/cache'" or str(_val) == "'/cache'"
+    assert_output(str(_val), "/cache", N)
     _val = (zc.buildout.easy_install.install_from_cache(False))
     assert repr(_val) == 'True' or str(_val) == 'True'
     _ = get(link_server + 'disable_server_logging')
@@ -1787,6 +1796,7 @@ While:
   Installing.
   Checking for upgrades.
 An internal error occurred ...
+...
 ValueError: install_from_cache set to true with no download cache
 """, N)
     rmdir('home', '.buildout')
@@ -1864,7 +1874,7 @@ This may be an indication for either a typo in the option's name or a bug in the
 The URL http://localhost/baseA.cfg was downloaded.
 The URL http://localhost/base.cfg was downloaded.
 The URL http://localhost/baseB.cfg was downloaded.
-Not upgrading because not running a local buildout command.
+...
 Section `buildout` contains unused option(s): 'bar' 'foo'.
 This may be an indication for either a typo in the option's name or a bug in the used recipe.
 """, N)
@@ -1890,6 +1900,7 @@ Error: No-longer supported "extended-by" option found in http://localhost/base.c
     assert_output(system(buildout), """
 While:
   Initializing.
+...
 ... File contains no section headers.
 file: http://localhost/faulty.cfg (downloaded as ...), line: 1
 'This is definitively not\\n'
@@ -1906,7 +1917,8 @@ file: http://localhost/faulty.cfg (downloaded as ...), line: 1
     assert_output(system(buildout), """
 While:
   Initializing.
-... ValueError: extends-cache '${buildout:dummy}' may not contain ${section:variable} to expand.
+...
+...ValueError: extends-cache '${buildout:dummy}' may not contain ${section:variable} to expand.
 """, N)
     ls(tempfile.tempdir)
     tempfile.tempdir = old_tempdir

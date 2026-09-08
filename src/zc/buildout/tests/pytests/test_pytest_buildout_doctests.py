@@ -1280,6 +1280,7 @@ def test_read_find_links_to_load_extensions(easy_install_env):
     write(src, 'setup.py', "\nfrom setuptools import setup\nsetup(name='wackyextension', version='1',\n      py_modules=['wacky_handler'],\n      entry_points = {'zc.buildout.extension':\n            ['default = wacky_handler:install']\n            },\n      )\n")
     assert_output(system(buildout + ' setup ' + src + ' bdist_egg'), """
 Running setup ...
+...
 creating 'dist/wackyextension-1-...
 """, N)
     dist = 'file://' + join(src, 'dist').replace(os.path.sep, '/')
@@ -1351,6 +1352,7 @@ def test_buildout_prefer_final_option(easy_install_env):
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
     assert_output(system(buildout), """
 Installing ...
+...
 ... written to versions-picked.cfg
 """, N)
     assert_output(capture_print(cat, 'versions-picked.cfg'), """
@@ -1365,6 +1367,7 @@ demoneeded = 1.1
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = true\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
     assert_output(system(buildout), """
 Updating ...
+...
 ... written to versions-picked.cfg
 """, N)
     assert_output(capture_print(cat, 'versions-picked.cfg'), """
@@ -1379,6 +1382,7 @@ demoneeded = 1.1
     write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = false\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
     assert_output(system(buildout), """
 Updating ...
+...
 ... written to versions-picked.cfg
 """, N)
     assert_output(capture_print(cat, 'versions-picked.cfg'), """

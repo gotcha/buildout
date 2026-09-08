@@ -301,6 +301,7 @@ def update_env():
                 stderr=_sp.STDOUT,
             )
 
+    fake.globs['write'] = _dedenting_write(fake.globs['write'])
     yield fake.globs
     zc.buildout.testing.buildoutTearDown(fake)
 
