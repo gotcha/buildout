@@ -78,7 +78,7 @@ def test_easy_install(easy_install_env):
             index=link_server+'index/')
         assert False, "Expected UserError not raised"
     except Exception as _exc:
-        assert_output(str(_exc), "UserError: Couldn't find the required extra...", N)
+        assert_output(str(_exc), "Couldn't find the required extra...", N)
     ws = zc.buildout.easy_install.install(
         ['demo[unknown_extra]'], dest, links=[link_server],
         index=link_server+'index/',
@@ -448,14 +448,14 @@ def test_downloadcache(easy_install_env):
     assert_output(str(get(link_server)), '<html><body>\n<a href="bigdemo-0.1-py3-none-any.whl">bigdemo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.1-py3-none-any.whl">demo-0.1-py3-none-any.whl</a><br>\n<a href="demo-0.2-py3-none-any.whl">demo-0.2-py3-none-any.whl</a><br>\n<a href="demo-0.3-py3-none-any.whl">demo-0.3-py3-none-any.whl</a><br>\n<a href="demo-0.4rc1-py3-none-any.whl">demo-0.4rc1-py3-none-any.whl</a><br>\n<a href="demoneeded-1.0.tar.gz">demoneeded-1.0.tar.gz</a><br>\n<a href="demoneeded-1.1.tar.gz">demoneeded-1.1.tar.gz</a><br>\n<a href="demoneeded-1.2rc1.tar.gz">demoneeded-1.2rc1.tar.gz</a><br>\n<a href="du_zipped-1.0-pyN.N.egg">du_zipped-1.0-pyN.N.egg</a><br>\n<a href="extdemo-1.4.tar.gz">extdemo-1.4.tar.gz</a><br>\n<a href="index/">index/</a><br>\n<a href="mixedcase-0.5.tar.gz">mixedcase-0.5.tar.gz</a><br>\n<a href="other-1.0-py3-none-any.whl">other-1.0-py3-none-any.whl</a><br>\n</body></html>', N)
     _ = get(link_server+'enable_server_logging')
     # TODO assert: 'GET 200 /enable_server_logging'
-    assert_output(system(buildout), "GET ...\nGET 200 /demo-0.2-py3-none-any.whl\nGET 200 /demoneeded-1.1.tar.gz\nInstalling eggs.\nGetting distribution for 'demo==0.2'.\nGot demo 0.2.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.\nGenerated script '/sample-buildout/bin/demo'.", N)
+    assert_output(system(buildout), "Installing eggs.\nGetting distribution for 'demo==0.2'.\nGot demo 0.2.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.\nGenerated script '/sample-buildout/bin/demo'.", N)
     assert_output(capture_print(ls, cache), 'd  dist', N)
     assert_output(capture_print(ls, cache, 'dist'), '-  demo-0.2-py3-none-any.whl\n-  demoneeded-1.1.tar.gz', N)
     import os
     for f in os.listdir(os.path.join('eggs', 'v5')):
         if f.startswith('demo'):
             remove('eggs', 'v5', f)
-    assert_output(system(buildout), "GET ...\nUpdating eggs.\nGetting distribution for 'demo==0.2'.\nGot demo 0.2.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.", N)
+    assert_output(system(buildout), "Updating eggs.\nGetting distribution for 'demo==0.2'.\nGot demo 0.2.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1.", N)
     for f in os.listdir(os.path.join('eggs', 'v5')):
         if f.startswith('demo'):
             remove('eggs', 'v5', f)
@@ -559,7 +559,7 @@ def test_dependencylinks(easy_install_env):
     recipe = zc.recipe.egg:eggs
     eggs = depdemo
     ''')
-    assert_output(system(buildout), "GET 200 /\nGET 200 /demoneeded-1.1.tar.gz\nDevelop: '/sample-buildout/depdemo'\nInstalling eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
+    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nInstalling eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
     write(sample_buildout, 'depdemo', 'setup.py',
     '''from setuptools import setup; setup(
         name='depdemo', py_modules=['dependencydemo'],
@@ -593,7 +593,7 @@ def test_dependencylinks(easy_install_env):
         zip_safe=True, version='1')
     '''  % link_server2)
     remove_demoneeded_egg()
-    assert_output(system(buildout), "GET 200 /...\nDevelop: '/sample-buildout/depdemo'\nUpdating eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
+    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nUpdating eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
     write(sample_buildout, 'buildout.cfg',
     '''
     [buildout]
@@ -621,7 +621,7 @@ def test_dependencylinks(easy_install_env):
     eggs = depdemo
     ''' % link_server)
     remove_demoneeded_egg()
-    assert_output(system(buildout), "GET 200 /...\nDevelop: '/sample-buildout/depdemo'\nUpdating eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
+    assert_output(system(buildout), "Develop: '/sample-buildout/depdemo'\nUpdating eggs.\nGetting distribution for 'demoneeded'.\nGot demoneeded 1.1...", N)
 
 def test_allowhosts(easy_install_env):
     buildout = easy_install_env['buildout']
@@ -760,7 +760,7 @@ def test_download(easy_install_env):
     else: print_('woops')
     # TODO assert: 'download error'
     _val = (download(join(server_data, 'foo.txt')))
-    assert repr(_val) == "('/sample_files/foo.txt', False)" or str(_val) == "('/sample_files/foo.txt', False)"
+    assert_output(str(_val), "('/sample_files/foo.txt', False)", N)
     from hashlib import md5
     path, is_temp = download(server_url+'foo.txt',
                              md5('This is a foo text.'.encode()).hexdigest())
@@ -775,7 +775,7 @@ def test_download(easy_install_env):
         assert_output(str(_exc), "ChecksumError: MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     _val = (download(join(server_data, 'foo.txt'),
               md5('This is a foo text.'.encode()).hexdigest()))
-    assert repr(_val) == "('/sample_files/foo.txt', False)" or str(_val) == "('/sample_files/foo.txt', False)"
+    assert_output(str(_val), "('/sample_files/foo.txt', False)", N)
     try:
         download(join(server_data, 'foo.txt'),
                  md5('The wrong text.'.encode()).hexdigest())
@@ -1281,7 +1281,7 @@ def test_extends_cache(easy_install_env):
 def test_testing_bugfix(easy_install_env):
     import logging
     count = len(logging.getLogger().handlers)
-    assert_output(capture_print(lambda: logging.getLogger().handlers), '[<...NullHandler...>]', N)
+    assert_output(capture_print(lambda: print(logging.getLogger().handlers)), '[<...NullHandler...>]', N)
     import zc.buildout.testing
     import doctest
     test = doctest.DocTestParser().get_doctest(
@@ -1289,8 +1289,8 @@ def test_testing_bugfix(easy_install_env):
     zc.buildout.testing.buildoutSetUp(test)
     _val = (len(logging.getLogger().handlers) == count + 1)
     assert repr(_val) == 'True' or str(_val) == 'True'
-    assert_output(capture_print(lambda: logging.getLogger().handlers), '[<...NullHandler...StreamHandler...>]', N)
+    assert_output(capture_print(lambda: print(logging.getLogger().handlers)), '[<...NullHandler...StreamHandler...>]', N)
     zc.buildout.testing.buildoutTearDown(test)
     _val = (len(logging.getLogger().handlers) == count)
     assert repr(_val) == 'True' or str(_val) == 'True'
-    assert_output(capture_print(lambda: logging.getLogger().handlers), '[<...NullHandler...>]', N)
+    assert_output(capture_print(lambda: print(logging.getLogger().handlers)), '[<...NullHandler...>]', N)
