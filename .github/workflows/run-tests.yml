@@ -33,14 +33,11 @@ jobs:
         # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
       run: make
-      # The pytest port of the test suite is run on a subset of the matrixes
-      # only, to keep CI time in check: newest setuptools here, and newest
-      # Python in the python matrix below.
     - name: Run pytest suite
-      if: matrix.setuptools-version == '81.0.0'
       env:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
+        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
       run: make pytest
 
@@ -102,7 +99,6 @@ jobs:
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
       run: make
     - name: Run pytest suite
-      if: matrix.python-version == '3.14'
       env:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
@@ -135,6 +131,13 @@ jobs:
         PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
       run: make
+    - name: Run pytest suite
+      env:
+        PYTHONWARNINGS: ignore
+        PYTHON_VERSION: ${{matrix.python-version}}
+        PIP_VERSION: ${{matrix.pip-version}}
+        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
+      run: make pytest
 
   mac:
     name: Mac
@@ -161,6 +164,13 @@ jobs:
         # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
       run: make
+    - name: Run pytest suite
+      env:
+        PYTHONWARNINGS: ignore
+        PYTHON_VERSION: ${{matrix.python-version}}
+        # PIP_VERSION: ${{matrix.pip-version}}
+        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
+      run: make pytest
 
   windows:
     name: Windows
@@ -194,6 +204,18 @@ jobs:
         TMP: C:\tmp
         TEMP: C:\tmp
       run: make
+    - name: Run pytest suite
+      env:
+        PYTHONWARNINGS: ignore
+        PYTHON_VERSION: ${{matrix.python-version}}
+        # PIP_VERSION: ${{matrix.pip-version}}
+        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
+        # Defining temporary directories is needed on Windows for
+        # test_all.TestEasyInstall.test_move_to_eggs_dir_and_compile
+        TMPDIR: C:\tmp
+        TMP: C:\tmp
+        TEMP: C:\tmp
+      run: make pytest
 
   generate-scripts:
     name: Scripts Python ${{ matrix.python-version }}
