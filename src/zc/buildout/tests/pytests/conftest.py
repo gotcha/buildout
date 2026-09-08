@@ -22,6 +22,7 @@ _TESTS_DIR = Path(__file__).parent.parent
 # ---------------------------------------------------------------------------
 
 NORMALIZERS_EASY_INSTALL = [
+    (re.compile(r'http://localhost:[0-9]{4,5}/'), 'http://localhost/'),
     zc.buildout.testing.normalize_path,
     zc.buildout.testing.normalize_endings,
     zc.buildout.testing.normalize_script,
@@ -64,6 +65,7 @@ NORMALIZERS_EASY_INSTALL = [
 ]
 
 NORMALIZERS_BUILDOUT = [
+    (re.compile(r'http://localhost:[0-9]{4,5}/'), 'http://localhost/'),
     zc.buildout.testing.normalize_path,
     zc.buildout.testing.normalize_endings,
     zc.buildout.testing.normalize_script,
