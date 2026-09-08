@@ -1318,7 +1318,7 @@ recipe recipes:debug
     """)
     _ = system(buildout)
 
-def test_extending(buildout_txt_env):
+def test_extending_macros(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
     join = buildout_txt_env['join']
     mkdir = buildout_txt_env['mkdir']
@@ -1406,6 +1406,23 @@ Develop: '/sample-buildout/demo'
     # Cleanup.
     os.remove(os.path.join(sample_buildout, 'base.cfg'))
     rmdir(sample_buildout, 'demo')
+
+
+def test_extending_adding_and_removing_options(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    join = buildout_txt_env['join']
+    mkdir = buildout_txt_env['mkdir']
+    os = buildout_txt_env['os']
+    print_ = buildout_txt_env['print_']
+    remove = buildout_txt_env['remove']
+    rmdir = buildout_txt_env['rmdir']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    start_server = buildout_txt_env['start_server']
+    stop_server = buildout_txt_env['stop_server']
+    system = buildout_txt_env['system']
+    tmpdir = buildout_txt_env['tmpdir']
+    write = buildout_txt_env['write']
+
     # Adding and removing options
     # ---------------------------
     #
@@ -1645,6 +1662,23 @@ Develop: '/sample-buildout/demo'
     os.remove(os.path.join(sample_buildout, 'base.cfg'))
     os.remove(os.path.join(sample_buildout, 'extension1.cfg'))
     os.remove(os.path.join(sample_buildout, 'extension2.cfg'))
+
+
+def test_extending_multiple_configuration_files(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    join = buildout_txt_env['join']
+    mkdir = buildout_txt_env['mkdir']
+    os = buildout_txt_env['os']
+    print_ = buildout_txt_env['print_']
+    remove = buildout_txt_env['remove']
+    rmdir = buildout_txt_env['rmdir']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    start_server = buildout_txt_env['start_server']
+    stop_server = buildout_txt_env['stop_server']
+    system = buildout_txt_env['system']
+    tmpdir = buildout_txt_env['tmpdir']
+    write = buildout_txt_env['write']
+
     # Multiple configuration files
     # ----------------------------
     #
