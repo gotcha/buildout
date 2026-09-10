@@ -1047,10 +1047,14 @@ class Buildout(DictMixin):
                         if existing is not None:
                             if self._develop_link_fresh(existing, directory):
                                 self._logger.debug(
-                                    "Packaging metadata of %r is unchanged "
-                                    "since the previous run; keeping "
-                                    "editable install: %s",
-                                    setup, existing)
+                                    "Keeping editable install of %s: "
+                                    "its packaging metadata (setup.py, "
+                                    "setup.cfg, pyproject.toml) is "
+                                    "unchanged since the previous run",
+                                    setup)
+                                self._logger.debug(
+                                    "Reusing editable install: %s",
+                                    existing)
                                 installed.append(os.path.join(
                                     dest, os.path.basename(existing)))
                                 continue
