@@ -28,12 +28,30 @@
   # - gnumake: the Makefile entry points (make test / make pytest / ...)
   # - uv: fast path of prepare.sh (USE_UV), also fetches pythons
   # - coreutils: provides `timeout` etc. on macOS, where it is missing
+  # - ty: Astral's type checker; the static tier of verify-buildout
   packages = with pkgs; [
     git
     gnumake
     uv
     coreutils
+    ty
   ];
+
+  # MonkeyType and autotyping are not in nixpkgs, and they must share
+  # the interpreter of the repo venv they trace or rewrite (the
+  # MonkeyType tracer runs in-process with the test suite). Install
+  # them into venvs/python$PYTHON_VERSION on demand:
+  #
+  #   typing-bootstrap
+  scripts.typing-bootstrap.exec = ''
+    VENV="venvs/python$PYTHON_VERSION"
+    if [ ! -x "$VENV/bin/python" ]; then
+      echo "no $VENV yet — run: make bin/buildout" >&2
+      exit 1
+    fi
+    "$VENV/bin/python" -m pip install --quiet MonkeyType autotyping
+    echo "MonkeyType + autotyping installed into $VENV"
+  '';
 
   # Feed the repo bootstrap the Python version selected above.
   env.PYTHON_VERSION = config.languages.python.version;
