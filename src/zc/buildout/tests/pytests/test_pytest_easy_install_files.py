@@ -22,7 +22,7 @@ from zc.buildout.tests.pytests.conftest import (
 N = NORMALIZERS_EASY_INSTALL
 
 
-def test_easy_install_distribution_installation(easy_install_env):
+def test_easy_install_distribution_installation_newest_and_prefer_final(easy_install_env):
     get = easy_install_env['get']
     link_server = easy_install_env['link_server']
     ls = easy_install_env['ls']
@@ -223,6 +223,15 @@ d  demoneeded-1.2rc1-py2.4.egg
 d  other-1.0-py2.4.egg
 """, N)
     rmdir(dest)
+
+
+def test_easy_install_distribution_installation_unknown_extras(easy_install_env):
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    rmdir = easy_install_env['rmdir']
+    tmpdir = easy_install_env['tmpdir']
+    dest = tmpdir('sample-install')
+
     # Unknown extras
     # --------------
     #
@@ -243,6 +252,17 @@ d  other-1.0-py2.4.egg
         allow_unknown_extras=True)
     assert_output(capture_print(ls, dest), 'd  demo-0.3-py2.4.egg', N)
     rmdir(dest)
+
+
+def test_easy_install_distribution_installation_case_issues(easy_install_env):
+    get = easy_install_env['get']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    print_ = easy_install_env['print_']
+    rmdir = easy_install_env['rmdir']
+    tmpdir = easy_install_env['tmpdir']
+    dest = tmpdir('sample-install')
+
     # Case issues
     # -----------
     #
@@ -1078,17 +1098,13 @@ if _interactive:
     #
 
 
-def test_easy_install_build_options(easy_install_env):
-    get = easy_install_env['get']
+def test_easy_install_build_options_build(easy_install_env):
     link_server = easy_install_env['link_server']
     ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
     os = easy_install_env['os']
-    remove = easy_install_env['remove']
     sample_buildout = easy_install_env['sample_buildout']
     tmpdir = easy_install_env['tmpdir']
-    update_extdemo = easy_install_env['update_extdemo']
-    extdemo = easy_install_env['extdemo']
     write = easy_install_env['write']
     dest = tmpdir('sample-install')
     zc.buildout.easy_install.install(
@@ -1198,6 +1214,49 @@ d  demoneeded-1.0-py2.4.egg
 d  demoneeded-1.1-py2.4.egg
 d  extdemo-1.4-py2.4-unix-i686.egg
 """, N)
+
+
+def test_easy_install_build_options_update(easy_install_env):
+    get = easy_install_env['get']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    sample_buildout = easy_install_env['sample_buildout']
+    tmpdir = easy_install_env['tmpdir']
+    update_extdemo = easy_install_env['update_extdemo']
+    write = easy_install_env['write']
+    dest = tmpdir('sample-install')
+    zc.buildout.easy_install.install(
+        ['demo'], dest, links=[link_server], index=link_server+'index/',
+        versions=dict(demo='0.2', demoneeded='1.0'))
+    zc.buildout.easy_install.install(
+        ['demo'], dest, links=[link_server], index=link_server+'index/')
+    # We'll add an include directory to our sample buildout and add the
+    # needed include file to it:
+    mkdir('include')
+    write('include', 'extdemo.h',
+    """
+    #define EXTDEMO 42
+    """)
+    # Now, we can use the build function to create an egg from the source
+    # distribution:
+    _val = (zc.buildout.easy_install.build(
+  'extdemo', dest,
+  {'include_dirs': os.path.join(sample_buildout, 'include')},
+  links=[link_server], index=link_server+'index/'))
+    assert_output(str(_val), "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']", N)
+    # The function returns the list of eggs
+    #
+    # Now if we look in our destination directory, we see we have an extdemo egg:
+    assert_output(capture_print(ls, dest), """
+d  demo-0.2-py2.4.egg
+d  demo-0.3-py2.4.egg
+d  demoneeded-1.0-py2.4.egg
+d  demoneeded-1.1-py2.4.egg
+d  extdemo-1.4-py2.4-unix-i686.egg
+""", N)
+
     # Let's update our link server with a new version of extdemo:
     update_extdemo()
     assert_output(str(get(link_server)), """
@@ -1251,6 +1310,26 @@ d  demoneeded-1.1-py2.4.egg
 d  extdemo-1.4-py2.4-unix-i686.egg
 d  extdemo-1.5-py2.4-unix-i686.egg
 """, N)
+
+
+def test_easy_install_build_options_versions(easy_install_env):
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    remove = easy_install_env['remove']
+    sample_buildout = easy_install_env['sample_buildout']
+    tmpdir = easy_install_env['tmpdir']
+    update_extdemo = easy_install_env['update_extdemo']
+    write = easy_install_env['write']
+    dest = tmpdir('sample-install')
+    mkdir('include')
+    write('include', 'extdemo.h',
+    """
+    #define EXTDEMO 42
+    """)
+    update_extdemo()
+    zc.buildout.easy_install.clear_index_cache()
+
     # The versions option also influences the versions used.  For example,
     # if we specify a version for extdemo, then that will be used, even
     # though it isn't the newest.  Let's clean out the destination directory
@@ -1265,6 +1344,28 @@ d  extdemo-1.5-py2.4-unix-i686.egg
   versions=dict(extdemo='1.4')))
     assert_output(str(_val), "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']", N)
     assert_output(capture_print(ls, dest), 'd  extdemo-1.4-py2.4-unix-i686.egg', N)
+
+
+def test_easy_install_build_options_develop(easy_install_env):
+    extdemo = easy_install_env['extdemo']
+    link_server = easy_install_env['link_server']
+    ls = easy_install_env['ls']
+    mkdir = easy_install_env['mkdir']
+    os = easy_install_env['os']
+    sample_buildout = easy_install_env['sample_buildout']
+    tmpdir = easy_install_env['tmpdir']
+    write = easy_install_env['write']
+    dest = tmpdir('sample-install')
+    mkdir('include')
+    write('include', 'extdemo.h',
+    """
+    #define EXTDEMO 42
+    """)
+    zc.buildout.easy_install.build(
+  'extdemo', dest,
+  {'include_dirs': os.path.join(sample_buildout, 'include')},
+  links=[link_server], index=link_server+'index/')
+
     # Handling custom build options for extensions in develop eggs
     # ------------------------------------------------------------
     #
