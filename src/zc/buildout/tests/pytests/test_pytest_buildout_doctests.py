@@ -1227,10 +1227,9 @@ Generated script '/sample-buildout/bin/demo'.
 """, N)
     assert_output(system(join('bin', 'demo')), '1 1', N)
 
-def test_exit_codes(easy_install_env):
+def test_exit_codes_success(easy_install_env):
     buildout = easy_install_env['buildout']
     print_ = easy_install_env['print_']
-    write = easy_install_env['write']
 
     import subprocess
     def call(s):
@@ -1243,6 +1242,20 @@ def test_exit_codes(easy_install_env):
 
 Exit: False
 """, N)
+
+
+def test_exit_codes_error_on_undefined_section(easy_install_env):
+    buildout = easy_install_env['buildout']
+    print_ = easy_install_env['print_']
+    write = easy_install_env['write']
+
+    import subprocess
+    def call(s):
+        p = subprocess.Popen(s, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p.stdin.close()
+        print_(p.stdout.read().decode())
+        print_('Exit:', bool(p.wait()))
+        p.stdout.close()
     write('buildout.cfg', '\n[buildout]\nparts = x\n')
     assert_output(capture_print(lambda: call(buildout)), """
 While:
@@ -1252,6 +1265,20 @@ Error: The referenced section, 'x', was not defined.
 
 Exit: True
 """, N)
+
+
+def test_exit_codes_internal_error_in_recipe(easy_install_env):
+    buildout = easy_install_env['buildout']
+    print_ = easy_install_env['print_']
+    write = easy_install_env['write']
+
+    import subprocess
+    def call(s):
+        p = subprocess.Popen(s, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p.stdin.close()
+        print_(p.stdout.read().decode())
+        print_('Exit:', bool(p.wait()))
+        p.stdout.close()
     write('setup.py', "\nfrom setuptools import setup\nsetup(name='zc.buildout.testexit',\n      py_modules=['testexitrecipe'],\n      entry_points={'zc.buildout': ['default = testexitrecipe:x']})\n")
     write('testexitrecipe.py', '\nx y\n')
     write('buildout.cfg', '\n[buildout]\nparts = x\ndevelop = .\n\n[x]\nrecipe = zc.buildout.testexit\n')
