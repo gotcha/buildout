@@ -66,3 +66,18 @@ content is unchanged:
   re-run an 8-minute suite on an identical tree.
 - If the tree differs (conflict resolution, amended files), rerun the
   verify-buildout ladder before claiming the result verified.
+- Rerunning the pytest tier by hand: `make pytest` passes
+  `PYTHONPATH=eggs/v5/*.egg` because xdist workers are bare
+  interpreters that do not inherit `bin/py`'s baked sys.path. Any
+  hand invocation with `-n` — full or scoped, e.g. one file with
+  `-n 2` — must replicate it:
+
+  ```sh
+  PYTHONWARNINGS=ignore PYTHONPATH="$(ls -d $PWD/eggs/v5/*.egg | tr '\n' ':')" \
+    bin/py -m pytest src/zc/buildout/tests/pytests/test_<x>.py -q [-n 2]
+  ```
+
+  Without it, every worker fails collection with
+  `ModuleNotFoundError` and the file reports 0 passed — recognize the
+  symptom, do not mistake it for a red suite. Full details in
+  verify-buildout (`features/repo-test-suites.md`).

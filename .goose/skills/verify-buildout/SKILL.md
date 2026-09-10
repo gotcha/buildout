@@ -141,6 +141,11 @@ index, then follow the feature file. The tiers:
      `PYTHONPATH=eggs/v5/*.egg` because xdist workers are bare
      interpreters that do not inherit `bin/py`'s baked sys.path — if
      you invoke pytest by hand, you MUST set that PYTHONPATH yourself.
+     The requirement rides with `-n`, not with the full suite: a
+     scoped run with `-n 2` breaks just the same; only `-n`-free
+     hand runs are exempt. The symptom of forgetting it: every
+     worker errors at collection with `ModuleNotFoundError` for the
+     eggs, so the file reports 0 passed.
      Scoped smoke: one file, e.g. `... test_pytest_rmtree.py -q`.
 4. **Static** (type gate): `make typecheck` — Astral's ty over the
    checkout, with the repo venv as its Python environment and

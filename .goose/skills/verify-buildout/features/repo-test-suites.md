@@ -64,7 +64,11 @@ Preconditions:
 - Hand-invoking pytest WITHOUT the `PYTHONPATH=eggs/v5/*.egg` line
   breaks xdist workers (they are bare interpreters and do not inherit
   `bin/py`'s baked sys.path) — the Makefile comment says exactly this.
-  Use `make pytest`, or replicate the PYTHONPATH.
+  Use `make pytest`, or replicate the PYTHONPATH. This applies to ANY
+  `-n` invocation, including a scoped `-n 2` on one file (only
+  `-n`-free hand runs are exempt): the workers fail collection with
+  `ModuleNotFoundError` for the eggs and the file reports 0 passed —
+  do not mistake that for a red suite.
 - `make test` rebuilds `bin/test` via `bin/buildout` if the config
   changed — a suite run can rewrite repo-root state. That is normal;
   the doctor's dirty-tree NOTE records it.
