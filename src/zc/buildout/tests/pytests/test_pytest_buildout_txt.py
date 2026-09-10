@@ -1048,6 +1048,31 @@ def test_configuration_query_values(buildout_txt_env):
 first
 second
 """, N)
+    # Values are shown raw, as written in the configuration. Pass
+    # --interpolated to show them with ${...} substitutions applied,
+    # the way recipes see them.
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    develop = .
+
+    [values]
+    host = buildout.org
+    url = http://${values:host}/api
+    """)
+    assert_output(system([buildout, 'query', 'values:url']), 'http://${values:host}/api', N)
+    assert_output(system([buildout, 'query', '--interpolated', 'values:url']), 'http://buildout.org/api', N)
+    assert_output(system([buildout, 'query', 'values:url', '--interpolated']), 'http://buildout.org/api', N)
+    assert_output(system([buildout, 'annotate', '--interpolated', 'values']), """
+Annotated sections
+==================
+
+[values]
+host= buildout.org
+    buildout.cfg
+url= http://buildout.org/api
+    buildout.cfg
+""", N)
     # As with assignments, if the section is omitted, 'buildout' section is assumed.
     assert_output(system([buildout, 'query', 'develop']), '.', N)
     # When used with -v option, the query command also displays section and key.
