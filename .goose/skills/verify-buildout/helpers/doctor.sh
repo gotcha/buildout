@@ -20,6 +20,9 @@ pybin=$(ls -d "$REPO"/venvs/*/bin/python* 2>/dev/null | head -1)
 
 [ -d "$REPO/eggs/v5" ]; check "eggs/v5 (pytest PYTHONPATH source)" $?
 
+tyver=$(command -v ty >/dev/null 2>&1 && ty --version 2>/dev/null | head -1)
+[ -n "$tyver" ]; check "ty on PATH (devenv, static tier)" $? "$tyver"
+
 head_rev=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)
 [ -n "$head_rev" ]; check "git HEAD" $? "$head_rev"
 dirty=$(git -C "$REPO" status --short 2>/dev/null | head -5)

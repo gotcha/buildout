@@ -1,4 +1,5 @@
-.PHONY: all test pytest help
+.PHONY: all test pytest typecheck help
+PYTHON_VERSION ?= 3.12
 all: test
 
 bin/buildout: setup.py prepare.sh dev.py
@@ -15,6 +16,12 @@ test-recipe: bin/test
 
 test-small: bin/test
 	PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
+
+typecheck: bin/buildout
+	# Static tier of verify-buildout: Astral's ty over the checkout with
+	# the repo venv as its Python environment. The _vendor exclude lives
+	# in pyproject.toml [tool.ty]. ty comes from the devenv.
+	ty check --project . --python venvs/python$(PYTHON_VERSION)/bin/python --output-format concise
 
 pytest: bin/buildout
 	# xdist workers are bare-interpreter subprocesses: they do not inherit

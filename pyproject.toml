@@ -1,3 +1,8 @@
+[tool.ty.src]
+# _vendor is frozen third-party code (the pkg_resources v81 fork):
+# not gateable signal, excluded from the static tier.
+exclude = ["src/zc/buildout/_vendor"]
+
 [tool.towncrier]
 filename = "CHANGES.rst"
 directory = "news/"

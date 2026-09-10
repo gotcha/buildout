@@ -97,6 +97,8 @@ It checks, printing OK/FAIL per line and exiting non-zero on any FAIL:
 - `git -C <repo> rev-parse HEAD` and `status --short` — record the exact
   revision driven, and whether the tree was dirty
 - `eggs/v5/` exists (pytest suite needs its eggs on PYTHONPATH)
+- `ty --version` on PATH (Astral checker for the static tier; the
+  devenv provides it)
 
 Run the doctor first whenever anything looks off; a FAIL there
 invalidates everything downstream. If `bin/buildout` is missing,
@@ -140,6 +142,13 @@ index, then follow the feature file. The tiers:
      interpreters that do not inherit `bin/py`'s baked sys.path — if
      you invoke pytest by hand, you MUST set that PYTHONPATH yourself.
      Scoped smoke: one file, e.g. `... test_pytest_rmtree.py -q`.
+4. **Static** (type gate): `make typecheck` — Astral's ty over the
+   checkout, with the repo venv as its Python environment and
+   `_vendor/` excluded via `[tool.ty]` in pyproject.toml. Treat the
+   diagnostic count like suite totals: record it, compare across
+   runs. Zero is the target only after the per-module ratchet lands
+   (easy_install.py and buildout.py stay lenient longest); until
+   then the gate is the trend.
 
 ## Evidence
 
@@ -152,6 +161,9 @@ Proof standards:
 - Record per drive: the exact `buildout.cfg` used, the command, exit
   code, full stdout/stderr transcript (`| tee "$ART/<name>.log"`), and
   `git rev-parse HEAD` of the checkout.
+- Static tier: `make typecheck 2>&1 | tee "$ART/typing.log"`; the
+  "Found N diagnostics" line is evidence the same way suite totals
+  are.
 - Capture the action AND the resulting state: after an install, list
   the tree (`ls -la`, `ls bin/`) and verify the run's side effects on
   disk (next bullet).
