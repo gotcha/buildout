@@ -28,6 +28,23 @@ Buildout is a short-lived CLI — there is no server. "Launch" means:
 build the runner once, then start each drive in its own throwaway
 project directory.
 
+Toolchain: enter `devenv shell` first (devenv.nix at the repo root).
+It provides Python (default 3.12), git, gnumake, uv and coreutils, and
+exports `PYTHON_VERSION` + `USE_UV` + `UV_VENV_CLEAR` +
+`SETUPTOOLS_VERSION=75.8.2` so the bootstrap below just works.
+Pick another supported Python (3.9–3.14) from the command line, no
+file edit:
+
+```sh
+devenv shell --option languages.python.version:string 3.10
+```
+
+Switching versions needs no `make clean`: prepare.sh keys its venvs by
+Python version (`venvs/python3.x`); re-run `make bin/buildout &&
+bin/buildout` after switching. Without devenv, set the pins by hand:
+`PYTHON_VERSION=3.12 SETUPTOOLS_VERSION=75.8.2` (unpinned setuptools
+breaks the 5.x bootstrap).
+
 One-time build (already done in a fresh checkout only if `bin/` is
 missing):
 
@@ -35,9 +52,6 @@ missing):
 cd $REPO
 make bin/buildout        # = ./prepare.sh: venv in venvs/, pip deps, sdist, dev.py
 ```
-
-Known-good pin on this machine: `PYTHON_VERSION=3.12 SETUPTOOLS_VERSION=75.8.2`
-(the default unpinned setuptools can break the 5.x bootstrap).
 
 Per-drive launch:
 

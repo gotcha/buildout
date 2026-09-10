@@ -14,6 +14,10 @@ driving, then use the matching feature file as the recipe.
   source tree, whatever branch is checked out.
 - `export PYTHONWARNINGS=ignore` for every command (pkg_resources
   deprecation noise otherwise floods transcripts).
+- Toolchain via `devenv shell` (devenv.nix at the root): python, git,
+  gnumake, uv, and the bootstrap pins are provided there;
+  `devenv shell --option languages.python.version:string X.Y` switches
+  Python (3.9–3.14 supported).
 - Every drive gets its own throwaway project dir:
   `D=$(mktemp -d /tmp/verify-buildout.XXXXXX)` — never drive in the
   repo root (it rewrites `.installed.cfg`, `parts/`, `eggs/`).

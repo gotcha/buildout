@@ -81,3 +81,9 @@ Preconditions:
   means the pytest suite must be fixed to match legacy. Behavior
   changes that impact existing tests update BOTH suites in the same
   change.
+- Multi-Python verification: use the devenv CLI override, then
+  rebuild and run the suites inside that shell:
+  `devenv shell --option languages.python.version:string 3.10`, then
+  `make bin/buildout && bin/buildout && make pytest && make test`.
+  venvs are keyed per Python version, so no `make clean` between
+  versions; `bin/` is relinked by the rebuild.
