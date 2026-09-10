@@ -9,6 +9,23 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_update.py ↔ legacy `update.txt` (self-update region, buildout.py ~1164-1260)
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| U1 newest check flipped (`if not self.newest` → `if self.newest`) | KILL | KILL |
+| U2 restart-guard env var neutralized | survive | survive |
+| U3 upgrade projects trimmed to `('zc.buildout',)` | survive | survive |
+| U4 upgraded check flipped (`if not upgraded` → `if upgraded`) | KILL | KILL |
+
+Agreement 4/4. U2 survives both: after a real restart the upgrade
+check re-runs but finds nothing new, so the missing guard is invisible
+to CLI-level output. U3 survives both: the test env only publishes a
+new zc.buildout release, so dropping wheel/pip/setuptools from the
+upgrade check changes nothing observable — the multi-project upgrade
+list is under-tested in BOTH suites equally (candidate for a dedicated
+test if that list matters).
+
 ## test_pytest_interpolated.py ↔ legacy `configuration.txt` (query/annotate region)
 
 This module is pytest-only ADDED coverage of the same query/annotate
