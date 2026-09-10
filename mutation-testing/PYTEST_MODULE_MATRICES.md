@@ -9,6 +9,23 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_extras.py ↔ legacy `test_extras` (easy_install.py extras region)
+
+Region: `Installer._satisfied` extras handling (~easy_install.py
+923-956) — the "extras in requirements were lost" bugfix region.
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| X1 extra requirements dropped (`dist.requires(req.extras)` → `[]`) | KILL | KILL |
+| X2 missing-extra check inverted (`-` → `&`) | KILL | KILL |
+| X3 `_allow_unknown_extras` condition flipped | survive | survive |
+| X4 requires called with no extras (`requires(())`) | KILL | KILL |
+
+Agreement 4/4. X3 survives both: the module's test exercises no
+missing-extra path (that path belongs to allow-unknown-extras.txt, see
+test_pytest_easy_install_files.py). Kills under X1/X4 confirm both
+suites really resolve the extra's dependency through this code.
+
 ## test_pytest_rmtree.py ↔ legacy `rmtree` (zc/buildout/rmtree.py)
 
 | Mutation | legacy | pytest |
