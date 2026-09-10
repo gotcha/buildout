@@ -9,6 +9,24 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_assert_output.py — pytest-only (no legacy counterpart)
+
+This module tests the pytest harness itself (`assert_output`,
+`capture_print`, `apply_normalizers` in conftest.py) — there is no
+legacy suite to compare with, so the legacy/pytest agreement question
+is N/A. What does apply is harness integrity: a mutant that makes
+`assert_output` vacuous would silently poison the whole pytest suite,
+and THIS module is the guard against that.
+
+| Mutation (conftest.py) | pytest |
+|---|---|
+| H1 `assert_output` returns early (always passes) | KILL |
+| H2 blank-line removal dropped from `_norm_ws` | KILL |
+
+2/2 killed — the suite's assertion helper cannot be silently neutered.
+Practice note: when porting further regions, a green pytest run is
+only trustworthy because this module exists.
+
 ## test_pytest_docs.py ↔ legacy doc/*.rst manuel suite (test_all.py)
 
 **FINDING — real port bug, fixed in this branch:** the module collected
