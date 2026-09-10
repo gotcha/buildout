@@ -39,6 +39,10 @@ driving, then use the matching feature file as the recipe.
   scripts). Configuration-composition proof is `query`/`annotate`
   output — the two answer different questions; never substitute one
   for the other.
+- Suite proof: the legacy suite (`make test`) is the official truth.
+  A green `make pytest` alone does not verify a change; a red legacy
+  suite with green pytest means the pytest port must be fixed to
+  match.
 - A networked drive that fails on a fetch is NOT a buildout failure:
   report it as environment-limited, attempt the hermetic tier, and say
   so explicitly. Do not report a networked path as verified through a
@@ -50,7 +54,10 @@ driving, then use the matching feature file as the recipe.
   rerun-modes.
 - **Networked** (PyPI or warm pip cache): scaffolding (init/bootstrap),
   the real part install inside install-and-inspect.
-- **Suites**: repo-test-suites (`make test`, `make pytest`).
+- **Suites**: repo-test-suites. `make test` (legacy) is the official
+  truth — every change is proven with it eventually; `make pytest`
+  (ported) is the fast development loop, not yet a standalone source
+  of truth.
 
 ## Features
 
@@ -65,5 +72,5 @@ driving, then use the matching feature file as the recipe.
 - [Project scaffolding](./scaffolding.md) — `buildout init` /
   `bootstrap` creating a new project (networked).
 - [Repo test suites](./repo-test-suites.md) — `make test` (legacy
-  doctest suite) and `make pytest` (ported pytest suite) as the deep
-  behavior proof.
+  doctest suite, the official truth) and `make pytest` (ported pytest
+  suite, the fast development loop) as the deep behavior proof.

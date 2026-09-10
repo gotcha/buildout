@@ -97,13 +97,19 @@ index, then follow the feature file. The tiers:
    `develop`, published egg from PyPI), `init`/`bootstrap`. Requires
    network or a warm pip cache.
 3. **Suites** (the deep proof): the repo has TWO suites, run from the
-   repo root:
+   repo root. Hierarchy: `make test` is the official truth — no change
+   is verified until it passes; `make pytest` is the fast development
+   loop, still too young to stand alone. If legacy fails while pytest
+   passes, the pytest port is wrong — fix pytest to match. A change
+   that impacts existing tests updates BOTH suites.
    - `make test` — legacy doctest/testrunner suite (`bin/test -pvc`).
-     Several minutes. Scoped smoke: `make test-small` (single
-     `buildout.txt` file) or `bin/test -pvc -t <name>`.
+     The official truth. Several minutes. Scoped smoke:
+     `make test-small` (single `buildout.txt` file) or
+     `bin/test -pvc -t <name>`.
    - `make pytest` — ported pytest suite in
      `src/zc/buildout/tests/pytests/`, run with xdist
-     (`bin/py -m pytest ... -n auto`). The Makefile passes
+     (`bin/py -m pytest ... -n auto`). The development loop — iterate
+     here, prove with `make test`. The Makefile passes
      `PYTHONPATH=eggs/v5/*.egg` because xdist workers are bare
      interpreters that do not inherit `bin/py`'s baked sys.path — if
      you invoke pytest by hand, you MUST set that PYTHONPATH yourself.

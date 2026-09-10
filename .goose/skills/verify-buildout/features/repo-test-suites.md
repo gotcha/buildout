@@ -5,12 +5,28 @@ suites: the legacy doctest/testrunner suite (`make test`) and the
 ported pytest suite (`make pytest`). For a behavior-affecting change,
 these are the deep proof layer beneath the CLI drives.
 
+## Which suite proves what
+
+- **The legacy suite (`make test`) is the official truth.** The
+  pytest suite is a port and still too young to stand alone — a
+  change is NOT verified until `make test` passes. Fast loops defer,
+  never replace: every verification ends with the legacy suite.
+- **The pytest suite is the development loop.** It is much quicker
+  (~1 min vs ~8+ min for a full run), so iterate with it while
+  developing — scoped single files, then full `make pytest` — then
+  prove the change with `make test`.
+- **Divergence rule:** if the legacy suite fails while the pytest
+  suite passes, the pytest port is wrong — fix the pytest suite to
+  match the legacy behavior, not the other way around.
+- **Changing tested behavior:** when a change impacts existing tests,
+  update BOTH suites in the same change.
+
 ## Sub-features
 
 - `suite-doctest` — `make test` runs the zope.testrunner doctest suite
-  (`bin/test -pvc`). Several minutes.
+  (`bin/test -pvc`). Several minutes. The official truth.
 - `suite-pytest` — `make pytest` runs `src/zc/buildout/tests/pytests/`
-  under xdist (`-n auto`). Faster.
+  under xdist (`-n auto`). Much faster — the development loop.
 - `suite-scoped` — both suites support scoped runs for fast iteration:
   `make test-small` (or `bin/test -pvc -t buildout.txt`) and
   single-file pytest invocations.
@@ -39,7 +55,9 @@ Preconditions:
   `PYTHONWARNINGS=ignore PYTHONPATH="$(ls -d $PWD/eggs/v5/*.egg | tr '\n' ':')" \
     bin/py -m pytest src/zc/buildout/tests/pytests/test_pytest_rmtree.py -q`.
   Both exit 0. Use these when the full suites are too slow for the
-  question at hand, and say so in the report.
+  question at hand, and say so in the report — a scoped smoke is
+  iteration fuel, never the final proof (see "Which suite proves
+  what").
 
 ## Gotchas
 
@@ -59,3 +77,7 @@ Preconditions:
   environment drifted (new setuptools/pip), not necessarily the code —
   record `bin/py -m pip --version` and the venv's `pip freeze` into
   `$ART` before concluding anything.
+- Suite disagreement is a pytest-port bug: legacy red + pytest green
+  means the pytest suite must be fixed to match legacy. Behavior
+  changes that impact existing tests update BOTH suites in the same
+  change.
