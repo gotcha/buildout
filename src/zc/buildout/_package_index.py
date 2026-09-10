@@ -41,11 +41,12 @@ import socket
 import subprocess
 import sys
 import urllib.error
+import urllib.response
 import urllib.parse
 import urllib.request
 from fnmatch import translate
 from functools import wraps
-from typing import NamedTuple
+from typing import Any, BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple, Union, NamedTuple
 
 import setuptools
 from pkg_resources import (
@@ -239,7 +240,7 @@ def parse_bdist_wininst(name):
     return base, py_ver, plat
 
 
-def egg_info_for_url(url):
+def egg_info_for_url(url: str) -> Tuple[str, str]:
     parts = urllib.parse.urlparse(url)
     _scheme, server, path, _parameters, _query, fragment = parts
     base = urllib.parse.unquote(path.split('/')[-1])
@@ -250,7 +251,7 @@ def egg_info_for_url(url):
     return base, fragment
 
 
-def distros_for_url(url, metadata=None):
+def distros_for_url(url: str, metadata: Optional[Any]=None) -> Iterator[Distribution]:
     """Yield egg or source distribution objects that might be found at a URL"""
     base, fragment = egg_info_for_url(url)
     yield from distros_for_location(url, base, metadata)
@@ -262,7 +263,7 @@ def distros_for_url(url, metadata=None):
             )
 
 
-def distros_for_location(location, basename, metadata=None):
+def distros_for_location(location: str, basename: str, metadata: Optional[Any]=None) -> List[Distribution]:
     """Yield egg or source distribution objects based on basename"""
     if basename.endswith('.egg.zip'):
         basename = basename[:-4]  # strip the .zip
@@ -297,7 +298,7 @@ def distros_for_location(location, basename, metadata=None):
     return []  # no extension matched
 
 
-def distros_for_filename(filename, metadata=None):
+def distros_for_filename(filename: str, metadata: Optional[Any]=None) -> List[Distribution]:
     """Yield possible egg or source distribution objects based on a filename"""
     return distros_for_location(
         normalize_path(filename), os.path.basename(filename), metadata
@@ -305,8 +306,8 @@ def distros_for_filename(filename, metadata=None):
 
 
 def interpret_distro_name(
-    location, basename, metadata, py_version=None, precedence=SOURCE_DIST, platform=None
-):
+    location: str, basename: str, metadata: Any, py_version: Optional[str]=None, precedence: int=SOURCE_DIST, platform: Optional[str]=None
+) -> Iterator[Distribution]:
     """Generate the interpretation of a source distro name
 
     Note: if `location` is a filesystem filename, you should call
@@ -338,7 +339,7 @@ def interpret_distro_name(
     )
 
 
-def unique_values(func):
+def unique_values(func: Callable) -> Callable:
     """
     Wrap a function returning an iterable such that the resulting iterable
     only ever yields unique items.
@@ -381,7 +382,7 @@ class ContentChecker:
     A null content checker that defines the interface for checking content
     """
 
-    def feed(self, block):
+    def feed(self, block: bytes):
         """
         Feed a block of data to the hash.
         """
@@ -393,7 +394,7 @@ class ContentChecker:
         """
         return True
 
-    def report(self, reporter, template):
+    def report(self, reporter: Callable, template: str):
         """
         Call reporter with information about the checker (hash name)
         substituted into the template.
@@ -413,7 +414,7 @@ class HashChecker(ContentChecker):
         self.expected = expected
 
     @classmethod
-    def from_url(cls, url):
+    def from_url(cls, url: str) -> ContentChecker:
         "Construct a (possibly null) ContentChecker from a URL"
         fragment = urllib.parse.urlparse(url)[-1]
         if not fragment:
@@ -440,8 +441,8 @@ class PackageIndex(Environment):
     def __init__(
         self,
         index_url: str = "https://pypi.org/simple/",
-        hosts=('*',),
-        ca_bundle=None,
+        hosts: Tuple[str, ...]=('*',),
+        ca_bundle: Optional[str]=None,
         verify_ssl: bool = True,
         *args,
         **kw,
@@ -525,7 +526,7 @@ class PackageIndex(Environment):
         if url.startswith(self.index_url) and getattr(f, 'code', None) != 404:
             page = self.process_index(url, page)
 
-    def process_filename(self, fn, nested: bool = False) -> None:
+    def process_filename(self, fn: str, nested: bool = False) -> None:
         # process filenames or directories
         if not os.path.exists(fn):
             self.warn("Not found: %s", fn)
@@ -541,7 +542,7 @@ class PackageIndex(Environment):
             self.debug("Found: %s", fn)
             list(map(self.add, dists))
 
-    def url_ok(self, url, fatal: bool = False) -> bool:
+    def url_ok(self, url: str, fatal: bool = False) -> bool:
         """Is this url allowed by the allow-hosts option?
 
         Buildout has changed this to not log any warning when a url
@@ -577,7 +578,7 @@ class PackageIndex(Environment):
             dist.precedence = SOURCE_DIST
             self.add(dist)
 
-    def _scan(self, link):
+    def _scan(self, link: str) -> Union[Tuple[str, str], Tuple[None, None]]:
         # Process a URL to see if it's for a package page
         NO_MATCH_SENTINEL = None, None
         if not link.startswith(self.index_url):
@@ -593,7 +594,7 @@ class PackageIndex(Environment):
         self.package_pages.setdefault(pkg.lower(), {})[link] = True
         return to_filename(pkg), to_filename(ver)
 
-    def process_index(self, url, page):
+    def process_index(self, url: str, page: str):
         """Process the contents of a PyPI page"""
 
         # process an index page into the package-page index
@@ -629,14 +630,14 @@ class PackageIndex(Environment):
             url,
         )
 
-    def scan_all(self, msg=None, *args) -> None:
+    def scan_all(self, msg: Optional[str]=None, *args) -> None:
         if self.index_url not in self.fetched_urls:
             if msg:
                 self.warn(msg, *args)
             self.info("Scanning index of all packages (this may take a while)")
         self.scan_url(self.index_url)
 
-    def find_packages(self, requirement) -> None:
+    def find_packages(self, requirement: Requirement) -> None:
         """Find packages.
 
         Note: Buildout had a patch for this, but that code is now merged in here.
@@ -665,7 +666,7 @@ class PackageIndex(Environment):
             # scan each page that might be related to the desired package
             self.scan_url(url)
 
-    def obtain(self, requirement, installer=None):
+    def obtain(self, requirement: Requirement, installer: Optional[Callable]=None) -> Optional[Distribution]:
         self.prescan()
         self.find_packages(requirement)
         for dist in self[requirement.key]:
@@ -674,7 +675,7 @@ class PackageIndex(Environment):
             self.debug("%s does not match %s", requirement, dist)
         return super().obtain(requirement, installer)
 
-    def check_hash(self, checker, filename, tfp) -> None:
+    def check_hash(self, checker: ContentChecker, filename: str, tfp: BinaryIO) -> None:
         """
         checker is a ContentChecker
         """
@@ -687,7 +688,7 @@ class PackageIndex(Environment):
                 "possible download problem?"
             )
 
-    def add_find_links(self, urls) -> None:
+    def add_find_links(self, urls: List[str]) -> None:
         """Add `urls` to the list that will be prescanned for searches"""
         for url in urls:
             if (
@@ -708,7 +709,7 @@ class PackageIndex(Environment):
             list(map(self.scan_url, self.to_scan))
         self.to_scan = None  # from now on, go ahead and process immediately
 
-    def not_found_in_index(self, requirement) -> None:
+    def not_found_in_index(self, requirement: Requirement) -> None:
         if self[requirement.key]:  # we've seen at least one distro
             meth, msg = self.info, "Couldn't retrieve index page for %r"
         else:  # no distros seen for this name, might be misspelled
@@ -716,7 +717,7 @@ class PackageIndex(Environment):
         meth(msg, requirement.unsafe_name)
         self.scan_all()
 
-    def download(self, spec, tmpdir):
+    def download(self, spec: Union[str, Requirement], tmpdir: str) -> str:
         """Locate and/or download `spec` to `tmpdir`, returning a local path
 
         `spec` may be a ``Requirement`` object, or a string containing a URL,
@@ -890,7 +891,7 @@ class PackageIndex(Environment):
 
     dl_blocksize = 8192
 
-    def _download_to(self, url, filename):
+    def _download_to(self, url: str, filename: str) -> http.client.HTTPMessage:
         self.info("Downloading %s", url)
         # Download the file
         fp = None
@@ -924,11 +925,11 @@ class PackageIndex(Environment):
             if fp:
                 fp.close()
 
-    def reporthook(self, url, filename, blocknum, blksize, size) -> None:
+    def reporthook(self, url: str, filename: str, blocknum: int, blksize: int, size: int) -> None:
         pass  # no-op
 
     # FIXME:
-    def open_url(self, url, warning=None):  # noqa: C901  # is too complex (12)
+    def open_url(self, url: str, warning: Optional[str]=None) -> Union[http.client.HTTPResponse, urllib.response.addinfourl, urllib.error.HTTPError]:  # noqa: C901  # is too complex (12)
         if url.startswith('file:'):
             return local_open(url)
         try:
@@ -961,7 +962,7 @@ class PackageIndex(Environment):
                 raise DistutilsError(f"Download error for {url}: {v}") from v
 
     @staticmethod
-    def _sanitize(name):
+    def _sanitize(name: str) -> str:
         r"""
         Replace unsafe path directives with underscores.
 
@@ -990,7 +991,7 @@ class PackageIndex(Environment):
         return re.sub(pattern, r'_', name)
 
     @classmethod
-    def _resolve_download_filename(cls, url, tmpdir):
+    def _resolve_download_filename(cls, url: str, tmpdir: str) -> str:
         """
         >>> import pathlib
         >>> du = PackageIndex._resolve_download_filename
@@ -1008,7 +1009,7 @@ class PackageIndex(Environment):
 
         return os.path.join(tmpdir, name)
 
-    def _download_url(self, url, tmpdir):
+    def _download_url(self, url: str, tmpdir: str) -> str:
         """
         Determine the download filename.
         """
@@ -1016,7 +1017,7 @@ class PackageIndex(Environment):
         return self._download_vcs(url, filename) or self._download_other(url, filename)
 
     @staticmethod
-    def _resolve_vcs(url):
+    def _resolve_vcs(url: str) -> Optional[str]:
         """
         >>> rvcs = PackageIndex._resolve_vcs
         >>> rvcs('git+http://foo/bar')
@@ -1034,7 +1035,7 @@ class PackageIndex(Environment):
         allowed = set(['svn', 'git'] + ['hg'] * bool(sep))
         return next(iter({pre} & allowed), None)
 
-    def _download_vcs(self, url, spec_filename):
+    def _download_vcs(self, url: str, spec_filename: str):
         vcs = self._resolve_vcs(url)
         if not vcs:
             return None
@@ -1059,7 +1060,7 @@ class PackageIndex(Environment):
 
         return filename
 
-    def _download_other(self, url, filename):
+    def _download_other(self, url: str, filename: str) -> str:
         scheme = urllib.parse.urlsplit(url).scheme
         if scheme == 'file':  # pragma: no cover
             return urllib.request.url2pathname(urllib.parse.urlparse(url).path)
@@ -1067,10 +1068,10 @@ class PackageIndex(Environment):
         self.url_ok(url, True)
         return self._attempt_download(url, filename)
 
-    def scan_url(self, url) -> None:
+    def scan_url(self, url: str) -> None:
         self.process_url(url, True)
 
-    def _attempt_download(self, url, filename):
+    def _attempt_download(self, url: str, filename: str) -> str:
         headers = self._download_to(url, filename)
         if 'html' in headers.get('content-type', '').lower():
             return self._invalid_download_html(url, headers, filename)
@@ -1113,13 +1114,13 @@ class PackageIndex(Environment):
 
         return resolved, rev
 
-    def debug(self, msg, *args) -> None:
+    def debug(self, msg: str, *args) -> None:
         log.debug(msg, *args)
 
-    def info(self, msg, *args) -> None:
+    def info(self, msg: str, *args) -> None:
         log.info(msg, *args)
 
-    def warn(self, msg, *args) -> None:
+    def warn(self, msg: str, *args) -> None:
         log.warn(msg, *args)
 
 
@@ -1133,7 +1134,7 @@ def decode_entity(match):
     return html.unescape(what)
 
 
-def htmldecode(text):
+def htmldecode(text: str) -> str:
     """
     Decode HTML entities in the given text.
 
@@ -1145,7 +1146,7 @@ def htmldecode(text):
     return entity_sub(decode_entity, text)
 
 
-def socket_timeout(timeout=15):
+def socket_timeout(timeout: int=15) -> Callable:
     def _socket_timeout(func):
         def _socket_timeout(*args, **kwargs):
             old_timeout = socket.getdefaulttimeout()
@@ -1210,7 +1211,7 @@ class PyPIConfig(configparser.RawConfigParser):
             _cfg_read_utf8_with_fallback(self, rc)
 
     @property
-    def creds_by_repository(self):
+    def creds_by_repository(self) -> Dict[Any, Any]:
         sections_with_repositories = [
             section
             for section in self.sections()
@@ -1226,7 +1227,7 @@ class PyPIConfig(configparser.RawConfigParser):
             self.get(section, 'password').strip(),
         )
 
-    def find_credential(self, url):
+    def find_credential(self, url: str):
         """
         If the URL indicated appears to be a repository defined in this
         config, return the credential for that repository.
@@ -1285,7 +1286,7 @@ def open_with_auth(url, opener=urllib.request.urlopen):
 
 # copy of urllib.parse._splituser from Python 3.8
 # See https://github.com/python/cpython/issues/80072.
-def _splituser(host):
+def _splituser(host: str) -> Tuple[Optional[str], str]:
     """splituser('user[:passwd]@host[:port]')
     --> 'user[:passwd]', 'host[:port]'."""
     user, delim, host = host.rpartition('@')
@@ -1300,7 +1301,7 @@ def fix_sf_url(url):
     return url  # backward compatibility
 
 
-def local_open(url):
+def local_open(url: str) -> Union[urllib.response.addinfourl, urllib.error.HTTPError]:
     """Read a local path, with special support for directories"""
     _scheme, _server, path, _param, _query, _frag = urllib.parse.urlparse(url)
     filename = urllib.request.url2pathname(path)
