@@ -222,9 +222,8 @@ def develop_verbose():
     >>> print_(system(join('bin', 'buildout')+' -vvv'), end='')
     ... # doctest: +ELLIPSIS
     Installing...
-    Making editable install of /sample-buildout/foo
     ...
-    Successfully made editable install: /sample-buildout/develop-eggs/foo.egg-link
+    Develop: '/sample-buildout/foo'
     ...
 
     """

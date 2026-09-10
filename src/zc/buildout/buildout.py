@@ -739,14 +739,13 @@ class Buildout(DictMixin):
         (installed_part_options, installed_exists
          )= self._read_installed_part_options()
 
-        # Remove old develop eggs
-        self._uninstall(
+        # Build develop eggs, reusing the egg-links of sources whose
+        # packaging metadata is unchanged, and removing the egg-links
+        # of sources no longer being developed.
+        installed_develop_eggs = self._develop(
             installed_part_options['buildout'].get(
                 'installed_develop_eggs', '')
             )
-
-        # Build develop eggs
-        installed_develop_eggs = self._develop()
         installed_part_options['buildout']['installed_develop_eggs'
                                            ] = installed_develop_eggs
 
@@ -962,27 +961,67 @@ class Buildout(DictMixin):
                 self._logger.info('Creating directory %r.', d)
                 os.mkdir(d)
 
-    def _develop(self):
+    def _develop(self, previously_installed=''):
         """Install sources by running in editable mode.
 
         Traditionally: run `setup.py develop` on them.
         Nowadays: run `pip install -e` on them, as there may not be a `setup.py`,
         but `pyproject.toml` instead, using for example `hatchling`.
+
+        Reinstalling an editable install is only needed when its packaging
+        metadata may have changed: an editable install does not copy any
+        code, so changes in the source code itself are picked up without
+        reinstalling.  Running `pip install -e` costs about a second per
+        source per run, so we skip it for sources whose packaging metadata
+        (``setup.py``, ``setup.cfg``, ``pyproject.toml``) has not changed
+        since their egg-link was created, and reuse the existing egg-link.
+
+        ``previously_installed`` is the newline-separated list of files
+        created by the previous run (as returned by this method), used to
+        find reusable egg-links and to remove egg-links of sources that are
+        no longer listed in the ``develop`` option.
         """
         __doing__ = 'Processing directories listed in the develop option'
 
         develop = self['buildout'].get('develop')
         if not develop:
+            self._uninstall(previously_installed)
             return ''
 
         dest = self['buildout']['develop-eggs-directory']
         old_files = os.listdir(dest)
 
-        env = dict(os.environ,
-                   PYTHONPATH=zc.buildout.easy_install.setuptools_pythonpath)
+        # Map the previously installed egg-links to the source directory
+        # they point at, so we can tell which ones are still current.
+        previous_links = {}
+        for f in previously_installed.split('\n'):
+            if not f:
+                continue
+            f = self._buildout_path(f)
+            if not f.endswith('.egg-link') or not os.path.isfile(f):
+                continue
+            with open(f) as fp:
+                egg_path = fp.readline().strip()
+            # The egg path is the source directory itself or, for
+            # src-layouts, its 'src' subdirectory.  Note that the source
+            # directory itself may also be named 'src' (a flat layout in a
+            # directory called src), so check which of the candidates
+            # holds the packaging metadata.
+            source = egg_path
+            if os.path.basename(egg_path) == 'src':
+                parent = os.path.dirname(egg_path)
+                metadata = ('setup.py', 'setup.cfg', 'pyproject.toml')
+                if (any(os.path.isfile(os.path.join(parent, name))
+                        for name in metadata)
+                        and not any(os.path.isfile(os.path.join(egg_path, name))
+                                    for name in metadata)):
+                    source = parent
+            previous_links[os.path.realpath(source)] = f
+
         here = os.getcwd()
         try:
             try:
+                installed = []
                 for setup in develop.split():
                     setup = self._buildout_path(setup)
                     files = glob.glob(setup)
@@ -993,8 +1032,34 @@ class Buildout(DictMixin):
                         files.sort()
                     for setup in files:
                         self._logger.info("Develop: %r", setup)
-                        __doing__ = 'Processing develop directory %r.', setup
-                        zc.buildout.easy_install.develop(setup, dest)
+                        __doing__ = ('Processing develop directory %r.',
+                                     setup)
+                        directory = os.path.realpath(
+                            os.path.expanduser(setup))
+                        existing = previous_links.pop(directory, None)
+                        if existing is not None and os.path.dirname(
+                                existing) != os.path.realpath(dest):
+                            # The develop-eggs directory changed since the
+                            # previous run: the old egg-link cannot be
+                            # reused in the new directory.
+                            self._uninstall(existing)
+                            existing = None
+                        if existing is not None:
+                            if self._develop_link_fresh(existing, directory):
+                                self._logger.debug(
+                                    "Packaging metadata of %r is unchanged "
+                                    "since the previous run; keeping "
+                                    "editable install: %s",
+                                    setup, existing)
+                                installed.append(os.path.join(
+                                    dest, os.path.basename(existing)))
+                                continue
+                            # Stale egg-link: reinstall from scratch.
+                            self._uninstall(existing)
+                        link = zc.buildout.easy_install.develop(setup, dest)
+                        if link:
+                            installed.append(os.path.join(
+                                dest, os.path.basename(link)))
             except Exception:
                 # if we had an error, we need to roll back changes, by
                 # removing any files we created.
@@ -1007,14 +1072,37 @@ class Buildout(DictMixin):
                 raise
 
             else:
+                # Remove egg-links of sources no longer being developed.
+                self._uninstall('\n'.join(previous_links.values()))
                 self._sanity_check_develop_eggs_files(dest, old_files)
-                return '\n'.join([os.path.join(dest, f)
-                                  for f in os.listdir(dest)
-                                  if f not in old_files
-                                  ])
+                return '\n'.join(dict.fromkeys(installed))
 
         finally:
             os.chdir(here)
+
+    @staticmethod
+    def _develop_link_fresh(link, directory):
+        """Can the existing egg-link be kept for this source directory?
+
+        True when the packaging metadata files (``setup.py``,
+        ``setup.cfg``, ``pyproject.toml``) are all older than the
+        egg-link, and the egg-info generated by the previous editable
+        install is still present in the source tree.
+        """
+        try:
+            link_mtime = os.path.getmtime(link)
+        except OSError:
+            return False
+        for name in ('setup.py', 'setup.cfg', 'pyproject.toml'):
+            path = os.path.join(directory, name)
+            if os.path.isfile(path) and os.path.getmtime(path) >= link_mtime:
+                return False
+        for pattern in ('*.egg-info', os.path.join('src', '*.egg-info')):
+            if glob.glob(os.path.join(directory, pattern)):
+                return True
+        # No egg-info left in the source tree: the previous editable
+        # install is incomplete, so it must be redone.
+        return False
 
 
     def _sanity_check_develop_eggs_files(self, dest, old_files):
