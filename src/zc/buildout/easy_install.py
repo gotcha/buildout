@@ -40,6 +40,7 @@ import zc.buildout
 import zc.buildout.rmtree
 import zipfile
 from . import _package_index
+from collections.abc import Iterable, Mapping, Sequence
 from functools import cached_property
 from importlib import metadata
 from packaging import specifiers
@@ -53,6 +54,8 @@ from zc.buildout.utils import IS_SETUPTOOLS_80_PLUS
 from zc.buildout.utils import normalize_name
 import warnings
 import csv
+from packaging.version import Version
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 
 
@@ -62,7 +65,7 @@ warnings.filterwarnings(
     'ignore', '.+is being parsed as a legacy, non PEP 440, version')
 
 _oprp = getattr(os.path, 'realpath', lambda path: path)
-def realpath(path):
+def realpath(path: str) -> str:
     return os.path.normcase(os.path.abspath(_oprp(path)))
 
 default_index_url = os.environ.get(
@@ -107,7 +110,7 @@ class EnvironmentMixin(object):
     setuptools 69.3+ get a different name than with older versions:
     https://github.com/buildout/buildout/issues/647
     """
-    def __getitem__(self, project_name):
+    def __getitem__(self, project_name: str) -> List[Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, Any, pkg_resources.Distribution]]:
         """Return a newest-to-oldest list of distributions for `project_name`
 
         Uses case-insensitive `project_name` comparison, assuming all the
@@ -118,7 +121,7 @@ class EnvironmentMixin(object):
         distribution_key = normalize_name(project_name)
         return self._distmap.get(distribution_key, [])
 
-    def add(self, dist):
+    def add(self, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]):
         """Add `dist` if we ``can_add()`` it and it has not already been added
         """
         if self.can_add(dist) and dist.has_version():
@@ -234,7 +237,7 @@ class AllowHostsPackageIndex(EnvironmentMixin, _package_index.PackageIndex):
 
 
 _indexes = {}
-def _get_index(index_url, find_links, allow_hosts=('*',)):
+def _get_index(index_url: Optional[str], find_links: List[str], allow_hosts: Tuple[str, ...]=('*',)) -> AllowHostsPackageIndex:
     key = index_url, tuple(find_links)
     index = _indexes.get(key)
     if index is not None:
@@ -274,14 +277,14 @@ else:
     get_win_launcher = None
 
 
-def call_subprocess(args, **kw):
+def call_subprocess(args: Sequence[Union[str, Path]], **kw):
     if subprocess.call(args, **kw) != 0:
         raise Exception(
             "Failed to run command:\n%s"
             % repr(args)[1:-1])
 
 
-def get_subprocess_output(args, **kw):
+def get_subprocess_output(args: List[str], **kw) -> str:
     result = subprocess.run(
         args, **kw,
         stdout=subprocess.PIPE,
@@ -297,7 +300,7 @@ def get_subprocess_output(args, **kw):
     return stdout
 
 
-def _execute_permission():
+def _execute_permission() -> int:
     current_umask = os.umask(0o022)
     # os.umask only returns the current umask if you also give it one, so we
     # have to give it a dummy one and immediately set it back to the real
@@ -307,7 +310,7 @@ def _execute_permission():
 
 
 
-def get_namespace_package_paths(dist):
+def get_namespace_package_paths(dist: pkg_resources.Distribution) -> Iterator[str]:
     """
     Generator of the expected pathname of each __init__.py file of the
     namespaces of a distribution.
@@ -317,7 +320,7 @@ def get_namespace_package_paths(dist):
     for namespace in dist.get_metadata_lines('namespace_packages.txt'):
         yield os.path.join(*(base + namespace.split('.') + init))
 
-def namespace_packages_need_pkg_resources(dist):
+def namespace_packages_need_pkg_resources(dist: Union[pkg_resources.EggInfoDistribution, pkg_resources.Distribution]):
     if os.path.isfile(dist.location):
         # Zipped egg, with namespaces, surely needs setuptools
         return True
@@ -333,7 +336,7 @@ def namespace_packages_need_pkg_resources(dist):
                     return True
     return False
 
-def dist_needs_pkg_resources(dist):
+def dist_needs_pkg_resources(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> bool:
     """
     A distribution needs setuptools/pkg_resources added as requirement if:
 
@@ -359,7 +362,7 @@ class IncompatibleConstraintError(zc.buildout.UserError):
 IncompatibleVersionError = IncompatibleConstraintError # Backward compatibility
 
 
-def _constrained_requirement(constraint, requirement):
+def _constrained_requirement(constraint: str, requirement: pkg_resources.Requirement) -> pkg_resources.Requirement:
     assert isinstance(requirement, pkg_resources.Requirement)
     if constraint[0] not in '<>':
         if constraint.startswith('='):
@@ -396,18 +399,18 @@ class Installer(object):
     _index_url = None
 
     def __init__(self,
-                 dest=None,
-                 links=(),
-                 index=None,
-                 executable=sys.executable,
-                 always_unzip=None, # Backward compat :/
-                 path=None,
-                 newest=True,
-                 versions=None,
-                 use_dependency_links=None,
-                 allow_hosts=('*',),
-                 check_picked=True,
-                 allow_unknown_extras=False,
+                 dest: Optional[str]=None,
+                 links: Union[Tuple[str, ...], List[str]]=(),
+                 index: Optional[str]=None,
+                 executable: str=sys.executable,
+                 always_unzip: Optional[bool]=None, # Backward compat :/
+                 path: Optional[List[str]]=None,
+                 newest: bool=True,
+                 versions: Optional[Mapping[str, str]]=None,
+                 use_dependency_links: Optional[bool]=None,
+                 allow_hosts: Tuple[str, ...]=('*',),
+                 check_picked: bool=True,
+                 allow_unknown_extras: bool=False,
                  ):
         assert executable == sys.executable, (executable, sys.executable)
         self._dest = dest if dest is None else pkg_resources.normalize_path(dest)
@@ -443,7 +446,7 @@ class Installer(object):
         if versions is not None:
             self._versions = normalize_versions(versions)
 
-    def _make_env(self):
+    def _make_env(self) -> Environment:
         full_path = self._get_dest_dist_paths() + self._path
         env = Environment(full_path)
         # this needs to be called whenever self._env is modified (or we could
@@ -455,7 +458,7 @@ class Installer(object):
         self._env.scan(self._get_dest_dist_paths())
         self._eggify_env_dest_dists(self._env, self._dest)
 
-    def _get_dest_dist_paths(self):
+    def _get_dest_dist_paths(self) -> List[str]:
         dest = self._dest
         if dest is None:
             return []
@@ -465,7 +468,7 @@ class Installer(object):
         return list(set(eggs + dists))
 
     @staticmethod
-    def _eggify_env_dest_dists(env, dest):
+    def _eggify_env_dest_dists(env: Environment, dest: Optional[str]):
         """
         Make sure everything found under `dest` is seen as an egg, even if it's
         some other kind of dist.
@@ -475,7 +478,7 @@ class Installer(object):
                 if os.path.dirname(dist.location) == dest:
                     dist.precedence = pkg_resources.EGG_DIST
 
-    def _version_conflict_information(self, name):
+    def _version_conflict_information(self, name: str) -> str:
         """Return textual requirements/constraint information for debug purposes
 
         We do a very simple textual search, as that filters out most
@@ -492,7 +495,7 @@ class Installer(object):
                    if name.lower() in line.lower()]
         return '\n  '.join(output)
 
-    def _satisfied(self, req, source=None):
+    def _satisfied(self, req: pkg_resources.Requirement, source: Optional[int]=None) -> Tuple[Optional[pkg_resources.Distribution], Optional[pkg_resources.Distribution]]:
         dists = [dist for dist in self._env[req.project_name] if dist in req]
         if not dists:
             logger.debug('We have no distributions for %s that satisfies %r.',
@@ -578,7 +581,7 @@ class Installer(object):
             str(req))
         return best_we_have, None
 
-    def _call_pip_install(self, spec, dest, dist):
+    def _call_pip_install(self, spec: str, dest: str, dist: pkg_resources.Distribution) -> List[pkg_resources.DistInfoDistribution]:
 
         tmp = tempfile.mkdtemp(dir=dest)
         try:
@@ -621,7 +624,7 @@ class Installer(object):
         finally:
             zc.buildout.rmtree.rmtree(tmp)
 
-    def _obtain(self, requirement, source=None):
+    def _obtain(self, requirement: pkg_resources.Requirement, source: Optional[int]=None) -> Optional[pkg_resources.Distribution]:
         # initialize out index for this project:
         index = self._index
 
@@ -677,7 +680,7 @@ class Installer(object):
         best.sort()
         return best[-1]
 
-    def _fetch(self, dist, tmp, download_cache):
+    def _fetch(self, dist: pkg_resources.Distribution, tmp: str, download_cache: Optional[str]) -> pkg_resources.Distribution:
         if (download_cache
             and (realpath(os.path.dirname(dist.location)) == download_cache)
             ):
@@ -697,7 +700,7 @@ class Installer(object):
 
         return dist.clone(location=new_location)
 
-    def _get_dist(self, requirement, ws):
+    def _get_dist(self, requirement: pkg_resources.Requirement, ws: pkg_resources.WorkingSet) -> List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]:
         __doing__ = 'Getting distribution for %r.', str(requirement)
 
         # Maybe an existing dist is already the best dist that satisfies the
@@ -763,7 +766,7 @@ class Installer(object):
 
         return dists
 
-    def _add_dependency_links_from_dists(self, dists):
+    def _add_dependency_links_from_dists(self, dists: List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]):
         reindex = False
         links = self._links
         for dist in dists:
@@ -778,7 +781,7 @@ class Installer(object):
         if reindex:
             self._index = _get_index(self._index_url, links, self._allow_hosts)
 
-    def _check_picked_requirement_versions(self, requirement, dists):
+    def _check_picked_requirement_versions(self, requirement: pkg_resources.Requirement, dists: List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]):
         """ Check whether we picked a version and, if we did, report it """
         for dist in dists:
             if not (dist.precedence == pkg_resources.DEVELOP_DIST
@@ -798,7 +801,7 @@ class Installer(object):
                     )
                     raise zc.buildout.UserError(msg)
 
-    def _maybe_add_setuptools(self, ws, dist):
+    def _maybe_add_setuptools(self, ws: pkg_resources.WorkingSet, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]):
         if dist_needs_pkg_resources(dist):
             # We have a namespace package but no requirement for setuptools
             if dist.precedence == pkg_resources.DEVELOP_DIST:
@@ -813,7 +816,7 @@ class Installer(object):
             if ws.find(requirement) is None:
                 self._get_dist(requirement, ws)
 
-    def _constrain(self, requirement):
+    def _constrain(self, requirement: pkg_resources.Requirement) -> pkg_resources.Requirement:
         """Return requirement with optional [versions] constraint added."""
         canonical_name = canonicalize_name(requirement.project_name)
         constraint = self._versions.get(canonical_name)
@@ -839,7 +842,7 @@ class Installer(object):
 
         return requirement
 
-    def install(self, specs, working_set=None):
+    def install(self, specs: Union[Tuple[str, ...], List[str]], working_set: Optional[pkg_resources.WorkingSet]=None) -> pkg_resources.WorkingSet:
 
         logger.debug('Installing %s.', repr(specs)[1:-1])
         self._requirements_and_constraints.append(
@@ -956,7 +959,7 @@ class Installer(object):
             processed[req] = True
         return ws
 
-    def build(self, spec, build_ext):
+    def build(self, spec: str, build_ext: Dict[str, str]) -> List[str]:
 
         requirement = self._constrain(pkg_resources.Requirement.parse(spec))
 
@@ -1028,7 +1031,7 @@ class Installer(object):
             if tmp != self._download_cache:
                 zc.buildout.rmtree.rmtree(tmp)
 
-    def _fix_file_links(self, links):
+    def _fix_file_links(self, links: Union[Tuple[str, ...], List[str]]) -> Iterator[str]:
         for link in links:
             if link.startswith('file://') and link[-1] != '/':
                 if os.path.isdir(link[7:]):
@@ -1036,7 +1039,7 @@ class Installer(object):
                     link += '/'
             yield link
 
-    def _log_requirement(self, ws, req):
+    def _log_requirement(self, ws: pkg_resources.WorkingSet, req: pkg_resources.Requirement):
         if (not logger.isEnabledFor(logging.DEBUG) and
             not Installer._store_required_by):
             # Sorting the working set and iterating over it's requirements
@@ -1057,11 +1060,11 @@ class Installer(object):
                     Installer._required_by[req_] = set()
                 Installer._required_by[req_].add(str(dist.as_requirement()))
 
-    def _final_version(self, parsed_version):
+    def _final_version(self, parsed_version: Version) -> bool:
         return not parsed_version.is_prerelease
 
 
-def normalize_versions(versions):
+def normalize_versions(versions: Mapping[str, str]) -> Dict[str, str]:
     """Return version dict with keys canonicalized.
 
     PyPI is case-insensitive and not all distributions are consistent in
@@ -1070,13 +1073,13 @@ def normalize_versions(versions):
     return dict([(canonicalize_name(k), v) for (k, v) in versions.items()])
 
 
-def default_versions(versions=None):
+def default_versions(versions: Optional[Mapping[str, str]]=None) -> Dict[str, str]:
     old = Installer._versions
     if versions is not None:
         Installer._versions = normalize_versions(versions)
     return old
 
-def download_cache(path=-1):
+def download_cache(path: Optional[Union[str, int]]=-1) -> Optional[str]:
     old = Installer._download_cache
     if path != -1:
         if path:
@@ -1084,61 +1087,61 @@ def download_cache(path=-1):
         Installer._download_cache = path
     return old
 
-def install_from_cache(setting=None):
+def install_from_cache(setting: Optional[bool]=None) -> bool:
     old = Installer._install_from_cache
     if setting is not None:
         Installer._install_from_cache = bool(setting)
     return old
 
-def prefer_final(setting=None):
+def prefer_final(setting: Optional[bool]=None) -> bool:
     old = Installer._prefer_final
     if setting is not None:
         Installer._prefer_final = bool(setting)
     return old
 
-def use_dependency_links(setting=None):
+def use_dependency_links(setting: Optional[bool]=None) -> bool:
     old = Installer._use_dependency_links
     if setting is not None:
         Installer._use_dependency_links = bool(setting)
     return old
 
-def index_url(setting=None):
+def index_url(setting: Optional[str]=None) -> Optional[str]:
     old = Installer._index_url
     if setting is not None:
         Installer._index_url = setting
     return old
 
-def allow_picked_versions(setting=None):
+def allow_picked_versions(setting: Optional[bool]=None) -> bool:
     old = Installer._allow_picked_versions
     if setting is not None:
         Installer._allow_picked_versions = bool(setting)
     return old
 
-def store_required_by(setting=None):
+def store_required_by(setting: Optional[Union[str, bool]]=None) -> bool:
     old = Installer._store_required_by
     if setting is not None:
         Installer._store_required_by = bool(setting)
     return old
 
-def get_picked_versions():
+def get_picked_versions() -> Tuple[List[Tuple[str, str]], Dict[str, Set[str]]]:
     picked_versions = sorted(Installer._picked_versions.items())
     required_by = Installer._required_by
     return (picked_versions, required_by)
 
-def get_namespace_packages():
+def get_namespace_packages() -> List[Tuple[str, str]]:
     return sorted(Installer._namespace_packages.items())
 
-def install(specs, dest,
-            links=(), index=None,
-            executable=sys.executable,
-            always_unzip=None, # Backward compat :/
-            path=None, working_set=None, newest=True, versions=None,
-            use_dependency_links=None, allow_hosts=('*',),
-            include_site_packages=None,
-            allowed_eggs_from_site_packages=None,
-            check_picked=True,
-            allow_unknown_extras=False,
-            ):
+def install(specs: Union[Tuple[str, ...], List[str]], dest: Optional[str],
+            links: Union[Tuple[str, ...], List[str]]=(), index: Optional[str]=None,
+            executable: str=sys.executable,
+            always_unzip: Optional[bool]=None, # Backward compat :/
+            path: Optional[List[str]]=None, working_set: Optional[pkg_resources.WorkingSet]=None, newest: bool=True, versions: Optional[Mapping[str, str]]=None,
+            use_dependency_links: Optional[bool]=None, allow_hosts: Tuple[str, ...]=('*',),
+            include_site_packages: None=None,
+            allowed_eggs_from_site_packages: None=None,
+            check_picked: bool=True,
+            allow_unknown_extras: bool=False,
+            ) -> pkg_resources.WorkingSet:
     assert executable == sys.executable, (executable, sys.executable)
     assert include_site_packages is None
     assert allowed_eggs_from_site_packages is None
@@ -1165,10 +1168,10 @@ setuptools_path = pip_path
 setuptools_pythonpath = pip_pythonpath
 
 
-def build(spec, dest, build_ext,
-          links=(), index=None,
-          executable=sys.executable,
-          path=None, newest=True, versions=None, allow_hosts=('*',)):
+def build(spec: str, dest: Optional[str], build_ext: Dict[str, str],
+          links: Union[Tuple[str, ...], List[str]]=(), index: Optional[str]=None,
+          executable: str=sys.executable,
+          path: Optional[List[str]]=None, newest: bool=True, versions: Optional[Dict[str, str]]=None, allow_hosts: Tuple[str, ...]=('*',)) -> List[str]:
     assert executable == sys.executable, (executable, sys.executable)
     installer = Installer(dest, links, index, executable,
                           True, path, newest,
@@ -1184,7 +1187,7 @@ def _rm(*paths):
             os.remove(path)
 
 
-def _create_egg_link(directory, dest, egg_name):
+def _create_egg_link(directory: Path, dest: str, egg_name: str) -> str:
     """Create egg-link file.
 
     setuptools 80 basically removes its own 'setup.py develop' code, and
@@ -1224,7 +1227,7 @@ def _create_egg_link(directory, dest, egg_name):
     return egg_link
 
 
-def _copyeggs(src, dest, suffix, undo):
+def _copyeggs(src: str, dest: str, suffix: str, undo: List[Callable]):
     """Copy eggs.
 
     Expected is:
@@ -1253,7 +1256,7 @@ def _copyeggs(src, dest, suffix, undo):
 _develop_distutils_scripts = {}
 
 
-def _detect_distutils_scripts(directory):
+def _detect_distutils_scripts(directory: str):
     """Record detected distutils scripts from develop eggs
 
     ``setup.py develop`` doesn't generate metadata on distutils scripts, in
@@ -1312,9 +1315,9 @@ def _detect_distutils_scripts(directory):
         _develop_distutils_scripts[egg_name] = scripts_found
 
 
-def develop(setup, dest,
-            build_ext=None,
-            executable=sys.executable):
+def develop(setup: str, dest: str,
+            build_ext: Optional[Dict[str, str]]=None,
+            executable: str=sys.executable) -> str:
     """Make a development/editable install of a package.
 
     This expects to get a path to a directory or a file as the first argument.
@@ -1355,7 +1358,7 @@ def develop(setup, dest,
             setup_cfg = os.path.join(directory, 'setup.cfg')
             if os.path.exists(setup_cfg):
                 os.rename(setup_cfg, setup_cfg+'-develop-aside')
-                def restore_old_setup():
+                def restore_old_setup() -> None:
                     if os.path.exists(setup_cfg):
                         os.remove(setup_cfg)
                     os.rename(setup_cfg+'-develop-aside', setup_cfg)
@@ -1401,9 +1404,9 @@ def develop(setup, dest,
         [f() for f in undo]
 
 
-def working_set(specs, executable, path=None,
-                include_site_packages=None,
-                allowed_eggs_from_site_packages=None):
+def working_set(specs: Tuple[str, ...], executable: str, path: Optional[List[str]]=None,
+                include_site_packages: None=None,
+                allowed_eggs_from_site_packages: None=None) -> pkg_resources.WorkingSet:
     # Backward compat:
     if path is None:
         path = executable
@@ -1416,14 +1419,14 @@ def working_set(specs, executable, path=None,
 
 
 
-def scripts(reqs, working_set, executable, dest=None,
-            scripts=None,
-            extra_paths=(),
-            arguments='',
-            interpreter=None,
-            initialization='',
-            relative_paths=False,
-            ):
+def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resources.WorkingSet, executable: str, dest: Optional[str]=None,
+            scripts: Optional[Dict[str, str]]=None,
+            extra_paths: Union[Tuple[str, ...], List[str]]=(),
+            arguments: str='',
+            interpreter: Optional[str]=None,
+            initialization: str='',
+            relative_paths: Union[str, bool]=False,
+            ) -> List[str]:
     assert executable == sys.executable, (executable, sys.executable)
 
     path = [dist.location for dist in working_set]
@@ -1562,7 +1565,7 @@ def scripts(reqs, working_set, executable, dest=None,
     return generated
 
 
-def _relative_path_and_setup(sname, path, relative_paths):
+def _relative_path_and_setup(sname: str, path: List[str], relative_paths: Union[str, bool]) -> Tuple[str, str]:
     if relative_paths:
         relative_paths = os.path.normcase(relative_paths)
         sname = os.path.normcase(os.path.abspath(sname))
@@ -1579,7 +1582,7 @@ def _relative_path_and_setup(sname, path, relative_paths):
     return spath, rpsetup
 
 
-def _relative_depth(common, path):
+def _relative_depth(common: str, path: str) -> int:
     n = 0
     while 1:
         dirname = os.path.dirname(path)
@@ -1592,7 +1595,7 @@ def _relative_depth(common, path):
     return n
 
 
-def _relative_path(common, path):
+def _relative_path(common: str, path: str) -> str:
     r = []
     while 1:
         dirname, basename = os.path.split(path)
@@ -1606,7 +1609,7 @@ def _relative_path(common, path):
     return os.path.join(*r)
 
 
-def _relativitize(path, script, relative_paths):
+def _relativitize(path: str, script: str, relative_paths: str) -> str:
     if path == script:
         raise AssertionError("path == script")
     if path == relative_paths:
@@ -1627,7 +1630,7 @@ join = os.path.join
 base = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
 """
 
-def _script(module_name, attrs, path, dest, arguments, initialization, rsetup):
+def _script(module_name: str, attrs: str, path: str, dest: str, arguments: str, initialization: str, rsetup: str) -> List[str]:
     if is_win32:
         dest += '-script.py'
 
@@ -1645,7 +1648,7 @@ def _script(module_name, attrs, path, dest, arguments, initialization, rsetup):
     return _create_script(contents, dest)
 
 
-def _distutils_script(path, dest, script_content, initialization, rsetup):
+def _distutils_script(path: str, dest: str, script_content: str, initialization: str, rsetup: str) -> List[str]:
     if is_win32:
         dest += '-script.py'
 
@@ -1680,7 +1683,7 @@ def _distutils_script(path, dest, script_content, initialization, rsetup):
         )
     return _create_script(contents, dest)
 
-def _file_changed(filename, old_contents, mode='r'):
+def _file_changed(filename: str, old_contents: str, mode: str='r') -> bool:
     try:
         with open(filename, mode) as f:
             return f.read() != old_contents
@@ -1690,7 +1693,7 @@ def _file_changed(filename, old_contents, mode='r'):
         else:
             raise
 
-def _create_script(contents, dest):
+def _create_script(contents: str, dest: str) -> List[str]:
     generated = []
     script = dest
 
@@ -1759,7 +1762,7 @@ sys.path[0:0] = [
 %(after)s'''
 
 
-def _pyscript(path, dest, rsetup, initialization=''):
+def _pyscript(path: str, dest: str, rsetup: str, initialization: str='') -> List[str]:
     generated = []
     script = dest
     if is_win32:
@@ -1874,12 +1877,12 @@ root_logger.addHandler(handler)
 
 class VersionConflict(zc.buildout.UserError):
 
-    def __init__(self, err, ws):
+    def __init__(self, err: pkg_resources.VersionConflict, ws: Iterable[pkg_resources.Distribution]):
         ws = list(ws)
         ws.sort()
         self.err, self.ws = err, ws
 
-    def __str__(self):
+    def __str__(self) -> str:
         result = ["There is a version conflict."]
         if len(self.err.args) == 2:
             existing_dist, req = self.err.args
@@ -1895,16 +1898,16 @@ class VersionConflict(zc.buildout.UserError):
 
 class MissingDistribution(zc.buildout.UserError):
 
-    def __init__(self, req, ws):
+    def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet):
         ws = list(ws)
         ws.sort()
         self.data = req, ws
 
-    def __str__(self):
+    def __str__(self) -> str:
         req, ws = self.data
         return "Couldn't find a distribution for %r." % str(req)
 
-def call_pip_install(spec, dest, editable=False):
+def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, List[str]]:
     """
     Call `pip install` from a subprocess to install a
     distribution specified by `spec` into `dest`.
@@ -2060,7 +2063,7 @@ def call_pip_install(spec, dest, editable=False):
     return name
 
 
-def check_namespace_init_file(ns_file):
+def check_namespace_init_file(ns_file: Union[str, Path]):
     """Look for namespace declaration in file.
 
     This can be spelled in different ways.  It can be a one-liner:
@@ -2101,7 +2104,7 @@ def check_namespace_init_file(ns_file):
     return False
 
 
-def find_namespace_init_files(directory):
+def find_namespace_init_files(directory: Union[str, Path]) -> List[str]:
     logger.debug("Searching for namespace __init__.py files in %s", directory)
     found_files = []
     for root, dirs, files in os.walk(directory):
@@ -2120,7 +2123,7 @@ def find_namespace_init_files(directory):
     return found_files
 
 
-def make_egg_after_pip_install(dest, distinfo_dir):
+def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
     """build properly named egg directory"""
     logger.debug('Making egg in %s from pip installation in %s', dest, distinfo_dir)
 
@@ -2226,7 +2229,7 @@ def make_egg_after_pip_install(dest, distinfo_dir):
     return [egg_dir]
 
 
-def unpack_egg(location, dest):
+def unpack_egg(location: str, dest: str):
     # Buildout 2 no longer installs zipped eggs,
     # so we always want to unpack it.
     # XXX The next line seems double now.
@@ -2253,7 +2256,7 @@ UNPACKERS = {
 }
 
 
-def _get_matching_dist_in_location(dist, location):
+def _get_matching_dist_in_location(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], location: str) -> Optional[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]]:
     """
     Check if `locations` contain only the one intended dist.
     Return the dist with metadata in the new location.
@@ -2274,7 +2277,7 @@ def _get_matching_dist_in_location(dist, location):
 class BuildoutWheel(Wheel):
     """Extension for Wheel class to get the actual project name."""
 
-    def get_project_name(self):
+    def get_project_name(self) -> Optional[str]:
         """Get project name by looking in the .dist-info of the wheel.
 
         This is adapted from the Wheel.install_as_egg method and the methods
@@ -2367,7 +2370,7 @@ def _maybe_copy_and_rename_wheel(dist, dest):
         zc.buildout.rmtree.rmtree(tmp_wheeldir)
 
 
-def _move_to_eggs_dir_and_compile(dist, dest):
+def _move_to_eggs_dir_and_compile(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], dest: str) -> Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]:
     """Move distribution to the eggs destination directory.
 
     Originally we compiled the py files if we actually moved the dist.
@@ -2492,7 +2495,7 @@ def _move_to_eggs_dir_and_compile(dist, dest):
     return newdist
 
 
-def sort_working_set(ws, eggs_dir, develop_eggs_dir):
+def sort_working_set(ws: pkg_resources.WorkingSet, eggs_dir: str, develop_eggs_dir: str) -> pkg_resources.WorkingSet:
     develop_paths = set()
     pattern = os.path.join(develop_eggs_dir, '*.egg-link')
     for egg_link in glob.glob(pattern):
