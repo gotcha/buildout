@@ -1,0 +1,61 @@
+# Mutation testing exploration — legacy vs ported pytest suite
+
+Date: 2026-09-10. Question (Gotcha): are there mutations that break one
+suite but not the other? Scope: the query/annotate region of
+`src/zc/buildout/buildout.py` (lines 1392–1450), freshly mirrored in both
+suites (legacy `configuration.txt` "Query values" ↔ pytest
+`test_pytest_buildout_txt.py`).
+
+## Kill matrix (semantic mutations, both suites scoped)
+
+rc=0 → suite green → mutant SURVIVED; rc≠0 → KILLED.
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| M0 baseline (unmutated) | pass | pass |
+| M1 `--interpolated` returns raw (drop cooked branch) | KILL | KILL |
+| M2 empty section/option accepted (`:port`, `values:`) | KILL | KILL |
+| M3 `a:b:c` not rejected cleanly (len check off) | KILL | KILL |
+| M4 missing key prints None instead of error | KILL | KILL |
+| M5 `annotate --interpolated` returns raw | KILL | KILL |
+| M6 `if value is not None` guard removed | survive | survive |
+| M7 deepcopy → shallow copy in `_interpolated_annotated` | survive | survive |
+
+Kill patterns agreed 7/7. No mutation broke one suite but not the other.
+
+The two double-survivors are the instructive part:
+
+- **M7 is an equivalent mutant for CLI-level suites**: every
+  `bin/buildout` invocation is a fresh process, so corrupting shared
+  in-memory state across calls is invisible to BOTH suites. Expect a
+  class of unkillable mutants for any process-isolated CLI.
+- **M6 survives because the path is never exercised**: the guard only
+  matters when `_annotated` holds a key the Options layer lacks — no
+  test config produces that. Either add a test to BOTH suites or accept
+  the survivor.
+
+## Coverage cross-check (scoped, `bin/coverage3`)
+
+- Legacy `bin/test -t configuration.txt` alone: region 1392–1450 fully
+  covered (no uncovered lines).
+- Pytest mirror file alone: same region fully covered.
+
+## Tooling
+
+- `mutmut` 3.7.0 installs cleanly inside devenv (`uv tool install
+  mutmut`). mutmut drives pytest natively; for the legacy
+  zope.testrunner suite, wrap `bin/test -t <name>` as a custom runner or
+  apply mutants via git (see `mutation-testing/harness.sh`).
+- Cost model: mutants × suite runtime. Full-module mutmut against an
+  8-minute legacy suite is not loop-friendly; scope per module, or use
+  semantic hand-mutations on freshly ported seams (the 80/20 used here).
+
+## Suggested standing practices
+
+1. Kill-matrix on any newly mirrored/split region as part of the porting
+   checklist.
+2. Coverage-diff per region (cheap, shown above) as a sanity gate.
+3. Revert-as-mutation: revert a historical bugfix, confirm BOTH suites
+   go red.
+4. If systematized: mutmut scoped via `paths_to_mutate` per module,
+   nightly CI, never per-commit.
