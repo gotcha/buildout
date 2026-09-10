@@ -9,6 +9,20 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_buildout_files.py ↔ legacy runsetup.txt + repeatable.txt + setup.txt + debugging.txt + windows.txt
+
+Legacy side run as one scoped regex:
+`bin/test -pvc -t 'runsetup.txt|repeatable.txt|setup.txt|debugging.txt|windows.txt'`.
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| B1 runsetup drops extra args (`+ args` removed) | KILL | KILL |
+| B2 `While:` reporting suppressed (`if d:` → `if False:` in `_doing`) | KILL | KILL |
+| B3 `While:` formatting broken (isinstance check inverted) | KILL | KILL |
+
+Agreement 3/3, all kills — the runsetup/setup and debugging
+(`While:`) regions are equally covered by both suites.
+
 ## test_pytest_configparser.py ↔ legacy `configparser.test` (zc/buildout/configparser.py)
 
 | Mutation | legacy | pytest |
