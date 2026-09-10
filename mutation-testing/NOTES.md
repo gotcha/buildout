@@ -18,7 +18,7 @@ rc=0 → suite green → mutant SURVIVED; rc≠0 → KILLED.
 | M3 `a:b:c` not rejected cleanly (len check off) | KILL | KILL |
 | M4 missing key prints None instead of error | KILL | KILL |
 | M5 `annotate --interpolated` returns raw | KILL | KILL |
-| M6 `if value is not None` guard removed | survive | survive |
+| M6 `if value is not None` guard removed | survive → KILL | survive → KILL |
 | M7 deepcopy → shallow copy in `_interpolated_annotated` | survive | survive |
 
 Kill patterns agreed 7/7. No mutation broke one suite but not the other.
@@ -29,10 +29,15 @@ The two double-survivors are the instructive part:
   `bin/buildout` invocation is a fresh process, so corrupting shared
   in-memory state across calls is invisible to BOTH suites. Expect a
   class of unkillable mutants for any process-isolated CLI.
-- **M6 survives because the path is never exercised**: the guard only
-  matters when `_annotated` holds a key the Options layer lacks — no
-  test config produces that. Either add a test to BOTH suites or accept
-  the survivor.
+- **M6 survived because the path was never exercised**: the guard only
+  matters when `_annotated` holds a key the Options layer lacks. That
+  happens with section extension (`<=`): `_do_extend_raw` pops `<` from
+  the Options view, so `options.get('<')` is None while `_annotated`
+  still carries the `<` SectionKey. FIXED 2026-09-10: both suites now
+  test `annotate --interpolated` on an extending section (legacy
+  `configuration.txt` "Query values" ↔ pytest
+  `test_configuration_query_values`); without the guard the mutant
+  dies with AttributeError (None.splitlines) in BOTH suites.
 
 ## Coverage cross-check (scoped, `bin/coverage3`)
 
