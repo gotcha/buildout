@@ -9,6 +9,31 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_interpolated.py ↔ legacy `configuration.txt` (query/annotate region)
+
+This module is pytest-only ADDED coverage of the same query/annotate
+region whose mirror matrix (M1–M7, NOTES.md) ran against
+test_pytest_buildout_txt.py. Here the M1–M6 mutants are re-run against
+THIS module to measure its partial view. M7 (deepcopy→shallow) is the
+known process-isolation equivalent mutant — not tested (see NOTES.md).
+
+| Mutation | legacy configuration.txt | this module | sister mirror (buildout_txt) |
+|---|---|---|---|
+| M1 `--interpolated` returns raw | KILL | KILL | KILL |
+| M2 empty-side args accepted | KILL | survive | KILL |
+| M3 `a:b:c` not rejected | KILL | survive | KILL |
+| M4 missing key prints None | KILL | KILL | KILL |
+| M5 `annotate --interpolated` returns raw | KILL | KILL | KILL |
+| M6 `value is not None` guard removed | KILL | survive | KILL |
+
+Region-level agreement: full — every mutant dies in the legacy suite
+AND in the combined pytest suite. The module-level survivals (M2, M3,
+M6) are expected: this module holds only the --interpolated-focused
+tests, while the error-contract tests (M2/M3) and the section-extension
+test (M6) live in the mirror module test_pytest_buildout_txt.py.
+Lesson: a module-scoped survival is only a divergence if NO pytest
+module kills the mutant; judge regions, not files.
+
 ## test_pytest_extras.py ↔ legacy `test_extras` (easy_install.py extras region)
 
 Region: `Installer._satisfied` extras handling (~easy_install.py
