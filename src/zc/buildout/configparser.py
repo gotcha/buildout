@@ -22,6 +22,8 @@ import textwrap
 import logging
 
 from packaging import markers
+from io import StringIO, TextIOWrapper
+from typing import Callable, Dict, Type, Union
 
 
 Marker = markers.Marker
@@ -38,7 +40,7 @@ class Error(Exception):
         BaseException."""
         return self.__message
 
-    def _set_message(self, value):
+    def _set_message(self, value: str):
         """Setter for 'message'; needed only to override deprecation in
         BaseException."""
         self.__message = value
@@ -48,7 +50,7 @@ class Error(Exception):
     # a new property that takes lookup precedence.
     message = property(_get_message, _set_message)
 
-    def __init__(self, msg=''):
+    def __init__(self, msg: str=''):
         self.message = msg
         Exception.__init__(self, msg)
 
@@ -72,7 +74,7 @@ class ParsingError(Error):
 class MissingSectionHeaderError(ParsingError):
     """Raised when a key-value pair is found before any section header."""
 
-    def __init__(self, filename, lineno, line):
+    def __init__(self, filename: str, lineno: int, line: str):
         Error.__init__(
             self,
             'File contains no section headers.\nfile: %s, line: %d\n%r' %
@@ -118,7 +120,7 @@ option_start = re.compile(
 
 leading_blank_lines = re.compile(r"^(\s*\n)+")
 
-def parse(fp, fpname, exp_globals=dict):
+def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Type[dict], Callable]=dict) -> Dict[str, Dict[str, str]]:
     """Parse a sectioned setup file.
 
     The sections in setup files contain a title line at the top,
