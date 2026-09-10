@@ -20,7 +20,7 @@ from zope.testing import renormalizing, setupstack
 
 import zc.buildout.testing
 
-_DOC_DIR = Path(__file__).parents[4] / 'doc'
+_DOC_DIR = Path(__file__).parents[5] / 'doc'
 
 _NORMALIZERS = renormalizing.RENormalizing([
     zc.buildout.testing.easyinstall_deprecated,
