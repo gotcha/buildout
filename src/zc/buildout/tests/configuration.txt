@@ -413,7 +413,19 @@ The query commands outputs proper error messages.
     Error: The query command requires a single argument.
 
     >>> print_(system([buildout, 'query', 'invalid:section:key']), end='')
-    Error: Invalid option: invalid:section:key
+    Error: Invalid query argument: 'invalid:section:key' (expected section:option)
+
+    >>> print_(system([buildout, 'query', ':port']), end='')
+    Error: Invalid query argument: ':port' (expected section:option)
+
+    >>> print_(system([buildout, 'query', 'values:']), end='')
+    Error: Invalid query argument: 'values:' (expected section:option)
+
+    >>> print_(system([buildout, 'query', ':']), end='')
+    Error: Invalid query argument: ':' (expected section:option)
+
+    >>> print_(system([buildout, 'query', '']), end='')
+    Error: Invalid query argument: '' (expected section:option)
 
     >>> print_(system([buildout, '-v', 'query', 'values:port']), end='')
     ${values:port}

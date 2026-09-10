@@ -1087,7 +1087,11 @@ buildout.org
     # The query commands outputs proper error messages.
     assert_output(system([buildout, 'query', 'versions', 'parts']), 'Error: The query command requires a single argument.', N)
     assert_output(system([buildout, 'query']), 'Error: The query command requires a single argument.', N)
-    assert_output(system([buildout, 'query', 'invalid:section:key']), 'Error: Invalid option: invalid:section:key', N)
+    assert_output(system([buildout, 'query', 'invalid:section:key']), "Error: Invalid query argument: 'invalid:section:key' (expected section:option)", N)
+    assert_output(system([buildout, 'query', ':port']), "Error: Invalid query argument: ':port' (expected section:option)", N)
+    assert_output(system([buildout, 'query', 'values:']), "Error: Invalid query argument: 'values:' (expected section:option)", N)
+    assert_output(system([buildout, 'query', ':']), "Error: Invalid query argument: ':' (expected section:option)", N)
+    assert_output(system([buildout, 'query', '']), "Error: Invalid query argument: '' (expected section:option)", N)
     assert_output(system([buildout, '-v', 'query', 'values:port']), """
 ${values:port}
 Error: Key not found: port

@@ -1400,8 +1400,12 @@ The following list shows the affected packages and their namespaces:
         if len(option) == 1:
             option = 'buildout', option[0]
         elif len(option) != 2:
-            _error('Invalid option:', args[0])
+            _error("Invalid query argument: %r (expected section:option)"
+                   % args[0])
         section, option = option
+        if not section or not option:
+            _error("Invalid query argument: %r (expected section:option)"
+                   % args[0])
         verbose = self['buildout'].get('verbosity', 0) != 0
         if verbose:
             print_('${%s:%s}' % (section, option))
