@@ -3,8 +3,9 @@
 The core buildout loop: a user writes `buildout.cfg`, runs
 `bin/buildout`, and gets the project skeleton (`bin/`, `parts/`,
 `eggs/`, `develop-eggs/`), installed parts with generated scripts, and
-`.installed.cfg` recording what was installed. State is then readable
-back through `query` and `annotate`.
+`.installed.cfg` recording what was installed. The configuration as
+composed from the files is then explorable through `query` and
+`annotate` — they read the configuration, not the run's results.
 
 ## Sub-features
 
@@ -12,8 +13,9 @@ back through `query` and `annotate`.
   directories, exit 0, and (expectedly) no `.installed.cfg`.
 - `install-part` — networked: a real part with `zc.recipe.egg` installs
   an egg and generates scripts in `bin/`.
-- `inspect-state` — `query section:option` and `annotate` read back
-  configuration state without installing anything new.
+- `inspect-state` — `query section:option` and `annotate` explore the
+  composed configuration (what the files say, where each value came
+  from) without installing anything new.
 
 ## How to get to it (user POV)
 
@@ -35,7 +37,8 @@ Preconditions:
   `develop-eggs` (eggs/v5 may already exist from earlier probes).
   `ls` shows `bin`, `develop-eggs`, `eggs`, `parts`, `buildout.cfg`.
   Assert: `test ! -f .installed.cfg` — with zero parts none is written.
-- **Read state back.** `"$B" query buildout:directory` prints `$D`.
+- **Explore the configuration.** `"$B" query buildout:directory`
+  prints `$D`.
   `"$B" annotate | head -20` shows `[buildout]` options each followed
   by an origin line (`DEFAULT_VALUE` etc.). Both exit 0.
 - **Real part install (networked).** Write:
@@ -70,7 +73,9 @@ Preconditions:
   block above, replace `<REPO>` with the actual checkout root when
   writing the file — INI has no variable expansion of its own.
 - Even `query` creates `eggs/v5/` in the project dir as a side effect;
-  "read-only" is about configuration state, not zero disk writes.
+  "read-only" means it installs nothing, not zero disk writes. And it
+  reads the configuration files as composed — never the results of a
+  run.
 - Empty-parts runs write no `.installed.cfg`; only a run that installs
   at least one part does. Don't assert its presence for `install-empty`.
 - Never run these drives in the repo root — `bin/buildout` there

@@ -6,12 +6,19 @@ substitutions, `extends`, and command-line assignments of the form
 `annotate` expose what the configuration says and where each value
 came from.
 
+These two commands explore the configuration FILES as composed — the
+`extends` chain above all, plus assignments and defaults. They do NOT
+inspect the result of a run: installed parts, generated scripts, and
+`.installed.cfg` are verified on disk (see install-and-inspect),
+never through `query`/`annotate`.
+
 ## Sub-features
 
 - `assign-override` — a `section:option=value` command-line assignment
   overrides the config file value.
 - `annotate-origin` — `annotate` attributes each value to its source
-  (file, DEFAULT_VALUE, COMMAND_LINE_VALUE).
+  (which file in the `extends` chain, DEFAULT_VALUE, or
+  COMMAND_LINE_VALUE).
 - `substitute-raw-vs-cooked` — `${...}` substitution exists in the
   config language; CLI views show raw templates, recipes get cooked
   values.

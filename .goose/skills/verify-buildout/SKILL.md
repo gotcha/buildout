@@ -1,12 +1,13 @@
 ---
 name: verify-buildout
-description: Verify zc.buildout behavior by driving the real CLI the way a user does — running bin/buildout from this checkout against throwaway projects, inspecting state with query/annotate, and running the repo's two test suites (make test / make pytest). Use when a change to this repo needs behavioral proof beyond unit tests.
+description: Verify zc.buildout behavior by driving the real CLI the way a user does — running bin/buildout from this checkout against throwaway projects, exploring the composed configuration files with query/annotate, and running the repo's two test suites (make test / make pytest). Use when a change to this repo needs behavioral proof beyond unit tests.
 ---
 
 # Verify buildout
 
 zc.buildout is a CLI: a user writes a `buildout.cfg`, runs `buildout`,
-and expects parts installed, scripts generated, and state queryable.
+and expects parts installed, scripts generated, and the composed
+configuration explorable.
 This skill drives exactly that loop with the `bin/buildout` built from
 this checkout, plus the repo's two test suites as the deep proof layer.
 
@@ -120,10 +121,14 @@ Proof standards:
   code, full stdout/stderr transcript (`| tee "$ART/<name>.log"`), and
   `git rev-parse HEAD` of the checkout.
 - Capture the action AND the resulting state: after an install, list
-  the tree (`ls -la`, `ls bin/`) and read back state through a second,
-  read-only view: `bin/buildout query section:option` and
-  `bin/buildout annotate` (shows each value's origin file — DEFAULT /
-  config / COMMAND_LINE_VALUE).
+  the tree (`ls -la`, `ls bin/`) and verify the run's side effects on
+  disk (next bullet).
+- `query`/`annotate` are a separate, read-only axis: they explore the
+  configuration FILES as composed — the `extends` chain above all,
+  plus command-line assignments and defaults — printing each value
+  with its origin (DEFAULT_VALUE / config / COMMAND_LINE_VALUE). They
+  do NOT inspect the result of a run: installed parts and generated
+  scripts are proven on disk, never through `query`/`annotate`.
 - Verify side effects on disk, not just output: `.installed.cfg`
   contents, generated scripts in `bin/`, egg links in `develop-eggs/`.
   Note: with `parts =` empty, NO `.installed.cfg` is written — that is

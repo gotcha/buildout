@@ -25,16 +25,20 @@ driving, then use the matching feature file as the recipe.
 - Treat every command as literal. Keep quoted names and flags unchanged.
 - Record the feature ID, `git rev-parse HEAD`, command, exit code, and
   full transcript per drive.
-- After mutating drives, read state back through a second, read-only
-  view (`query` / `annotate`).
+- Run results are verified on disk (`.installed.cfg`, `bin/` scripts).
+  `query`/`annotate` are a separate, read-only axis: they explore the
+  configuration files as composed (`extends` chain, assignments,
+  defaults) — not the result of a run.
 - Restore nothing — drives are disposable by construction — but retain
   all proof artifacts during cleanup.
 
 ## Proof and skip reporting
 
 - CLI proof includes the command, stdout, stderr, and exit code.
-- Mutation proof includes on-disk side effects (`.installed.cfg`,
-  `bin/` scripts) AND a read-only second view.
+- Mutation proof is on-disk side effects (`.installed.cfg`, `bin/`
+  scripts). Configuration-composition proof is `query`/`annotate`
+  output — the two answer different questions; never substitute one
+  for the other.
 - A networked drive that fails on a fetch is NOT a buildout failure:
   report it as environment-limited, attempt the hermetic tier, and say
   so explicitly. Do not report a networked path as verified through a
@@ -51,7 +55,8 @@ driving, then use the matching feature file as the recipe.
 ## Features
 
 - [Install and inspect a project](./install-and-inspect.md) — the core
-  loop: config in, directories and scripts out, state readable back.
+  loop: config in, directories and scripts out, composed configuration
+  explorable.
 - [Configure and substitute](./configure-and-substitute.md) — INI
   composition, `${section:option}` substitution, command-line
   assignments, `query`/`annotate`.
