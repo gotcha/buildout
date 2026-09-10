@@ -329,7 +329,13 @@ def buildout_txt_env(_buildout_txt_index_cache):
     fake.globs['write'] = _dedenting_write(fake.globs['write'])
     sample_buildout = fake.globs['sample_buildout']
     recipes_dir = _TESTS_DIR / 'recipes'
-    shutil.copytree(str(recipes_dir), str(Path(sample_buildout) / 'recipes'))
+    shutil.copytree(
+        str(recipes_dir), str(Path(sample_buildout) / 'recipes'),
+        # Don't let generated state from the checkout (e.g. a stray
+        # egg-info from a local `pip install -e` experiment) leak
+        # into the sandbox: the tests expect a pristine source tree.
+        ignore=shutil.ignore_patterns('*.egg-info', '__pycache__'),
+    )
 
     yield fake.globs
     zc.buildout.testing.buildoutTearDown(fake)
@@ -462,3 +468,5 @@ def capture_print(fn, *args, **kwargs):
     finally:
         sys.stdout = old_stdout
     return buf.getvalue()
+
+

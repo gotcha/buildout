@@ -526,7 +526,11 @@ def stop_server(url, thread=None):
 def wait(port, up):
     addr = 'localhost', port
     for i in range(120):
-        time.sleep(0.25)
+        if i:
+            # Don't sleep before the first try: the server is usually up
+            # (or down) immediately, and 0.25s per server start adds up
+            # fast in the test suite.
+            time.sleep(0.25)
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect(addr)
@@ -535,7 +539,7 @@ def wait(port, up):
                 break
         except socket.error:
             e = sys.exc_info()[1]
-            if e[0] not in (errno.ECONNREFUSED, errno.ECONNRESET):
+            if e.errno not in (errno.ECONNREFUSED, errno.ECONNRESET):
                 raise
             s.close()
             if not up:
