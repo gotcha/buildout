@@ -26,6 +26,7 @@ import shutil
 import sys
 import tempfile
 import zc.buildout
+from typing import Dict, Optional, Tuple, Union
 
 
 class ChecksumError(zc.buildout.UserError):
@@ -49,8 +50,8 @@ class Download(object):
 
     """
 
-    def __init__(self, options=None, cache=-1, namespace=None,
-                 offline=-1, fallback=False, hash_name=False, logger=None):
+    def __init__(self, options: Optional[Dict[str, str]]=None, cache: Optional[Union[str, int]]=-1, namespace: Optional[str]=None,
+                 offline: Union[int, bool]=-1, fallback: bool=False, hash_name: bool=False, logger: Optional[logging.Logger]=None):
         if options is None:
             options = {}
         self.directory = options.get('directory', '')
@@ -76,7 +77,7 @@ class Download(object):
         if self.download_cache is not None:
             return os.path.join(self.download_cache, self.namespace or '')
 
-    def __call__(self, url, md5sum=None, path=None):
+    def __call__(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> Tuple[str, bool]:
         """Download a file according to the utility's configuration.
 
         url: URL to download
@@ -93,7 +94,7 @@ class Download(object):
 
         return locate_at(local_path, path), is_temp
 
-    def download_cached(self, url, md5sum=None):
+    def download_cached(self, url: str, md5sum: Optional[str]=None) -> Tuple[str, bool]:
         """Download a file from a URL using the cache.
 
         This method assumes that the cache has been configured. Optionally, it
@@ -136,7 +137,7 @@ class Download(object):
 
         return cached_path, is_temp
 
-    def download(self, url, md5sum=None, path=None):
+    def download(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> Tuple[str, bool]:
         """Download a file from a URL to a given or temporary path.
 
         An online resource is always downloaded to a temporary file and moved
@@ -187,7 +188,7 @@ class Download(object):
         else:
             return tmp_path, True
 
-    def filename(self, url):
+    def filename(self, url: str) -> str:
         """Determine a file name from a URL according to the configuration.
 
         """
@@ -215,7 +216,7 @@ class Download(object):
             return '%s:%s' % (url_host, url_port)
 
 
-def check_md5sum(path, md5sum):
+def check_md5sum(path: str, md5sum: Optional[str]) -> bool:
     """Tell whether the MD5 checksum of the file at path matches.
 
     No checksum being given is considered a match.
@@ -241,7 +242,7 @@ def remove(path):
         os.remove(path)
 
 
-def locate_at(source, dest):
+def locate_at(source: str, dest: Optional[str]) -> str:
     if dest is None or realpath(dest) == realpath(source):
         return source
 
