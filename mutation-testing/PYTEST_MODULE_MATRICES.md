@@ -9,6 +9,20 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_buildout_doctests.py ↔ legacy inline doctests in test_all.py
+
+Legacy side scoped per mutant with a tailored `-t` regex naming the
+mirrored doctest functions.
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| D1 who-requires filter inverted (`in` → `not in` in `_version_conflict_information`) | KILL (`-t 'show_who_requires\|version_conflict'`) | KILL |
+| D2 `-v` decrements verbosity instead of incrementing | KILL (`-t develop_verbose`) | KILL |
+| D3 `-o` sets `offline=false` instead of `true` | KILL (`-t o_option_sets_offline`) | KILL |
+
+Agreement 3/3, all kills across conflict-reporting and CLI-flag
+regions.
+
 ## test_pytest_buildout_files.py ↔ legacy runsetup.txt + repeatable.txt + setup.txt + debugging.txt + windows.txt
 
 Legacy side run as one scoped regex:
