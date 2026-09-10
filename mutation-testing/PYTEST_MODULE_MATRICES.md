@@ -9,6 +9,22 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_easy_install_files.py ↔ legacy easy_install.txt + downloadcache.txt + download.txt (scoped)
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| E1 develop-dist preference dropped (`_satisfied`) | survive | survive |
+| E2 prefer-final inverted in `_satisfied` | survive | survive |
+| E2b prefer-final inverted in `_obtain` | KILL (`-t easy_install.txt`) | KILL |
+| E3 valid cache entry rejected (`not check_md5sum` → `check_md5sum`) | KILL (`-t 'downloadcache.txt\|download.txt'`) | KILL |
+
+Agreement 4/4. The survivors are compensating-layer mutants: dropping
+the develop-dist special case in `_satisfied` still returns the develop
+dist via env precedence ordering (dists[0]); skipping the prefer-final
+filter at satisfy-time is compensated by the obtain-time filter (E2b
+dies in both suites, proving the behavior IS tested — at obtain time).
+Same shape in both suites: no divergence.
+
 ## test_pytest_buildout_doctests.py ↔ legacy inline doctests in test_all.py
 
 Legacy side scoped per mutant with a tailored `-t` regex naming the
