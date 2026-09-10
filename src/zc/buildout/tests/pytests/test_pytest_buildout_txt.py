@@ -1335,7 +1335,6 @@ parts = data-dir debug
 
 def test_configuration_macros(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
-    mkdir = buildout_txt_env['mkdir']
     sample_buildout = buildout_txt_env['sample_buildout']
     system = buildout_txt_env['system']
     write = buildout_txt_env['write']
@@ -1409,6 +1408,14 @@ recipe recipes:debug
     #     though ``<=`` may look like a new operator, it's still just the familiar
     #     ``key = value`` syntax.
     #
+
+
+def test_configuration_macros_cleanup(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+
     # .. cleanup buildout
     write(sample_buildout, 'buildout.cfg',
     """
@@ -1765,17 +1772,10 @@ Develop: '/sample-buildout/demo'
     os.remove(os.path.join(sample_buildout, 'extension2.cfg'))
 
 
-def test_extending_multiple_configuration_files(buildout_txt_env):
+def test_extending_multiple_configuration_files_examples(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
-    join = buildout_txt_env['join']
-    mkdir = buildout_txt_env['mkdir']
     os = buildout_txt_env['os']
-    print_ = buildout_txt_env['print_']
-    remove = buildout_txt_env['remove']
-    rmdir = buildout_txt_env['rmdir']
     sample_buildout = buildout_txt_env['sample_buildout']
-    start_server = buildout_txt_env['start_server']
-    stop_server = buildout_txt_env['stop_server']
     system = buildout_txt_env['system']
     tmpdir = buildout_txt_env['tmpdir']
     write = buildout_txt_env['write']
@@ -1937,6 +1937,64 @@ recipe recipes:debug
     [debug]
     op = buildout
     """ % dict(b3=os.path.join(other, 'b3.cfg')))
+
+
+def test_extending_multiple_configuration_files_optional_extends(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    os = buildout_txt_env['os']
+    remove = buildout_txt_env['remove']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    tmpdir = buildout_txt_env['tmpdir']
+    write = buildout_txt_env['write']
+    other = tmpdir('other')
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op = buildout
+    """)
+    write(sample_buildout, 'base.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    op = base
+    """)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Installing debug.
+op buildout
+recipe recipes:debug
+""", N)
+    write(sample_buildout, 'b1.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op1 = b1 1
+    op2 = b1 2
+    """)
+    write(sample_buildout, 'base.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    name = base
+    
+    [environ]
+    recipe = recipes:environ
+    name = base
+    """)
     # Optional extends
     # ----------------
     #
@@ -1991,6 +2049,41 @@ recipe recipes:debug
     op = buildout
     """ % dict(b3=os.path.join(other, 'b3.cfg')))
     remove(sample_buildout, 'optional.cfg')
+
+
+def test_extending_multiple_configuration_files_urls(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    os = buildout_txt_env['os']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    start_server = buildout_txt_env['start_server']
+    stop_server = buildout_txt_env['stop_server']
+    system = buildout_txt_env['system']
+    tmpdir = buildout_txt_env['tmpdir']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op = buildout
+    """)
+    write(sample_buildout, 'base.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    op = base
+    """)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Installing debug.
+op buildout
+recipe recipes:debug
+""", N)
     # Loading Configuration from URLs
     # -------------------------------
     #
@@ -2071,6 +2164,97 @@ op2 r2 2
 op3 r2 3
 recipe recipes:debug
 """, N)
+    # ..
+    stop_server(server_url)
+
+
+def test_extending_multiple_configuration_files_user_defaults(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    join = buildout_txt_env['join']
+    mkdir = buildout_txt_env['mkdir']
+    os = buildout_txt_env['os']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    tmpdir = buildout_txt_env['tmpdir']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op = buildout
+    """)
+    write(sample_buildout, 'base.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    op = base
+    """)
+    assert_output(system(buildout), """
+Develop: '/sample-buildout/recipes'
+Installing debug.
+op buildout
+recipe recipes:debug
+""", N)
+    other = tmpdir('other')
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    extends = b1.cfg b2.cfg %(b3)s
+    
+    [debug]
+    op = buildout
+    """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    write(sample_buildout, 'b1.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op1 = b1 1
+    op2 = b1 2
+    """)
+    write(sample_buildout, 'b2.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op2 = b2 2
+    op3 = b2 3
+    """)
+    write(other, 'b3.cfg',
+    """
+    [buildout]
+    extends = b3base.cfg
+    
+    [debug]
+    op4 = b3 4
+    """)
+    write(other, 'b3base.cfg',
+    """
+    [debug]
+    op5 = b3base 5
+    """)
+    write(sample_buildout, 'base.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    name = base
+    
+    [environ]
+    recipe = recipes:environ
+    name = base
+    """)
     # User defaults
     # -------------
     #
@@ -2159,6 +2343,45 @@ op4 b3 4
 op5 b3base 5
 recipe recipes:debug
 """, N)
+
+
+def test_extending_multiple_configuration_files_log_level(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+    write(sample_buildout, 'b1.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op1 = b1 1
+    op2 = b1 2
+    """)
+    write(sample_buildout, 'b2.cfg',
+    """
+    [buildout]
+    extends = base.cfg
+    
+    [debug]
+    op2 = b2 2
+    op3 = b2 3
+    """)
+    write(sample_buildout, 'base.cfg',
+    """
+    [buildout]
+    develop = recipes
+    parts = debug
+    
+    [debug]
+    recipe = recipes:debug
+    name = base
+    
+    [environ]
+    recipe = recipes:environ
+    name = base
+    """)
     # Log level
     # ---------
     #
@@ -2178,8 +2401,6 @@ op2 b2 2
 op3 b2 3
 recipe recipes:debug
 """, N)
-    # ..
-    stop_server(server_url)
 
 
 def test_options_socket_timeout(buildout_txt_env):
@@ -3218,18 +3439,13 @@ zc.recipe.egg = >=1.99
     #    command-line options.
 
 
-def test_init(buildout_txt_env):
+def test_init_creating_and_bootstrapping(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
     cat = buildout_txt_env['cat']
-    cd = buildout_txt_env['cd']
     ls = buildout_txt_env['ls']
     os = buildout_txt_env['os']
-    print_ = buildout_txt_env['print_']
-    remove = buildout_txt_env['remove']
-    sample_buildout = buildout_txt_env['sample_buildout']
     system = buildout_txt_env['system']
     tmpdir = buildout_txt_env['tmpdir']
-    uncd = buildout_txt_env['uncd']
     write = buildout_txt_env['write']
 
     # Creating new buildouts and bootstrapping
@@ -3303,6 +3519,27 @@ While:
   Initializing.
 Error: '/sample-bootstrapped/setup.cfg' already exists.
 """, N)
+
+
+def test_init_initial_eggs(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    cat = buildout_txt_env['cat']
+    cd = buildout_txt_env['cd']
+    ls = buildout_txt_env['ls']
+    os = buildout_txt_env['os']
+    remove = buildout_txt_env['remove']
+    system = buildout_txt_env['system']
+    tmpdir = buildout_txt_env['tmpdir']
+    uncd = buildout_txt_env['uncd']
+    sample_bootstrapped = tmpdir('sample-bootstrapped')
+    assert_output(system([buildout, '-c' + os.path.join(sample_bootstrapped, 'setup.cfg'), 'init']), """
+Creating '/sample-bootstrapped/setup.cfg'.
+Creating directory '/sample-bootstrapped/eggs/v5'.
+Creating directory '/sample-bootstrapped/bin'.
+Creating directory '/sample-bootstrapped/parts'.
+Creating directory '/sample-bootstrapped/develop-eggs'.
+Generated script '/sample-bootstrapped/bin/buildout'.
+""", N)
     # Initial eggs
     # ------------
     #
@@ -3374,6 +3611,17 @@ Generated interpreter '/sample-bootstrapped/bin/py'.
     # .. cleanup
     _ = system([buildout, '-csetup.cfg', 'buildout:parts='])
     uncd()
+
+
+def test_init_installation_database(buildout_txt_env):
+    buildout = buildout_txt_env['buildout']
+    ls = buildout_txt_env['ls']
+    os = buildout_txt_env['os']
+    print_ = buildout_txt_env['print_']
+    sample_buildout = buildout_txt_env['sample_buildout']
+    system = buildout_txt_env['system']
+    write = buildout_txt_env['write']
+
     # Finding distributions
     # ---------------------
     #
