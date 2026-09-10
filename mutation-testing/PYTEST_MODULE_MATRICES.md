@@ -9,6 +9,32 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_docs.py ↔ legacy doc/*.rst manuel suite (test_all.py)
+
+**FINDING — real port bug, fixed in this branch:** the module collected
+ZERO tests. `_DOC_DIR = Path(__file__).parents[4] / 'doc'` was written
+for the pre-src layout (`zc/buildout/tests/pytests` at repo root, where
+parents[4] is the repo root); under `src/` layout parents[4] is `src/`,
+so `_DOC_DIR.exists()` was False and the module silently skipped all 8
+RST files. Fixed to `parents[5]` → 8 tests collected, all pass
+(19.6s); full `make pytest` went 188 → **196 passed**. The legacy suite
+ran these docs all along — pytest coverage silently missing. The kill
+matrix surfaced it via pytest exit code 5 (no tests collected).
+NOTE: the bug exists on port_test_suite too (file added in 378e763b) —
+worth cherry-picking the one-liner there.
+
+Matrix (mutants on the substitution machinery the docs exercise):
+
+| Mutation | legacy (8 rst files) | pytest (module, fixed) |
+|---|---|---|
+| DC1 get-time `${` check disabled (`'${'` → `'$$'`) | survive | survive |
+| DC2 sub refs shifted (`value[1::2]` → `value[0::2]`) | KILL | KILL |
+
+Agreement 2/2. DC1 survives both: `_initialize` pre-cooks every
+`${`-containing key via `_dosub` into `_cooked`, so the get-time
+substitution branch only fires for runtime-set keys — unexercised by
+the docs in both suites.
+
 ## test_pytest_easy_install_files.py ↔ legacy easy_install.txt + downloadcache.txt + download.txt (scoped)
 
 | Mutation | legacy | pytest |
