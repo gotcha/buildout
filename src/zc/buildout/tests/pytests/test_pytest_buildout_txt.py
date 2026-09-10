@@ -1073,6 +1073,44 @@ host= buildout.org
 url= http://buildout.org/api
     buildout.cfg
 """, N)
+    # When a section extends others with the ``<`` option, annotate
+    # --interpolated keeps the extension marker's raw value, while the
+    # section's own values are shown interpolated.
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    parts =
+
+    [base]
+    host = buildout.org
+
+    [child]
+    <= base
+    name = kid
+    url = http://${base:host}/api
+    """)
+    assert_output(system([buildout, 'annotate', '--interpolated', 'child']), """
+Annotated sections
+==================
+
+[child]
+<= base
+    buildout.cfg
+name= kid
+    buildout.cfg
+url= http://buildout.org/api
+    buildout.cfg
+""", N)
+    # Restore the previous configuration for the next examples.
+    write(sample_buildout, 'buildout.cfg',
+    """
+    [buildout]
+    develop = .
+
+    [values]
+    host = buildout.org
+    url = http://${values:host}/api
+    """)
     # As with assignments, if the section is omitted, 'buildout' section is assumed.
     assert_output(system([buildout, 'query', 'develop']), '.', N)
     # When used with -v option, the query command also displays section and key.
