@@ -20,6 +20,36 @@ these are the deep proof layer beneath the CLI drives.
   match the legacy behavior, not the other way around.
 - **Changing tested behavior:** when a change impacts existing tests,
   update BOTH suites in the same change.
+- **Port confidence:** after mirroring or splitting a region, prove the
+  two suites agree with a kill-matrix — see "Proving a port" below.
+
+## Proving a port: kill-matrix
+
+Both suites passing proves the CODE passes both — it does not prove both
+suites would catch the same regressions. After porting or splitting a
+test region (legacy `.txt` ↔ pytest mirror), mutate the freshly-mirrored
+SOURCE code and check both suites kill the same mutants.
+
+- **The pattern** (reusable harness: `mutation-testing/harness.sh`):
+  pick a handful of semantic mutations on the ported region (flip a
+  condition, drop a branch, weaken a validation); apply each as an
+  exact-string replace; run the scoped legacy file
+  (`bin/test -pvc -t <name>`) and the scoped pytest mirror file; rc≠0 =
+  kill; `git restore` between mutants.
+- **Read the matrix:** every mutant should die in BOTH suites. A
+  one-suite kill means the port diverges — fix the pytest side (see the
+  divergence rule). A double survivor means either an unexercised path
+  (add a test to BOTH suites) or an equivalent mutant.
+- **Expected survivor classes** (measured 2026-09-10 on the
+  query/annotate region, `mutation-testing/NOTES.md`): guards on paths
+  no test config exercises; and process-isolation mutants (e.g.
+  deepcopy→shallow) are unkillable by CLI-level suites — every
+  `bin/buildout` call is a fresh process. Do not chase those.
+- **Companion gates:** a scoped coverage diff per region (both suites
+  should cover the ported region fully) and revert-as-mutation (revert
+  a historical bugfix, confirm BOTH suites go red).
+- **Full mutmut runs are a nightly-CI tool, never per-commit:** mutants
+  × suite runtime against an 8-minute legacy suite is not loop-friendly.
 
 ## Sub-features
 
@@ -30,6 +60,9 @@ these are the deep proof layer beneath the CLI drives.
 - `suite-scoped` — both suites support scoped runs for fast iteration:
   `make test-small` (or `bin/test -pvc -t buildout.txt`) and
   single-file pytest invocations.
+- `suite-killmatrix` — mutation kill-matrix proves legacy/pytest
+  agreement on a freshly ported region (harness:
+  `mutation-testing/harness.sh`); see "Proving a port" above.
 
 ## How to get to it (user POV)
 
