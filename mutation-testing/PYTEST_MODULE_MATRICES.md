@@ -9,6 +9,19 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_configparser.py ↔ legacy `configparser.test` (zc/buildout/configparser.py)
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| C1 `=>` shorthand broken (`== '=>'` → `== '=='`) | KILL | KILL |
+| C2a conditional-section filter inverted | KILL | KILL |
+| C2b conditional option filter removed (`continue` → `pass`) | KILL | KILL |
+| C3 `-=` treated as assignment (`'+-'` → `'+'`) | KILL | KILL |
+| C4 multiline dedent skipped (`isspace()` → `isdigit()`) | KILL | KILL |
+
+Agreement 5/5, all kills — the conditional-section / marker / comment
+machinery is tightly and equally covered by both suites.
+
 ## test_pytest_increment.py ↔ legacy `test_increment` (`_update_section`/`_update`, buildout.py ~2081-2150)
 
 | Mutation | legacy | pytest |
