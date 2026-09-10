@@ -1,4 +1,4 @@
-.PHONY: all test pytest typecheck help
+.PHONY: all test pytest typecheck test-traced help
 PYTHON_VERSION ?= 3.12
 all: test
 
@@ -34,3 +34,15 @@ help:
 
 clean:
 	rm -rf venvs .Python .installed.cfg bin build dist lib include parts pip-selfcheck.json develop-eggs src/*.egg-info zc.recipe.egg_/src/*.egg-info
+
+# Temporary slow tier: run the suite with MonkeyType tracing in every
+# process, including spawned bin/buildout subprocesses (via
+# etc/tracing/sitecustomize.py on PYTHONPATH). Traces land in
+# .monkeytype-trace/monkeytype.sqlite3 for monkeytype stub/apply.
+test-traced: bin/test
+	rm -rf .monkeytype-trace && mkdir -p .monkeytype-trace
+	PYTHONPATH=$(CURDIR)/etc/tracing \
+	MT_DB_PATH=$(CURDIR)/.monkeytype-trace/monkeytype.sqlite3 \
+	MONKEYTYPE_TRACE_MODULES=zc,buildout \
+	PYTHONWARNINGS=ignore \
+	bin/test -pvc
