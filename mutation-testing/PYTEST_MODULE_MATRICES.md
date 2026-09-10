@@ -9,6 +9,21 @@ SURVIVED, rc≠0 → KILLED. Mutants applied as exact-string replaces,
 `git restore` between rounds. The configuration.txt ↔
 test_pytest_buildout_txt.py matrix is in NOTES.md (M1–M7).
 
+## test_pytest_increment.py ↔ legacy `test_increment` (`_update_section`/`_update`, buildout.py ~2081-2150)
+
+| Mutation | legacy | pytest |
+|---|---|---|
+| I1 `+=` behaves as `-=` (addToValue → removeFromValue) | KILL | KILL |
+| I2 +/- sort key widened (`rstrip(' +')` → `rstrip(' +-')`) | survive | survive |
+| I3 implicit += base non-empty (`""` → `"x"`) | KILL | KILL |
+| I4 no-base `+=`/`-=` branches swapped in `_update` | survive | survive |
+
+Agreement 4/4. I2's sort-key change alters no exercised ordering; I4
+is the instructive survivor: `+=` without a preceding `=` that escapes
+`_update`'s normalization is still caught by `_update_section`'s `+=`
+branch (addToValue against an implicit empty base) — compensating
+layers make the mutant semantically invisible to both suites.
+
 ## test_pytest_update.py ↔ legacy `update.txt` (self-update region, buildout.py ~1164-1260)
 
 | Mutation | legacy | pytest |
