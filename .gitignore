@@ -16,3 +16,4 @@ dist
 .coverage.*
 .vscode/
 .devenv/
+.monkeytype-trace/
