@@ -10,6 +10,8 @@ and expects parts installed, scripts generated, and the composed
 configuration explorable.
 This skill drives exactly that loop with the `bin/buildout` built from
 this checkout, plus the repo's two test suites as the deep proof layer.
+The process side of a change — towncrier news entries and rebase-based
+linear integration — lives in the sibling `develop-buildout` skill.
 
 This skill is location-independent: it lives at
 `.goose/skills/verify-buildout/` inside the checkout. Set `REPO` to the
@@ -40,8 +42,18 @@ devenv shell --option languages.python.version:string 3.10
 ```
 
 Switching versions needs no `make clean`: prepare.sh keys its venvs by
-Python version (`venvs/python3.x`); re-run `make bin/buildout &&
-bin/buildout` after switching. Without devenv, set the pins by hand:
+Python version (`venvs/python3.x`). But `make bin/buildout` is
+mtime-keyed and no-ops when `bin/buildout` is up to date — it does NOT
+notice the version change, and the stale script keeps the old
+interpreter. Force regeneration and prove the interpreter before
+trusting results:
+
+```sh
+rm -rf bin && make bin/buildout && bin/buildout
+bin/py -c 'import sys; print(sys.version)'   # must show the override version
+```
+
+Without devenv, set the pins by hand:
 `PYTHON_VERSION=3.12 SETUPTOOLS_VERSION=75.8.2` (unpinned setuptools
 breaks the 5.x bootstrap).
 

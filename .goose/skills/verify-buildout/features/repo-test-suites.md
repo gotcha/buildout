@@ -84,6 +84,10 @@ Preconditions:
 - Multi-Python verification: use the devenv CLI override, then
   rebuild and run the suites inside that shell:
   `devenv shell --option languages.python.version:string 3.10`, then
-  `make bin/buildout && bin/buildout && make pytest && make test`.
-  venvs are keyed per Python version, so no `make clean` between
-  versions; `bin/` is relinked by the rebuild.
+  `rm -rf bin && make bin/buildout && bin/buildout && make pytest &&
+  make test`. venvs are keyed per Python version, so no `make clean`
+  between versions — but `make bin/buildout` alone is mtime-keyed and
+  no-ops after a version switch, leaving `bin/` scripts on the OLD
+  interpreter; `rm -rf bin` forces dev.py to regenerate them. Prove
+  the interpreter before trusting a run:
+  `bin/py -c 'import sys; print(sys.version)'`.

@@ -20,8 +20,8 @@ never through `query`/`annotate`.
   (which file in the `extends` chain, DEFAULT_VALUE, or
   COMMAND_LINE_VALUE).
 - `substitute-raw-vs-cooked` — `${...}` substitution exists in the
-  config language; CLI views show raw templates, recipes get cooked
-  values.
+  config language; CLI views show raw templates by default and cooked
+  values with `--interpolated`; recipes always get cooked values.
 
 ## How to get to it (user POV)
 
@@ -53,21 +53,32 @@ Preconditions:
   grep -A 3 '\[greeting\]'` shows `audience= mars` with
   `COMMAND_LINE_VALUE` beneath it, while `message` shows
   `buildout.cfg`. Capture into `$ART/assign-override.log`.
-- **Substitution template.** `"$B" query greeting:message` prints the
-  RAW template `hello ${greeting:audience}` — this is expected, not a
-  bug (see Gotchas). Cooked substitution is proven through
-  `install-and-inspect`'s real part (recipes receive substituted
-  values) and through the suites (`make test` covers substitution
-  semantics extensively).
+- **Substitution template, raw (default).** `"$B" query
+  greeting:message` prints the RAW template `hello
+  ${greeting:audience}` — this is expected, not a bug (see Gotchas).
+- **Substitution, cooked.** `"$B" query --interpolated
+  greeting:message` prints `hello world` — the value exactly as a
+  recipe receives it (same substitution pipeline). The flag also works
+  after the argument (`query greeting:message --interpolated`) and on
+  `annotate` (`annotate --interpolated greeting` prints cooked values
+  with their origins). `install-and-inspect`'s real part proves the
+  same cooked values land on disk, and `make test` covers substitution
+  semantics extensively.
 
 ## Gotchas
 
-- `query`/`annotate` print RAW, uninterpolated values. Never assert a
-  substituted string from `query` — the assertion will fail even when
-  substitution works.
-- Querying a nonexistent key exits non-zero with
-  `Error: Section not found: <name>` on stderr — usable as a negative
-  check.
+- `query`/`annotate` print RAW, uninterpolated values BY DEFAULT.
+  Assert substituted strings only with `--interpolated`; without the
+  flag the assertion will fail even when substitution works. With the
+  flag, values come from the same cooked `Options.get()` pipeline
+  recipes use.
+- Querying a nonexistent section or key exits 1 with
+  `Error: Section not found: <name>` / `Error: Key not found: <name>`
+  on stderr — usable as a negative check. A bare `query foo` (no `:`)
+  is NOT an error: it queries option `foo` in the `buildout` section.
+  Malformed arguments — more than one `:` or an empty side, e.g.
+  `a:b:c`, `:port`, `values:` — exit 1 with
+  `Error: Invalid query argument: '<arg>' (expected section:option)`.
 - Assignments apply to that invocation only; nothing is persisted to
   `buildout.cfg`.
 - User defaults (`~/.buildout/default.cfg`, if present) can shadow
