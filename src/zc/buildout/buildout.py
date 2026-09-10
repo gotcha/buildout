@@ -1390,6 +1390,9 @@ The following list shows the affected packages and their namespaces:
 
     @command
     def query(self, args=None):
+        interpolated = bool(args) and '--interpolated' in args
+        if interpolated:
+            args = [arg for arg in args if arg != '--interpolated']
         if args is None or len(args) != 1:
             _error('The query command requires a single argument.')
         option = args[0]
@@ -1403,12 +1406,15 @@ The following list shows the affected packages and their namespaces:
         if verbose:
             print_('${%s:%s}' % (section, option))
         try:
-            print_(self._raw[section][option])
+            value = self._raw[section][option]
         except KeyError:
             if section in self._raw:
                 _error('Key not found:', option)
             else:
                 _error('Section not found:', section)
+        if interpolated:
+            value = self[section].get(option)
+        print_(value)
 
     @command
     def annotate(self, args=None):
@@ -1418,7 +1424,23 @@ The following list shows the affected packages and their namespaces:
             sections = []
         else:
             sections = args
-        _print_annotate(self._annotated, verbose, sections, self._buildout_dir)
+        interpolated = '--interpolated' in sections
+        if interpolated:
+            sections = [s for s in sections if s != '--interpolated']
+            data = self._interpolated_annotated()
+        else:
+            data = self._annotated
+        _print_annotate(data, verbose, sections, self._buildout_dir)
+
+    def _interpolated_annotated(self):
+        data = copy.deepcopy(self._annotated)
+        for section_name, section in data.items():
+            options = self[section_name]
+            for key, sectionkey in section.items():
+                value = options.get(key)
+                if value is not None:
+                    sectionkey.value = value
+        return data
 
     def print_options(self, base_path=None):
         for section in sorted(self._data):
@@ -2260,16 +2282,22 @@ Commands:
     The script can be given either as a script path or a path to a
     directory containing a setup.py script.
 
-  annotate
+  annotate [--interpolated] [section ...]
 
     Display annotated sections. All sections are displayed, sorted
     alphabetically. For each section, all key-value pairs are displayed,
     sorted alphabetically, along with the origin of the value (file name or
     COMPUTED_VALUE, DEFAULT_VALUE, COMMAND_LINE_VALUE).
 
-  query section:key
+    Values are shown raw, as written in the configuration.  Pass
+    --interpolated to show the values with ${...} substitutions
+    applied, as recipes see them.
 
-    Display value of given section key pair.
+  query [--interpolated] section:key
+
+    Display value of given section key pair.  The value is shown raw,
+    as written in the configuration.  Pass --interpolated to show the
+    value with ${...} substitutions applied, as recipes see it.
 """
 
 def _help():
