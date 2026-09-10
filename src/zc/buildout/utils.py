@@ -9,7 +9,7 @@ SETUPTOOLS_VERSION = packaging.version.parse(version("setuptools"))
 IS_SETUPTOOLS_80_PLUS = SETUPTOOLS_VERSION >= packaging.version.Version('80')
 
 
-def normalize_name(name):
+def normalize_name(name: str) -> str:
     """PEP 503 normalization plus dashes as underscores.
 
     Taken over from importlib.metadata.
