@@ -16,6 +16,7 @@
 import logging
 import os
 import sys
+from typing import Callable
 
 import zc.buildout.easy_install
 
@@ -23,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 class Base:
+
+    # Provided by subclasses; Custom also shadows it per-instance in
+    # offline mode.  Annotated here so Base.update() has a visible target.
+    install: Callable
 
     def __init__(self, buildout, name, options):
         self.name, self.options = name, options
@@ -66,7 +71,7 @@ class Custom(Base):
         options['_e'] = buildout['buildout']['eggs-directory']
 
         if buildout['buildout'].get('offline') == 'true':
-            self.install = lambda: ()
+            self.install = lambda: ()  # ty: ignore[invalid-assignment]  # offline mode: instance attr intentionally shadows the method with a no-arg lambda
 
         self.newest = buildout['buildout'].get('newest') == 'true'
 

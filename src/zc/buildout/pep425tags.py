@@ -43,8 +43,8 @@ def get_impl_version_info():
     version."""
     if get_abbr_impl() == 'pp':
         # as per https://github.com/pypa/pip/issues/2882
-        return (sys.version_info[0], sys.pypy_version_info.major,
-                sys.pypy_version_info.minor)
+        return (sys.version_info[0], sys.pypy_version_info.major,  # ty: ignore[unresolved-attribute]  # exists on PyPy only; guarded by the 'pp' check above
+                sys.pypy_version_info.minor)  # ty: ignore[unresolved-attribute]  # PyPy-only
     else:
         return sys.version_info[0], sys.version_info[1]
 

@@ -126,9 +126,12 @@ class Eggs(object):
         )
         if cache_key not in cache_storage:
             if offline:
+                # Legacy positional form: the path list rides in the
+                # executable slot; working_set's path=None branch forwards
+                # it (see the backward-compat shim there).
                 ws = zc.buildout.easy_install.working_set(
                     distributions,
-                    [develop_eggs_dir, eggs_dir]
+                    [develop_eggs_dir, eggs_dir]  # ty: ignore[invalid-argument-type]
                     )
             else:
                 ws = zc.buildout.easy_install.install(

@@ -172,16 +172,16 @@ def patch_PackageIndex():
         except TypeError:
             try:
                 # pip 20.1-22.1
-                html_page = IndexContent(page, charset, base, cache_link_parsing=False)
+                html_page = IndexContent(page, charset, base, cache_link_parsing=False)  # ty: ignore[missing-argument]  # old-pip signature; TypeError-guarded above
             except TypeError:
                 # pip 20.0 or older
-                html_page = IndexContent(page, charset, base)
+                html_page = IndexContent(page, charset, base)  # ty: ignore[missing-argument]  # old-pip signature; TypeError-guarded above
 
         # https://github.com/buildout/buildout/issues/598
         # use_deprecated_html5lib is a required addition in pip 22.0/22.1
         # and it is gone already in 22.2
         try:
-            plinks = parse_links(html_page, use_deprecated_html5lib=False)
+            plinks = parse_links(html_page, use_deprecated_html5lib=False)  # ty: ignore[unknown-argument]  # pip 22.0/22.1 only; TypeError-guarded below
         except TypeError:
             plinks = parse_links(html_page)
         plinks = list(plinks)
