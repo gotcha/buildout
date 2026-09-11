@@ -39,7 +39,10 @@ import sys
 import tempfile
 import zc.buildout
 import zc.buildout.download
-from typing import Any, Callable, Dict, List, Optional, Set, TextIO, Tuple, Type, Union
+from typing import (
+    Any, Callable, ClassVar, Dict, List, NoReturn, Optional, Sequence, Set,
+    TextIO, Tuple, Type, TypeVar, Union, overload,
+)
 
 
 try:
@@ -50,7 +53,8 @@ except ValueError:
 
 
 def command(method: Callable) -> Callable:
-    method.buildout_command = True
+    # The marker attribute is created dynamically at runtime.
+    setattr(method, 'buildout_command', True)
     return method
 
 
@@ -86,7 +90,7 @@ class MissingSection(zc.buildout.UserError, KeyError):
         return "The referenced section, %r, was not defined." % self.args[0]
 
 
-def _annotate_section(section: Dict[str, str], source: str) -> Dict[str, 'SectionKey']:
+def _annotate_section(section: Dict[str, Any], source: str) -> Dict[str, 'SectionKey']:
     for key in section:
         section[key] = SectionKey(section[key], source)
     return section
@@ -225,6 +229,11 @@ class HistoryItem(object):
             self.operation, " ".join(self.value.split('\n')), self.source)
 
 
+# Annotated configuration data: maps section names to sections whose values
+# are SectionKey objects once annotated (plain dicts while still raw).
+ConfigData = Dict[str, Union[Dict[str, SectionKey], Dict[Any, Any]]]
+
+
 def _annotate(data: Dict[str, Union[Dict[str, str], Dict[Any, Any]]], note: str) -> Dict[str, Union[Dict[str, SectionKey], Dict[Any, Any]]]:
     for key in data:
         data[key] = _annotate_section(data[key], note)
@@ -309,8 +318,11 @@ def _get_user_config() -> str:
 class Buildout(DictMixin):
 
     COMMANDS = set()
+    # Bound further below, where the Options class is defined
+    # (``Buildout.Options = Options``).
+    Options: ClassVar[Type['Options']]
 
-    def __init__(self, config_file: str, cloptions: List[Tuple[str, str, str]],
+    def __init__(self, config_file: Optional[str], cloptions: List[Tuple[str, str, str]],
                  use_user_defaults: bool=True,
                  command: Optional[str]=None, args: Union[Tuple[str, ...], List[str]]=()):
 
@@ -319,7 +331,7 @@ class Buildout(DictMixin):
         # default options
         _buildout_default_options_copy = copy.deepcopy(
             _buildout_default_options)
-        data = dict(buildout=_buildout_default_options_copy)
+        data: ConfigData = dict(buildout=_buildout_default_options_copy)
         self._buildout_dir = os.getcwd()
 
         if config_file and not _isurl(config_file):
@@ -344,13 +356,13 @@ class Buildout(DictMixin):
                 data['buildout']['directory'] = SectionKey(
                     os.path.dirname(config_file), 'COMPUTED_VALUE')
 
-        cloptions = dict(
+        cloptions_dict: ConfigData = dict(
             (section, dict((option, SectionKey(value, 'COMMAND_LINE_VALUE'))
                            for (_, option, value) in v))
             for (section, v) in itertools.groupby(sorted(cloptions),
                                                   lambda v: v[0])
             )
-        override = copy.deepcopy(cloptions.get('buildout', {}))
+        override = copy.deepcopy(cloptions_dict.get('buildout', {}))
 
         # load user defaults, which override defaults
         user_config = _get_user_config()
@@ -361,6 +373,8 @@ class Buildout(DictMixin):
                 user_config, [], download_options,
                 override, set(), {}
             )
+            # A top-level _open call returns the dict form.
+            assert isinstance(user_defaults, dict)
             for_download_options = _update(data, user_defaults)
         else:
             user_defaults = {}
@@ -374,11 +388,13 @@ class Buildout(DictMixin):
                 config_file, [], download_options,
                 override, set(), user_defaults
             )
+            # A top-level _open call returns the dict form.
+            assert isinstance(cfg_data, dict)
             data = _update(data, cfg_data)
 
         # extends from command-line
-        if 'buildout' in cloptions:
-            cl_extends = cloptions['buildout'].pop('extends', None)
+        if 'buildout' in cloptions_dict:
+            cl_extends = cloptions_dict['buildout'].pop('extends', None)
             if cl_extends:
                 for extends in cl_extends.value.split():
                     download_options = for_download_options['buildout']
@@ -388,10 +404,12 @@ class Buildout(DictMixin):
                         [], download_options,
                         override, set(), user_defaults
                     )
+                    # A top-level _open call returns the dict form.
+                    assert isinstance(cfg_data, dict)
                     data = _update(data, cfg_data)
 
         # apply command-line options
-        data = _update(data, cloptions)
+        data = _update(data, cloptions_dict)
 
         # Set up versions section, if necessary
         if 'versions' not in data['buildout']:
@@ -596,8 +614,12 @@ class Buildout(DictMixin):
 
         if bool_option(options, 'abi-tag-eggs', 'false'):
             from zc.buildout.pep425tags import get_abi_tag
+            abi_tag = get_abi_tag()
+            # get_abi_tag() only returns None on platforms without a known
+            # ABI tag, where joining it into a path would fail anyway.
+            assert abi_tag is not None
             options['eggs-directory'] = os.path.join(
-                options['eggs-directory'], get_abi_tag())
+                options['eggs-directory'], abi_tag)
 
         eggs_cache = options.get('eggs-directory')
 
@@ -650,21 +672,24 @@ class Buildout(DictMixin):
         # Now copy buildout and setuptools eggs, and record destination eggs:
         entries = []
         for dist in zc.buildout.easy_install.buildout_and_setuptools_dists:
+            # These are the dists running the current buildout, so they
+            # always live on disk.
+            location = zc.buildout.easy_install._dist_location(dist)
             if dist.precedence == pkg_resources.DEVELOP_DIST:
                 dest = os.path.join(self['buildout']['develop-eggs-directory'],
                                     dist.key + '.egg-link')
                 with open(dest, 'w') as fh:
-                    fh.write(dist.location)
-                entries.append(dist.location)
+                    fh.write(location)
+                entries.append(location)
             else:
                 dest = os.path.join(self['buildout']['eggs-directory'],
-                                    os.path.basename(dist.location))
+                                    os.path.basename(location))
                 entries.append(dest)
                 if not os.path.exists(dest):
-                    if os.path.isdir(dist.location):
-                        shutil.copytree(dist.location, dest)
+                    if os.path.isdir(location):
+                        shutil.copytree(location, dest)
                     else:
-                        shutil.copy2(dist.location, dest)
+                        shutil.copy2(location, dest)
 
         # Create buildout script
         ws = pkg_resources.WorkingSet(entries)
@@ -756,9 +781,10 @@ class Buildout(DictMixin):
 
         # get configured and installed part lists
         conf_parts = self['buildout']['parts']
-        conf_parts = conf_parts and conf_parts.split() or []
+        conf_parts = conf_parts.split() if conf_parts else []
         installed_parts = installed_part_options['buildout']['parts']
-        installed_parts = installed_parts and installed_parts.split() or []
+        installed_parts = (installed_parts.split()
+                           if installed_parts else [])
 
         if install_args:
             install_parts = install_args
@@ -792,6 +818,9 @@ class Buildout(DictMixin):
                 old_options = installed_part_options[part].copy()
                 installed_files = old_options.pop('__buildout_installed__')
                 new_options = self.get(part)
+                # part is in install_parts, whose sections were all loaded
+                # above, so the section exists.
+                assert new_options is not None
                 if old_options == new_options:
                     # The options are the same, but are all of the
                     # installed files still there?  If not, we should
@@ -933,7 +962,7 @@ class Buildout(DictMixin):
             _save_option(option, value, f)
         f.close()
 
-    def _uninstall_part(self, part: str, installed_part_options: Dict[str, 'Options']):
+    def _uninstall_part(self, part: str, installed_part_options: Dict[str, Union['Options', Dict[str, str]]]):
         # uninstall part
         __doing__ = 'Uninstalling %s.', part
         self._logger.info(*__doing__)
@@ -1119,7 +1148,7 @@ class Buildout(DictMixin):
                 self._logger.warning(
                     "Unexpected entry, %r, in develop-eggs directory.", f)
 
-    def _compute_part_signatures(self, parts: List[str]):
+    def _compute_part_signatures(self, parts: Sequence[str]):
         # Compute recipe signature and add to options
         for part in parts:
             options = self.get(part)
@@ -1130,13 +1159,13 @@ class Buildout(DictMixin):
             sig = _dists_sig(pkg_resources.working_set.resolve([req]))
             options['__buildout_signature__'] = ' '.join(sig)
 
-    def _read_installed_part_options(self) -> Tuple[Dict[str, 'Options'], bool]:
+    def _read_installed_part_options(self) -> Tuple[Dict[str, Union['Options', Dict[str, str]]], bool]:
         old = self['buildout']['installed']
         if old and os.path.isfile(old):
             fp = open(old)
             sections = zc.buildout.configparser.parse(fp, old)
             fp.close()
-            result = {}
+            result: Dict[str, Union['Options', Dict[str, str]]] = {}
             for section, options in sections.items():
                 for option, value in options.items():
                     if '%(' in value:
@@ -1201,7 +1230,7 @@ class Buildout(DictMixin):
             _save_options(part, installed_options[part], f)
         f.close()
 
-    def _error(self, message, *args):
+    def _error(self, message, *args) -> NoReturn:
         raise zc.buildout.UserError(message % args)
 
     def _setup_socket_timeout(self):
@@ -1298,7 +1327,8 @@ class Buildout(DictMixin):
                     project,
                 )
                 continue
-            if not inspect.getfile(sys.modules[project]).startswith(dist.location):
+            if not inspect.getfile(sys.modules[project]).startswith(
+                    zc.buildout.easy_install._dist_location(dist)):
                 upgraded.append(dist)
 
         if not upgraded:
@@ -1651,6 +1681,9 @@ def _install_and_load(spec: str, group: str, entry: str, buildout: Buildout) -> 
             group, entry, spec, v)
         raise
 
+_T = TypeVar('_T')
+
+
 class Options(DictMixin):
 
     def __init__(self, buildout: Buildout, section: str, data: Dict[str, str]):
@@ -1659,6 +1692,9 @@ class Options(DictMixin):
         self._raw = data
         self._cooked = {}
         self._data = {}
+        # Only holds a value while a recipe is installing (see _call);
+        # declared here so its type is known in created().
+        self._created: Optional[List[str]]
 
     def _initialize(self):
         name = self.name
@@ -1713,10 +1749,10 @@ class Options(DictMixin):
                     raise zc.buildout.UserError("No section named %r" % iname)
                 result.update(self._do_extend_raw(iname, raw, doing))
 
-            result = _annotate_section(result, "")
-            data = _annotate_section(copy.deepcopy(data), "")
-            result = _update_section(result, data)
-            result = _unannotate_section(result)
+            annotated_result = _annotate_section(result, "")
+            annotated_data = _annotate_section(copy.deepcopy(data), "")
+            result = _unannotate_section(
+                _update_section(annotated_result, annotated_data))
             result.pop('<', None)
             return result
         finally:
@@ -1728,34 +1764,42 @@ class Options(DictMixin):
         v = '$$'.join([self._sub(s, seen) for s in v.split('$$')])
         self._cooked[option] = v
 
-    def get(self, option: str, default: Optional[Union[str, int, bool]]=None, seen: Optional[List[Tuple[str, str]]]=None) -> Optional[Union[str, int, bool]]:
+    # Option values are always strings; a non-string ``default`` is
+    # returned as is, so its type shows up in the overloads.  The key
+    # parameter is typed ``Any`` to stay compatible with ``Mapping.get``,
+    # whose key type is not narrowed by this class.
+    @overload
+    def get(self, key: Any) -> Optional[str]: ...
+    @overload
+    def get(self, key: Any, default: _T, seen: Optional[List[Tuple[str, str]]]=None) -> Union[str, _T]: ...
+    def get(self, key: Any, default: Optional[Union[str, int, bool]]=None, seen: Optional[List[Tuple[str, str]]]=None) -> Optional[Union[str, int, bool]]:
         try:
-            return self._data[option]
+            return self._data[key]
         except KeyError:
             pass
 
-        v = self._cooked.get(option)
+        v = self._cooked.get(key)
         if v is None:
-            v = self._raw.get(option)
+            v = self._raw.get(key)
             if v is None:
                 return default
 
-        __doing__ = 'Getting option %s:%s.', self.name, option
+        __doing__ = 'Getting option %s:%s.', self.name, key
 
         if '${' in v:
-            key = self.name, option
+            seen_key = self.name, key
             if seen is None:
-                seen = [key]
-            elif key in seen:
+                seen = [seen_key]
+            elif seen_key in seen:
                 raise zc.buildout.UserError(
                     "Circular reference in substitutions.\n"
                     )
             else:
-                seen.append(key)
+                seen.append(seen_key)
             v = '$$'.join([self._sub(s, seen) for s in v.split('$$')])
             seen.pop()
 
-        self._data[option] = v
+        self._data[key] = v
         return v
 
     _template_split = re.compile('([$]{[^}]*})').split
@@ -1829,7 +1873,8 @@ class Options(DictMixin):
         else:
             raise KeyError(key)
 
-    def keys(self) -> List[str]:
+    # Legacy API: returns a real list, not a KeysView as Mapping.keys does.
+    def keys(self) -> List[str]:  # ty: ignore[invalid-method-override]
         raw = self._raw
         return list(self._raw) + [k for k in self._data if k not in raw]
 
@@ -1867,12 +1912,17 @@ class Options(DictMixin):
 
     def created(self, *paths) -> List[str]:
         try:
-            self._created.extend(paths)
+            created = self._created
         except AttributeError:
             raise TypeError(
                 "Attempt to register a created path while not installing",
                 self.name)
-        return self._created
+        if created is None:
+            raise TypeError(
+                "Attempt to register a created path while not installing",
+                self.name)
+        created.extend(paths)
+        return created
 
     def __repr__(self):
         return repr(dict(self))
@@ -2008,10 +2058,14 @@ variable_template_split = re.compile('([$]{[^}]*})').split
 def _open(
         base: str, filename: str, seen: List[str], download_options: Dict[str, SectionKey],
         override: Dict[str, SectionKey], downloaded: Set[str], user_defaults: Dict[str, Dict[str, SectionKey]]
-        ) -> Union[Tuple[Dict[Any, Any], Dict[Any, Any]], Tuple[Dict[str, Dict[str, SectionKey]], Dict[Any, Any]], Tuple[List[Dict[str, Dict[str, SectionKey]]], Dict[Any, Any]], Tuple[List[Union[Dict[str, Dict[str, SectionKey]], Dict[str, Dict[Any, Any]]]], Dict[Any, Any]], Tuple[List[Dict[str, Dict[Any, Any]]], Dict[Any, Any]]]:
+        ) -> Union[Tuple[ConfigData, Dict[str, Dict[str, SectionKey]]], Tuple[List[ConfigData], Dict[str, Dict[str, SectionKey]]]]:
     """Open a configuration file and return the result as a dictionary,
 
     Recursively open other files based on buildout options found.
+
+    Return type: a top-level call (empty ``seen``) returns the merged
+    config dict; a recursive call (for ``extends``) returns the list of
+    per-file config dicts.  Callers narrow with isinstance asserts.
     """
     download_options = _update_section(download_options, override)
     raw_download_options = _unannotate_section(download_options)
@@ -2050,6 +2104,8 @@ def _open(
     if filename in seen:
         if is_temp:
             fp.close()
+            # downloaded_filename is always set when is_temp is true.
+            assert downloaded_filename is not None
             os.remove(downloaded_filename)
         raise zc.buildout.UserError("Recursive file include", seen, filename)
 
@@ -2065,9 +2121,13 @@ def _open(
 
     fp.close()
     if is_temp:
+        # downloaded_filename is always set when is_temp is true.
+        assert downloaded_filename is not None
         os.remove(downloaded_filename)
 
-    options = result.get('buildout', {})
+    # Values are plain strings for now; _annotate below mutates them into
+    # SectionKey objects in place.
+    options: Dict[str, Any] = result.get('buildout', {})
     extends = options.pop('extends', None)
     if 'extended-by' in options:
         raise zc.buildout.UserError(
@@ -2082,13 +2142,15 @@ def _open(
         )
 
     # Process extends to handle nested += and -=
-    eresults = []
+    eresults: List[ConfigData] = []
     if extends:
         extends = extends.split()
         for fname in extends:
             next_extend, user_defaults = _open(
                 base, fname, seen, download_options, override,
                 downloaded, user_defaults)
+            # A recursive _open call returns the list form.
+            assert isinstance(next_extend, list)
             eresults.extend(next_extend)
     else:
         if user_defaults:
@@ -2105,13 +2167,15 @@ def _open(
             next_extend, user_defaults = _open(
                 base, fname, seen, download_options, override,
                 downloaded, user_defaults)
+            # A recursive _open call returns the list form.
+            assert isinstance(next_extend, list)
             eresults.extend(next_extend)
 
     eresults.append(result)
     seen.pop()
 
     if root_config_file:
-        final_result = {}
+        final_result: ConfigData = {}
         for eresult in eresults:
             final_result = _update(final_result, eresult)
         return final_result, user_defaults
@@ -2164,7 +2228,7 @@ def _dists_sig(dists: List[pkg_resources.Distribution]) -> List[str]:
         if dist in seen:
             continue
         seen.add(dist)
-        location = dist.location
+        location = zc.buildout.easy_install._dist_location(dist)
         if dist.precedence == pkg_resources.DEVELOP_DIST:
             result.append(dist.project_name + '-' + _dir_hash(location))
         else:
@@ -2269,7 +2333,7 @@ def _doing():
                 d = d[0] % d[1:]
             sys.stderr.write('  %s\n' % d)
 
-def _error(*message):
+def _error(*message) -> NoReturn:
     sys.stderr.write('Error: ' + ' '.join(message) +'\n')
     sys.exit(1)
 
@@ -2402,9 +2466,11 @@ def _help():
     sys.exit(0)
 
 def _version():
-    version = pkg_resources.working_set.find(
-                pkg_resources.Requirement.parse('zc.buildout')).version
-    print_("buildout version %s" % version)
+    dist = pkg_resources.working_set.find(
+        pkg_resources.Requirement.parse('zc.buildout'))
+    # We are running, so zc.buildout is in the working set.
+    assert dist is not None
+    print_("buildout version %s" % dist.version)
     sys.exit(0)
 
 def main(args: Optional[List[str]]=None):
