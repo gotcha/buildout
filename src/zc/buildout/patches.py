@@ -73,7 +73,7 @@ def patch_PackageIndex():
             from pip._internal.index.collector import IndexContent
         except ImportError:
             # pip 22.1-
-            from pip._internal.index.collector import HTMLPage as IndexContent
+            from pip._internal.index.collector import HTMLPage as IndexContent  # ty: ignore[unresolved-import]
 
         from pip._internal.index.collector import parse_links
         from pip._internal.index.package_finder import _check_link_requires_python
@@ -209,71 +209,6 @@ def patch_PackageIndex():
 
 patch_PackageIndex()
 
-
-def patch_interpret_distro_name():
-    """Goal: recognize distro names better.
-
-    interpret_distro_name was changed as part of
-    https://github.com/pypa/setuptools/pull/2822
-    This landed in setuptools 70.
-
-    We seem to need this version, to avoid problems recognizing distro names.
-    'basename' is for example 'mauritstest.namespacepackage-1.0.0'
-    The new code correctly handles this as project name
-    ''mauritstest.namespacepackage', instead of yielding multiple distros.
-    """
-    try:
-        from packaging import version
-        from pkg_resources import Distribution
-        from pkg_resources import SOURCE_DIST
-        from . import package_index
-
-        import re
-        import setuptools
-    except ImportError:
-        return
-
-    if version.parse(setuptools.__version__) >= version.Version("70"):
-        # Patch is not needed.
-        return
-
-    def interpret_distro_name(
-        location, basename, metadata, py_version=None, precedence=SOURCE_DIST, platform=None
-    ):
-        """Generate the interpretation of a source distro name
-
-        Note: if `location` is a filesystem filename, you should call
-        ``pkg_resources.normalize_path()`` on it before passing it to this
-        routine!
-        """
-
-        parts = basename.split('-')
-        if not py_version and any(re.match(r'py\d\.\d$', p) for p in parts[2:]):
-            # it is a bdist_dumb, not an sdist -- bail out
-            return
-
-        # find the pivot (p) that splits the name from the version.
-        # infer the version as the first item that has a digit.
-        for p in range(len(parts)):
-            if parts[p][:1].isdigit():
-                break
-        else:
-            p = len(parts)
-
-        yield Distribution(
-            location,
-            metadata,
-            '-'.join(parts[:p]),
-            '-'.join(parts[p:]),
-            py_version=py_version,
-            precedence=precedence,
-            platform=platform,
-        )
-
-    package_index.interpret_distro_name = interpret_distro_name
-
-
-patch_interpret_distro_name()
 
 
 def patch_pkg_resources_requirement_contains():
