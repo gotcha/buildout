@@ -156,6 +156,8 @@ def system(command, input='', with_exit_code=False, env=None):
                          close_fds=MUST_CLOSE_FDS,
                          env=sub_env)
     i, o, e = (p.stdin, p.stdout, p.stderr)
+    # The PIPE arguments above guarantee these streams are not None.
+    assert i is not None and o is not None and e is not None
     if input:
         i.write(input.encode())
     i.close()
@@ -397,16 +399,21 @@ class Server(HTTPServer):
         self.tree = os.path.abspath(tree)
 
     __run = True
-    def serve_forever(self):
+    def serve_forever(self, poll_interval: float = 0.5) -> None:
+        # poll_interval is accepted for signature compatibility with
+        # BaseServer.serve_forever; it is unused here.
         while self.__run:
             self.handle_request()
 
-    def handle_error(self, *_):
+    def handle_error(self, request, client_address) -> None:
         self.__run = False
 
 class Handler(BaseHTTPRequestHandler):
 
-    Server.__log = False
+    # Dynamic class-attribute creation (name-mangled to _Server__log): moving
+    # it into the Server class body breaks the HTTP test servers at runtime,
+    # so it must stay here even though static analysis cannot see it.
+    Server.__log = False  # ty: ignore[unresolved-attribute]
 
     def __init__(self, request, address, server):
         self.__server = server
@@ -465,7 +472,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             with open(path, 'rb') as f:
                 out = f.read()
-            self.send_header('Content-Length', len(out))
+            self.send_header('Content-Length', str(len(out)))
             if path.endswith('.egg'):
                 self.send_header('Content-Type', 'application/zip')
             elif path.endswith('.gz'):
@@ -481,7 +488,9 @@ class Handler(BaseHTTPRequestHandler):
 
         self.wfile.write(out)
 
-    def log_request(self, code):
+    def log_request(self, code='-', size='-'):
+        # size is accepted for signature compatibility with
+        # BaseHTTPRequestHandler.log_request; it is unused here.
         if self.__server.__log:
             print_('%s %s %s' % (self.command, code, self.path))
 
@@ -537,8 +546,7 @@ def wait(port, up):
             s.close()
             if up:
                 break
-        except socket.error:
-            e = sys.exc_info()[1]
+        except socket.error as e:
             if e.errno not in (errno.ECONNREFUSED, errno.ECONNRESET):
                 raise
             s.close()
@@ -557,6 +565,10 @@ def install(project, destination):
 
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse(project))
+    if dist is None:
+        raise ValueError('Distribution not found for %r' % project)
+    if dist.location is None:
+        raise ValueError('Distribution %r has no location' % project)
     if dist.location.endswith('.egg'):
         destination = os.path.join(destination,
                                    os.path.basename(dist.location),
@@ -577,6 +589,10 @@ def install_develop(project, destination):
 
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse(project))
+    if dist is None:
+        raise ValueError('Distribution not found for %r' % project)
+    if dist.location is None:
+        raise ValueError('Distribution %r has no location' % project)
     with open(os.path.join(destination, project+'.egg-link'), 'w') as f:
         f.write(dist.location)
 
@@ -683,16 +699,18 @@ def run_in_process(*args, **kwargs):
             print(f.read())
 
 def run_buildout_in_process(command='buildout'):
-    command = command.split(' ', 1)
-    command.insert(
-        1,
+    options = (
         " use-dependency-links=false"
         # Leaving this here so we can uncomment to see what's going on.
         #" log-format=%(asctime)s____%(levelname)s_%(message)s -vvv"
         " index=" + __file__ + 'nonexistent' # hide index
         )
-    command = ' '.join(command)
-    run_in_process(run_buildout, command)
+    # The annotation keeps the list element type as plain str: without it
+    # the inferred element type is LiteralString (from the literal default),
+    # which rejects inserting the non-literal `options` string.
+    parts: list = command.split(' ', 1)
+    parts.insert(1, options)
+    run_in_process(run_buildout, ' '.join(parts))
 
 
 def setup_coverage(path_to_coveragerc):
