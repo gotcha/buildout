@@ -56,7 +56,7 @@ from zc.buildout.utils import normalize_name
 import warnings
 import csv
 from packaging.version import Version
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 
 
@@ -68,6 +68,17 @@ warnings.filterwarnings(
 _oprp = getattr(os.path, 'realpath', lambda path: path)
 def realpath(path: str) -> str:
     return os.path.normcase(os.path.abspath(_oprp(path)))
+
+def _dist_location(dist: pkg_resources.Distribution) -> str:
+    """The location of a distribution that is known to live on disk.
+
+    pkg_resources types ``Distribution.location`` as optional, but the
+    dists handled in this module are installed or downloadable dists,
+    which always have a location.
+    """
+    location = dist.location
+    assert location is not None
+    return location
 
 default_index_url = os.environ.get(
     'buildout_testing_index_url',
@@ -91,7 +102,7 @@ if is_jython:
 # Include buildout and setuptools eggs in paths.  We get this
 # initially from the entire working set.  Later, we'll use the install
 # function to narrow to just the buildout and setuptools paths.
-buildout_and_setuptools_path = sorted({d.location for d in pkg_resources.working_set})
+buildout_and_setuptools_path = sorted({_dist_location(d) for d in pkg_resources.working_set})
 setuptools_path = buildout_and_setuptools_path
 pip_path = buildout_and_setuptools_path
 logger.debug('before restricting versions: pip_path %r', pip_path)
@@ -111,6 +122,14 @@ class EnvironmentMixin(object):
     setuptools 69.3+ get a different name than with older versions:
     https://github.com/buildout/buildout/issues/647
     """
+    if TYPE_CHECKING:
+        # Provided by pkg_resources.Environment, which this mixin is always
+        # combined with.  Declared here because the mixin itself does not
+        # inherit from it.
+        _distmap: Dict[str, List[pkg_resources.Distribution]]
+
+        def can_add(self, dist: pkg_resources.Distribution) -> bool: ...
+
     def __getitem__(self, project_name: str) -> List[Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, Any, pkg_resources.Distribution]]:
         """Return a newest-to-oldest list of distributions for `project_name`
 
@@ -180,7 +199,11 @@ class Environment(EnvironmentMixin, pkg_resources.Environment):
         Adapted from pkg_resources.compatible_platforms.
         If self.platform is something like 'macosx-15.4-arm64', we return 'arm64.
         """
-        match = macosVersionString.match(self.platform)
+        platform = self.platform
+        # This property is only consulted when platform matching failed,
+        # which cannot happen with a None platform.
+        assert platform is not None
+        match = macosVersionString.match(platform)
         if match is None:
             # no Mac
             return ""
@@ -211,7 +234,11 @@ class Environment(EnvironmentMixin, pkg_resources.Environment):
         )
         if not py_compat:
             return False
-        provMac = macosVersionString.match(dist.platform)
+        # compatible_platforms() accepts a None provided platform, so
+        # super().can_add() would not have failed and we would not be here.
+        dist_platform = dist.platform
+        assert dist_platform is not None
+        provMac = macosVersionString.match(dist_platform)
         if not provMac:
             # The dist is not for Mac.
             return False
@@ -322,7 +349,7 @@ def get_namespace_package_paths(dist: pkg_resources.Distribution) -> Iterator[st
         yield os.path.join(*(base + namespace.split('.') + init))
 
 def namespace_packages_need_pkg_resources(dist: Union[pkg_resources.EggInfoDistribution, pkg_resources.Distribution]):
-    if os.path.isfile(dist.location):
+    if os.path.isfile(_dist_location(dist)):
         # Zipped egg, with namespaces, surely needs setuptools
         return True
     # If they have `__init__.py` files that use pkg_resources and don't
@@ -476,7 +503,7 @@ class Installer(object):
         """
         for project_name in env:
             for dist in env[project_name]:
-                if os.path.dirname(dist.location) == dest:
+                if os.path.dirname(_dist_location(dist)) == dest:
                     dist.precedence = pkg_resources.EGG_DIST
 
     def _version_conflict_information(self, name: str) -> str:
@@ -582,7 +609,7 @@ class Installer(object):
             str(req))
         return best_we_have, None
 
-    def _call_pip_install(self, spec: str, dest: str, dist: pkg_resources.Distribution) -> List[pkg_resources.DistInfoDistribution]:
+    def _call_pip_install(self, spec: str, dest: str, dist: pkg_resources.Distribution) -> List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]]:
 
         tmp = tempfile.mkdtemp(dir=dest)
         try:
@@ -672,7 +699,7 @@ class Installer(object):
 
         if self._download_cache:
             for dist in best:
-                if (realpath(os.path.dirname(dist.location))
+                if (realpath(os.path.dirname(_dist_location(dist)))
                     ==
                     self._download_cache
                     ):
@@ -683,15 +710,15 @@ class Installer(object):
 
     def _fetch(self, dist: pkg_resources.Distribution, tmp: str, download_cache: Optional[str]) -> pkg_resources.Distribution:
         if (download_cache
-            and (realpath(os.path.dirname(dist.location)) == download_cache)
+            and (realpath(os.path.dirname(_dist_location(dist))) == download_cache)
             ):
             logger.debug("Download cache has %s at: %s", dist, dist.location)
             return dist
 
         logger.debug("Fetching %s from: %s", dist, dist.location)
-        new_location = self._index.download(dist.location, tmp)
+        new_location = self._index.download(_dist_location(dist), tmp)
         if (download_cache
-            and (realpath(new_location) == realpath(dist.location))
+            and (realpath(new_location) == realpath(_dist_location(dist)))
             and os.path.isfile(new_location)
             ):
             # setuptools avoids making extra copies, but we want to copy
@@ -916,6 +943,9 @@ class Installer(object):
                 self._log_requirement(ws, req)
                 for dist in self._get_dist(req, ws):
                     self._maybe_add_setuptools(ws, dist)
+            # _get_dist either raises or returns a non-empty list, so dist
+            # is always set here.
+            assert dist is not None
             if dist not in req:
                 # Oops, the "best" so far conflicts with a dependency.
                 logger.info(self._version_conflict_information(req.key))
@@ -966,7 +996,7 @@ class Installer(object):
 
         dist, avail = self._satisfied(requirement, 1)
         if dist is not None:
-            return [dist.location]
+            return [_dist_location(dist)]
 
         # Retrieve the dist:
         if avail is None:
@@ -1005,12 +1035,12 @@ class Installer(object):
                         logger.warning(
                             "Couldn't find a setup script to build in %s. "
                             "Trying pip install anyway."
-                            % os.path.basename(dist.location)
+                            % os.path.basename(_dist_location(dist))
                         )
                     elif len(setups) > 1:
                         raise distutils.errors.DistutilsError(
                             "Multiple setup scripts in %s"
-                            % os.path.basename(dist.location)
+                            % os.path.basename(_dist_location(dist))
                             )
                     else:
                         base = os.path.dirname(setups[0])
@@ -1024,7 +1054,7 @@ class Installer(object):
 
                 dists = self._call_pip_install(base, self._dest, dist)
 
-                return [dist.location for dist in dists]
+                return [_dist_location(dist) for dist in dists]
             finally:
                 zc.buildout.rmtree.rmtree(build_tmp)
 
@@ -1051,9 +1081,9 @@ class Installer(object):
             # 6 fold improvement.
             return
 
-        ws = list(ws)
-        ws.sort()
-        for dist in ws:
+        sorted_dists = list(ws)
+        sorted_dists.sort()
+        for dist in sorted_dists:
             if req in dist.requires():
                 logger.debug("  required by %s." % dist)
                 req_ = str(req)
@@ -1084,6 +1114,9 @@ def download_cache(path: Optional[Union[str, int]]=-1) -> Optional[str]:
     old = Installer._download_cache
     if path != -1:
         if path:
+            # The only supported non-string values are the falsy ones
+            # (None/0, meaning "unset") and the -1 sentinel above.
+            assert isinstance(path, str)
             path = realpath(path)
         Installer._download_cache = path
     return old
@@ -1157,11 +1190,11 @@ def install(specs: Union[Tuple[str, ...], List[str]], dest: Optional[str],
 
 buildout_and_setuptools_dists = list(install(['zc.buildout'], None,
                                              check_picked=False))
-buildout_and_setuptools_path = sorted({d.location
+buildout_and_setuptools_path = sorted({_dist_location(d)
                                 for d in buildout_and_setuptools_dists})
 
 pip_dists = [d for d in buildout_and_setuptools_dists if d.project_name != 'zc.buildout']
-pip_path = sorted({d.location for d in pip_dists})
+pip_path = sorted({_dist_location(d) for d in pip_dists})
 logger.debug('after restricting versions: pip_path %r', pip_path)
 pip_pythonpath = os.pathsep.join(pip_path)
 
@@ -1318,7 +1351,7 @@ def _detect_distutils_scripts(directory: str):
 
 def develop(setup: str, dest: str,
             build_ext: Optional[Dict[str, str]]=None,
-            executable: str=sys.executable) -> str:
+            executable: str=sys.executable) -> Optional[str]:
     """Make a development/editable install of a package.
 
     This expects to get a path to a directory or a file as the first argument.
@@ -1375,6 +1408,8 @@ def develop(setup: str, dest: str,
         undo.append(lambda : zc.buildout.rmtree.rmtree(tmp3))
 
         egg_name = call_pip_install(directory.as_uri(), tmp3, editable=True)
+        # For an editable install call_pip_install returns the package name.
+        assert isinstance(egg_name, str)
 
         # output = get_subprocess_output(args)
         # if log_level <= logging.DEBUG:
@@ -1410,7 +1445,9 @@ def working_set(specs: Tuple[str, ...], executable: str, path: Optional[List[str
                 allowed_eggs_from_site_packages: None=None) -> pkg_resources.WorkingSet:
     # Backward compat:
     if path is None:
-        path = executable
+        # Legacy quirk: the executable string is passed where a list of
+        # paths is expected.
+        path = executable  # ty: ignore[invalid-assignment]
     else:
         assert executable == sys.executable, (executable, sys.executable)
     assert include_site_packages is None
@@ -1430,7 +1467,7 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
             ) -> List[str]:
     assert executable == sys.executable, (executable, sys.executable)
 
-    path = [dist.location for dist in working_set]
+    path = [_dist_location(dist) for dist in working_set]
     path.extend(extra_paths)
     # order preserving unique
     unique_path = []
@@ -1482,6 +1519,9 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
             # regular console_scripts entry points
             for name in pkg_resources.get_entry_map(dist, 'console_scripts'):
                 entry_point = dist.get_entry_info('console_scripts', name)
+                # The name comes from the dist's own entry map, so the
+                # entry point is guaranteed to exist.
+                assert entry_point is not None
                 entry_points.append(
                     (name, entry_point.module_name,
                      '.'.join(entry_point.attrs))
@@ -1523,6 +1563,8 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
         else:
             sname = name
 
+        # Generating a script requires a destination directory.
+        assert dest is not None
         sname = os.path.join(dest, sname)
         spath, rpsetup = _relative_path_and_setup(sname, path, relative_paths)
 
@@ -1551,6 +1593,8 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
         else:
             sname = name
 
+        # Generating a script requires a destination directory.
+        assert dest is not None
         sname = os.path.join(dest, sname)
         spath, rpsetup = _relative_path_and_setup(sname, path, relative_paths)
 
@@ -1559,6 +1603,8 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
             )
 
     if interpreter:
+        # Generating a script requires a destination directory.
+        assert dest is not None
         sname = os.path.join(dest, interpreter)
         spath, rpsetup = _relative_path_and_setup(sname, path, relative_paths)
         generated.extend(_pyscript(spath, sname, rpsetup, initialization))
@@ -1568,6 +1614,9 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
 
 def _relative_path_and_setup(sname: str, path: List[str], relative_paths: Union[str, bool]) -> Tuple[str, str]:
     if relative_paths:
+        # Callers pass either a falsy value or a base path string; a bare
+        # ``True`` is not supported.
+        assert isinstance(relative_paths, str)
         relative_paths = os.path.normcase(relative_paths)
         sname = os.path.normcase(os.path.abspath(sname))
         spath = ',\n  '.join(
@@ -1900,9 +1949,9 @@ class VersionConflict(zc.buildout.UserError):
 class MissingDistribution(zc.buildout.UserError):
 
     def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet):
-        ws = list(ws)
-        ws.sort()
-        self.data = req, ws
+        sorted_dists = list(ws)
+        sorted_dists.sort()
+        self.data = req, sorted_dists
 
     def __str__(self) -> str:
         req, ws = self.data
@@ -1953,7 +2002,9 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
         HAS_WARNING_OPTION = False
     if HAS_WARNING_OPTION:
         if not hasattr(call_pip_install, 'displayed'):
-            call_pip_install.displayed = True
+            # One-shot flag stored as a function attribute; dynamic attribute
+            # creation is invisible to static analysis.
+            call_pip_install.displayed = True  # ty: ignore[unresolved-attribute]
         else:
             args.append('--no-python-version-warning')
 
@@ -2278,6 +2329,10 @@ def _get_matching_dist_in_location(dist: Union[pkg_resources.DistInfoDistributio
 class BuildoutWheel(Wheel):
     """Extension for Wheel class to get the actual project name."""
 
+    # setuptools.wheel.Wheel.__init__ sets this dynamically via setattr
+    # from the wheel filename, which is invisible to static analysis.
+    project_name: str
+
     def get_project_name(self) -> Optional[str]:
         """Get project name by looking in the .dist-info of the wheel.
 
@@ -2403,18 +2458,18 @@ def _move_to_eggs_dir_and_compile(dist: Union[pkg_resources.DistInfoDistribution
     )
     tmp_dest = tempfile.mkdtemp(dir=dest)
     try:
-        if (os.path.isdir(dist.location) and
+        if (os.path.isdir(_dist_location(dist)) and
                 dist.precedence >= pkg_resources.BINARY_DIST):
             # We got a pre-built directory. It must have been obtained locally.
             # Just copy it.
             logger.debug("dist is pre-built directory.")
             # TODO Can we still support this?  Do we need to?  Maybe warn, or let pip install this.
-            tmp_loc = os.path.join(tmp_dest, os.path.basename(dist.location))
-            shutil.copytree(dist.location, tmp_loc)
+            tmp_loc = os.path.join(tmp_dest, os.path.basename(_dist_location(dist)))
+            shutil.copytree(_dist_location(dist), tmp_loc)
         else:
             # It is an archive of some sort.
             # Figure out how to unpack it, or fall back to easy_install.
-            basename, ext = os.path.splitext(dist.location)
+            basename, ext = os.path.splitext(_dist_location(dist))
             if ext == ".gz" and basename.endswith(".tar"):
                 basename = basename[:-4]
             # Set new location with name ending in '.experimental'.
@@ -2434,10 +2489,10 @@ def _move_to_eggs_dir_and_compile(dist: Union[pkg_resources.DistInfoDistribution
                 #     logger.debug("Renaming wheel was not needed or did not help.")
                 unpacker = UNPACKERS[ext]
                 logger.debug("Calling unpacker for %s on %s", ext, dist.location)
-                unpacker(dist.location, tmp_loc)
+                unpacker(_dist_location(dist), tmp_loc)
             else:
                 logger.debug("Calling pip install for %s on %s", ext, dist.location)
-                [tmp_loc] = call_pip_install(dist.location, tmp_dest)
+                [tmp_loc] = call_pip_install(_dist_location(dist), tmp_dest)
 
         # We have installed the dist. Now try to rename/move it.
         logger.debug("Egg for %s installed at %s", dist, tmp_loc)
@@ -2509,7 +2564,7 @@ def sort_working_set(ws: pkg_resources.WorkingSet, eggs_dir: str, develop_eggs_d
     egg_paths = []
     other_paths = []
     for dist in ws:
-        path = dist.location
+        path = _dist_location(dist)
         if path in develop_paths:
             sorted_paths.append(path)
         elif os.path.commonprefix([path, eggs_dir]) == eggs_dir:
