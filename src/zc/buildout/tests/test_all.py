@@ -31,6 +31,7 @@ import sys
 import tarfile
 import tempfile
 import zc.buildout.easy_install
+import zc.buildout.rmtree
 import zc.buildout.testing
 from build import ProjectBuilder
 from build.env import DefaultIsolatedEnv
@@ -115,7 +116,7 @@ class TestEasyInstall(unittest.TestCase):
         # Returns a distribution with a version of '3.3.0',
         # but an egg with a version of '3.3'
         self._make_egg()
-        from distutils.dist import Distribution
+        from distutils.dist import Distribution  # ty: ignore[unresolved-import]  # runtime: setuptools hook
         dist = Distribution()
         dist.project_name = 'TheProject'
         dist.version = '3.3.0'

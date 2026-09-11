@@ -24,7 +24,7 @@ import zc.buildout.easy_install
 import zc.buildout.configparser
 import copy
 import datetime
-import distutils.errors
+import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import glob
 import importlib
 import inspect

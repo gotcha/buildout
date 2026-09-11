@@ -3206,7 +3206,7 @@ This may be an indication for either a typo in the option's name or a bug in the
 """, N)
     # (XXX We patch download utility's API to produce readable output for the test;
     # a better solution would re-use the logging already done by the utility.)
-    import zc.buildout
+    import zc.buildout.download
     old_download = zc.buildout.download.Download.download
     def wrapper_download(self, url, md5sum=None, path=None):
       print_("The URL %s was downloaded." % url)

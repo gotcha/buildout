@@ -4,7 +4,7 @@ import sys
 import warnings
 
 import sysconfig
-import distutils.util
+import distutils.util  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 
 from typing import Optional
 
@@ -132,7 +132,7 @@ def get_supported(versions=None, supplied_platform=None):
         abis[0:0] = [abi]
 
     abi3s = set()
-    import imp
+    import imp  # ty: ignore[unresolved-import]  # removed in py3.12; this fallback only runs on older Pythons
     for suffix in imp.get_suffixes():
         if suffix[0].startswith('.abi'):
             abi3s.add(suffix[0].split('.', 2)[1])

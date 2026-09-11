@@ -1,7 +1,9 @@
 [tool.ty.src]
 # _vendor is frozen third-party code (the pkg_resources v81 fork):
 # not gateable signal, excluded from the static tier.
-exclude = ["src/zc/buildout/_vendor"]
+# etc/tracing is a MonkeyType driver used with an ad-hoc monkeytype
+# install; the gate venv intentionally lacks it.
+exclude = ["src/zc/buildout/_vendor", "etc/tracing"]
 
 [tool.towncrier]
 filename = "CHANGES.rst"

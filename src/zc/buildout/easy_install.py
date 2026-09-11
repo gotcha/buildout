@@ -19,8 +19,9 @@ installed.
 """
 
 import copy
-import distutils.errors
+import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import email
+import email.parser
 import errno
 import glob
 import logging

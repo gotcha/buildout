@@ -19,6 +19,7 @@ import shutil
 import tempfile
 import zc.buildout
 import zc.buildout.easy_install
+import zc.buildout.testing
 
 
 def create_sample_eggs(test, executable=sys.executable):

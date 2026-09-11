@@ -25,9 +25,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import gen_pytest
-from gen_pytest import (collect_doctest_fns, dedent_strings, extract_print_arg,
-                        looks_like_python_literal, looks_like_traceback)
+import gen_pytest  # ty: ignore[unresolved-import]  # sibling module; this file runs as a script from its own dir
+from gen_pytest import (  # ty: ignore[unresolved-import]  # sibling via sys.path.insert above
+    collect_doctest_fns, dedent_strings, extract_print_arg,
+    looks_like_python_literal, looks_like_traceback)
 
 TESTS = HERE.parent
 

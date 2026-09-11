@@ -67,8 +67,8 @@ from pkg_resources import (
 )
 from setuptools.wheel import Wheel
 
-from distutils import log
-from distutils.errors import DistutilsError
+from distutils import log  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
+from distutils.errors import DistutilsError  # ty: ignore[unresolved-import]  # runtime: setuptools hook
 
 EGG_FRAGMENT = re.compile(r'^egg=([-A-Za-z0-9_.+!]+)$')
 HREF = re.compile(r"""href\s*=\s*['"]?([^'"> ]+)""", re.I)
