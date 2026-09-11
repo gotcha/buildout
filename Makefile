@@ -17,13 +17,16 @@ test-recipe: bin/test
 test-small: bin/test
 	PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
 
-typecheck: bin/buildout
+typecheck: bin/test
 	# Static tier of verify-buildout: Astral's ty over the checkout with
 	# the repo venv as its Python environment. The _vendor exclude lives
 	# in pyproject.toml [tool.ty]. ty comes from the devenv.
-	ty check --project . --python venvs/python$(PYTHON_VERSION)/bin/python --output-format concise
+	# Depends on bin/test (not bare bin/buildout): the buildout run is what
+	# materializes eggs/, and the eggs go on ty's search path below so
+	# imports that resolve at test time also resolve statically.
+	ty check --project . --python venvs/python$(PYTHON_VERSION)/bin/python --output-format concise $(foreach e,$(wildcard eggs/v5/*.egg),--extra-search-path $e)
 
-pytest: bin/buildout
+pytest: bin/test
 	# xdist workers are bare-interpreter subprocesses: they do not inherit
 	# bin/py's baked sys.path, so pass the eggs via PYTHONPATH. Let Python
 	# itself assemble the value: the PWD variable is empty when make is
