@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import base64
 import configparser
+import email.message
 import hashlib
 import html
 import http.client
@@ -46,7 +47,7 @@ import urllib.parse
 import urllib.request
 from fnmatch import translate
 from functools import wraps
-from typing import Any, BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple, Union, NamedTuple
+from typing import Any, BinaryIO, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union, NamedTuple, cast
 
 import setuptools
 from pkg_resources import (
@@ -263,7 +264,7 @@ def distros_for_url(url: str, metadata: Optional[Any]=None) -> Iterator[Distribu
             )
 
 
-def distros_for_location(location: str, basename: str, metadata: Optional[Any]=None) -> List[Distribution]:
+def distros_for_location(location: str, basename: str, metadata: Optional[Any]=None) -> Iterable[Distribution]:
     """Yield egg or source distribution objects based on basename"""
     if basename.endswith('.egg.zip'):
         basename = basename[:-4]  # strip the .zip
@@ -277,8 +278,8 @@ def distros_for_location(location: str, basename: str, metadata: Optional[Any]=N
         return [
             Distribution(
                 location=location,
-                project_name=wheel.project_name,
-                version=wheel.version,
+                project_name=wheel.project_name,  # ty: ignore[unresolved-attribute]  # runtime: Wheel.__init__ sets these via setattr from the WHEEL_NAME regex groupdict
+                version=wheel.version,  # ty: ignore[unresolved-attribute]  # runtime: same dynamic setattr mechanism
                 # Increase priority over eggs.
                 precedence=EGG_DIST + 1,
             )
@@ -298,7 +299,7 @@ def distros_for_location(location: str, basename: str, metadata: Optional[Any]=N
     return []  # no extension matched
 
 
-def distros_for_filename(filename: str, metadata: Optional[Any]=None) -> List[Distribution]:
+def distros_for_filename(filename: str, metadata: Optional[Any]=None) -> Iterable[Distribution]:
     """Yield possible egg or source distribution objects based on a filename"""
     return distros_for_location(
         normalize_path(filename), os.path.basename(filename), metadata
@@ -337,6 +338,27 @@ def interpret_distro_name(
         precedence=precedence,
         platform=platform,
     )
+
+
+def _dist_location(dist: Distribution) -> str:
+    """The location of a distribution that is known to live on disk.
+
+    pkg_resources types ``Distribution.location`` as optional, but the
+    dists handled here are installed or downloadable dists, which always
+    have a location.  Same helper as in easy_install.py.
+    """
+    location = dist.location
+    assert location is not None
+    return location
+
+
+class _DownloadedDistribution(Distribution):
+    """A Distribution with the ``download_location`` that fetch_distribution's
+    inner ``find()`` attaches (setuptools sets this attribute dynamically;
+    pkg_resources does not declare it).
+    """
+
+    download_location: str
 
 
 def unique_values(func: Callable) -> Callable:
@@ -381,6 +403,11 @@ class ContentChecker:
     """
     A null content checker that defines the interface for checking content
     """
+
+    # Only HashChecker sets these; check_hash reaches them through the
+    # ContentChecker interface, with is_valid() gating their use.
+    hash: 'hashlib._Hash'
+    hash_name: str
 
     def feed(self, block: bytes):
         """
@@ -451,9 +478,11 @@ class PackageIndex(Environment):
         self.index_url = index_url + "/"[: not index_url.endswith('/')]
         self.scanned_urls: dict = {}
         self.fetched_urls: dict = {}
-        self.package_pages: dict = {}
+        # package name -> {package page url: True}
+        self.package_pages: Dict[str, Dict[str, bool]] = {}
         self.allows = re.compile('|'.join(map(translate, hosts))).match
-        self.to_scan: list = []
+        # None once prescan() has run: from then on, scan immediately.
+        self.to_scan: Optional[list] = []
         self.opener = urllib.request.urlopen
 
     def add(self, dist):
@@ -517,7 +546,10 @@ class PackageIndex(Environment):
                 # Errors have no charset, assume latin1:
                 charset = 'latin-1'
             else:
-                charset = f.headers.get_param('charset') or 'latin-1'
+                # get_param is typed to possibly return an RFC 2231
+                # (charset, lang, value) tuple; a plain charset parameter is
+                # a str. (Latent upstream: a tuple here would fail decode.)
+                charset = cast(str, f.headers.get_param('charset')) or 'latin-1'
             page = page.decode(charset, "ignore")
         f.close()
         for match in HREF.finditer(page):
@@ -537,7 +569,9 @@ class PackageIndex(Environment):
             for item in os.listdir(path):
                 self.process_filename(os.path.join(path, item), True)
 
-        dists = distros_for_filename(fn)
+        # Materialize: an iterator is always truthy, and the check below
+        # decides whether anything was found (as upstream setuptools does).
+        dists = list(distros_for_filename(fn))
         if dists:
             self.debug("Found: %s", fn)
             list(map(self.add, dists))
@@ -550,9 +584,9 @@ class PackageIndex(Environment):
         """
         s = URL_SCHEME(url)
         is_file = s and s.group(1).lower() == 'file'
-        return is_file or self.allows(urllib.parse.urlparse(url)[1])
+        return bool(is_file or self.allows(urllib.parse.urlparse(url)[1]))
 
-    def scan_egg_links(self, search_path) -> None:
+    def scan_egg_links(self, search_path: List[str]) -> None:
         dirs = filter(os.path.isdir, search_path)
         egg_links = (
             (path, entry)
@@ -646,10 +680,11 @@ class PackageIndex(Environment):
         url_name = re.sub(r"[-_.]+", "-", requirement.unsafe_name).lower()
         self.scan_url(self.index_url + url_name + '/')
 
-        if self.package_pages.get(url_name):
+        pages = self.package_pages.get(url_name)
+        if pages:
             # We have found a package page and don't need try to any other
             # package pages for this package.
-            for url in list(self.package_pages.get(url_name)):
+            for url in list(pages):
                 # scan each page that might be related to the desired package
                 self.scan_url(url)
             return
@@ -666,7 +701,11 @@ class PackageIndex(Environment):
             # scan each page that might be related to the desired package
             self.scan_url(url)
 
-    def obtain(self, requirement: Requirement, installer: Optional[Callable]=None) -> Optional[Distribution]:
+    def obtain(  # ty: ignore[invalid-method-override]  # Environment.obtain's strict-installer overload promises the installer's own return type; PackageIndex returns an environment dist or None instead (same shape as setuptools' PackageIndex.obtain)
+        self,
+        requirement: Requirement,
+        installer: Optional[Callable[[Requirement], Optional[Distribution]]] = None,
+    ) -> Optional[Distribution]:
         self.prescan()
         self.find_packages(requirement)
         for dist in self[requirement.key]:
@@ -703,7 +742,7 @@ class PackageIndex(Environment):
                 # otherwise, defer retrieval till later
                 self.to_scan.append(url)
 
-    def prescan(self):
+    def prescan(self) -> None:
         """Scan urls scheduled for prescanning (e.g. --find-links)"""
         if self.to_scan:
             list(map(self.scan_url, self.to_scan))
@@ -749,7 +788,10 @@ class PackageIndex(Environment):
                 return spec
             else:
                 spec = parse_requirement_arg(spec)
-        return getattr(self.fetch_distribution(spec, tmpdir), 'location', None)
+        # Upstream setuptools returns the fetched dist's location here, or
+        # None when the requirement matched nothing; buildout's own callers
+        # only pass URL/file specs, which never reach this branch.
+        return cast(str, getattr(self.fetch_distribution(spec, tmpdir), 'location', None))
 
     def fetch_distribution(  # noqa: C901  # is too complex (14)  # FIXME
         self,
@@ -781,7 +823,7 @@ class PackageIndex(Environment):
         skipped = set()
         dist = None
 
-        def find(req, env: Environment | None = None):
+        def find(req, env: Environment | None = None) -> _DownloadedDistribution | None:
             if env is None:
                 env = self
             # Find a matching distribution; may be called more than once
@@ -798,10 +840,11 @@ class PackageIndex(Environment):
 
                 test = dist in req and (dist.precedence <= SOURCE_DIST or not source)
                 if test:
-                    loc = self.download(dist.location, tmpdir)
-                    dist.download_location = loc
-                    if os.path.exists(dist.download_location):
-                        return dist
+                    loc = self.download(_dist_location(dist), tmpdir)
+                    downloaded = cast(_DownloadedDistribution, dist)
+                    downloaded.download_location = loc
+                    if os.path.exists(loc):
+                        return downloaded
 
             return None
 
@@ -900,13 +943,21 @@ class PackageIndex(Environment):
             fp = self.open_url(url)
             if isinstance(fp, urllib.error.HTTPError):
                 raise DistutilsError(f"Can't download {url}: {fp.code} {fp.msg}")
-            headers = fp.headers
+            # open_url without a `warning` argument raises instead of
+            # returning None.
+            assert fp is not None
+            # HTTPResponse, addinfourl and HTTPError all expose an
+            # email.message.Message as .headers at runtime; typeshed only
+            # narrows that to HTTPMessage for HTTPResponse.
+            headers = cast(http.client.HTTPMessage, fp.headers)
             blocknum = 0
             bs = self.dl_blocksize
             size = -1
             if "content-length" in headers:
                 # Some servers return multiple Content-Length headers :(
                 sizes = headers.get_all('Content-Length')
+                # Presence is guaranteed by the `in` check above.
+                assert sizes is not None
                 size = max(map(int, sizes))
                 self.reporthook(url, filename, blocknum, bs, size)
             with open(filename, 'wb') as tfp:
@@ -929,7 +980,7 @@ class PackageIndex(Environment):
         pass  # no-op
 
     # FIXME:
-    def open_url(self, url: str, warning: Optional[str]=None) -> Union[http.client.HTTPResponse, urllib.response.addinfourl, urllib.error.HTTPError]:  # noqa: C901  # is too complex (12)
+    def open_url(self, url: str, warning: Optional[str]=None) -> Optional[Union[http.client.HTTPResponse, urllib.response.addinfourl, urllib.error.HTTPError]]:  # noqa: C901  # is too complex (12)
         if url.startswith('file:'):
             return local_open(url)
         try:
@@ -949,11 +1000,11 @@ class PackageIndex(Environment):
                 raise DistutilsError(f"Download error for {url}: {v.reason}") from v
         except http.client.BadStatusLine as v:
             if warning:
-                self.warn(warning, v.line)
+                self.warn(warning, v.line)  # ty: ignore[unresolved-attribute]  # runtime: BadStatusLine.__init__ stores .line; typeshed omits it
             else:
                 raise DistutilsError(
                     f'{url} returned a bad status line. The server might be '
-                    f'down, {v.line}'
+                    f'down, {v.line}'  # ty: ignore[unresolved-attribute]  # runtime: same BadStatusLine.line
                 ) from v
         except (http.client.HTTPException, OSError) as v:
             if warning:
@@ -1324,6 +1375,12 @@ def local_open(url: str) -> Union[urllib.response.addinfourl, urllib.error.HTTPE
     else:
         status, message, body = 404, "Path not found", "Not found"
 
-    headers = {'content-type': 'text/html'}
+    headers = email.message.Message()
+    headers['content-type'] = 'text/html'
     body_stream = io.StringIO(body)
-    return urllib.error.HTTPError(url, status, message, headers, body_stream)
+    # cast: HTTPError is typed to take a binary stream, but it only needs a
+    # file-like .read(); buildout's synthesized local body is text and is
+    # consumed as text by process_url.
+    return urllib.error.HTTPError(
+        url, status, message, headers, cast(BinaryIO, body_stream)
+    )
