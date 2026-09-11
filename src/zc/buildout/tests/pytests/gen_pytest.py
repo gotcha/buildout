@@ -255,7 +255,7 @@ def collect_doctest_fns(source_path):
             continue
         if not (node.body and isinstance(node.body[0], ast.Expr)
                 and isinstance(node.body[0].value, ast.Constant)
-                and '>>>' in node.body[0].value.s):
+                and '>>>' in node.body[0].value.value):
             continue
-        results.append((node.name, node.body[0].value.s))
+        results.append((node.name, node.body[0].value.value))
     return results

@@ -597,20 +597,20 @@ class Installer(object):
                 raise zc.buildout.UserError("Couldn't install: %s" % dist)
 
             if len(dists) > 1:
-                logger.warn("Installing %s\n"
+                logger.warning("Installing %s\n"
                             "caused multiple distributions to be installed:\n"
                             "%s\n",
                             dist, '\n'.join(map(str, dists)))
             else:
                 d = dists[0]
                 if d.project_name != dist.project_name:
-                    logger.warn("Installing %s\n"
+                    logger.warning("Installing %s\n"
                                 "Caused installation of a distribution:\n"
                                 "%s\n"
                                 "with a different project name.",
                                 dist, d)
                 if d.version != dist.version:
-                    logger.warn("Installing %s\n"
+                    logger.warning("Installing %s\n"
                                 "Caused installation of a distribution:\n"
                                 "%s\n"
                                 "with a different version.",

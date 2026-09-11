@@ -78,7 +78,7 @@ class Custom(Base):
             if distribution is None:
                 distribution = self.name
             else:
-                logger.warn("The eggs option is deprecated. Use egg instead")
+                logger.warning("The eggs option is deprecated. Use egg instead")
 
 
         distribution = options.get('egg', options.get('eggs', self.name)

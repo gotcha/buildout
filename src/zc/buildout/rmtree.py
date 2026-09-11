@@ -68,7 +68,8 @@ def rmtree (path: str):
             # finally rethrow the last exception
             raise
 
-    shutil.rmtree (path, onerror = retry_writeable)
+    # onexc replaces onerror in 3.12+, but the floor here is 3.9.
+    shutil.rmtree (path, onerror = retry_writeable)  # ty: ignore[deprecated]
 
 def test_suite():
     return doctest.DocTestSuite()

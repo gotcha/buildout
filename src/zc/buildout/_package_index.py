@@ -900,7 +900,7 @@ class PackageIndex(Environment):
             fp = self.open_url(url)
             if isinstance(fp, urllib.error.HTTPError):
                 raise DistutilsError(f"Can't download {url}: {fp.code} {fp.msg}")
-            headers = fp.info()
+            headers = fp.headers
             blocknum = 0
             bs = self.dl_blocksize
             size = -1

@@ -507,7 +507,7 @@ def get_port():
 def _start_server(tree, name=''):
     port = get_port()
     thread = threading.Thread(target=_run, args=(tree, port), name=name)
-    thread.setDaemon(True)
+    thread.daemon = True
     thread.start()
     wait(port, up=True)
     return port, thread
