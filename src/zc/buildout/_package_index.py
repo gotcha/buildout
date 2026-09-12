@@ -47,7 +47,7 @@ import urllib.parse
 import urllib.request
 from fnmatch import translate
 from functools import wraps
-from typing import Any, BinaryIO, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union, NamedTuple, cast
+from typing import Any, BinaryIO, Callable, Dict, Iterable, Iterator, List, NoReturn, Optional, Tuple, Union, NamedTuple, cast
 
 import setuptools
 from pkg_resources import (
@@ -129,7 +129,7 @@ except ImportError:
         #       The question comes to mind mainly because of sdists that have been produced
         #       by old versions of setuptools and published to PyPI...
 
-    def _read_utf8_with_fallback(file: str, fallback_encoding=LOCALE_ENCODING) -> str:
+    def _read_utf8_with_fallback(file: str, fallback_encoding: Optional[str]=LOCALE_ENCODING) -> str:
         """
         First try to read the file with UTF-8, if there is an error fallback to a
         different encoding ("locale" by default). Returns the content of the file.
@@ -145,7 +145,7 @@ except ImportError:
                 return f.read()
 
     def _cfg_read_utf8_with_fallback(
-        cfg: RawConfigParser, file: str, fallback_encoding=LOCALE_ENCODING
+        cfg: RawConfigParser, file: str, fallback_encoding: Optional[str]=LOCALE_ENCODING
     ) -> None:
         """Same idea as :func:`_read_utf8_with_fallback`, but for the
         :meth:`RawConfigParser.read` method.
@@ -160,7 +160,7 @@ except ImportError:
             cfg.read(file, encoding=fallback_encoding)
 
 
-def unique_everseen(iterable, key=None):
+def unique_everseen(iterable: Iterable[Any], key: Optional[Callable[[Any], Any]]=None) -> Iterator[Any]:
     """Yield unique elements, preserving order.
 
     This function is copied from `more_itertools` 10.7.0.  I did not want to
@@ -208,7 +208,7 @@ def unique_everseen(iterable, key=None):
                 yield element
 
 
-def parse_requirement_arg(spec):
+def parse_requirement_arg(spec: str) -> Requirement:
     try:
         return Requirement.parse(spec)
     except ValueError as e:
@@ -217,7 +217,7 @@ def parse_requirement_arg(spec):
         ) from e
 
 
-def parse_bdist_wininst(name):
+def parse_bdist_wininst(name: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Return (base,pyversion) or (None,None) for possible .exe name"""
 
     lower = name.lower()
@@ -368,7 +368,7 @@ def unique_values(func: Callable) -> Callable:
     """
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         return unique_everseen(func(*args, **kwargs))
 
     return wrapper
@@ -381,7 +381,7 @@ Regex for an HTML tag with 'rel="val"' attributes.
 
 
 @unique_values
-def find_external_links(url, page):
+def find_external_links(url: str, page: str) -> Iterator[str]:
     """Find rel="homepage" and rel="download" links in `page`, yielding URLs"""
 
     for match in REL.finditer(page):
@@ -409,19 +409,19 @@ class ContentChecker:
     hash: 'hashlib._Hash'
     hash_name: str
 
-    def feed(self, block: bytes):
+    def feed(self, block: bytes) -> None:
         """
         Feed a block of data to the hash.
         """
         return
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """
         Check the hash. Return False if validation fails.
         """
         return True
 
-    def report(self, reporter: Callable, template: str):
+    def report(self, reporter: Callable, template: str) -> None:
         """
         Call reporter with information about the checker (hash name)
         substituted into the template.
@@ -435,7 +435,7 @@ class HashChecker(ContentChecker):
         r'(?P<expected>[a-f0-9]+)'
     )
 
-    def __init__(self, hash_name, expected) -> None:
+    def __init__(self, hash_name: str, expected: str) -> None:
         self.hash_name = hash_name
         self.hash = hashlib.new(hash_name)
         self.expected = expected
@@ -451,13 +451,13 @@ class HashChecker(ContentChecker):
             return ContentChecker()
         return cls(**match.groupdict())
 
-    def feed(self, block):
+    def feed(self, block: bytes) -> None:
         self.hash.update(block)
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         return self.hash.hexdigest() == self.expected
 
-    def report(self, reporter, template):
+    def report(self, reporter: Callable, template: str) -> Any:
         msg = template % self.hash_name
         return reporter(msg)
 
@@ -471,8 +471,8 @@ class PackageIndex(Environment):
         hosts: Tuple[str, ...]=('*',),
         ca_bundle: Optional[str]=None,
         verify_ssl: bool = True,
-        *args,
-        **kw,
+        *args: Any,
+        **kw: Any,
     ) -> None:
         super().__init__(*args, **kw)
         self.index_url = index_url + "/"[: not index_url.endswith('/')]
@@ -485,7 +485,7 @@ class PackageIndex(Environment):
         self.to_scan: Optional[list] = []
         self.opener = urllib.request.urlopen
 
-    def add(self, dist):
+    def add(self, dist: Distribution) -> None:
         # ignore invalid versions
         try:
             parse_version(dist.version)
@@ -494,7 +494,7 @@ class PackageIndex(Environment):
         return super().add(dist)
 
     # FIXME: 'PackageIndex.process_url' is too complex (14)
-    def process_url(self, url, retrieve: bool = False) -> None:  # noqa: C901
+    def process_url(self, url: str, retrieve: bool = False) -> None:  # noqa: C901
         """Evaluate a URL as a possible download, and maybe retrieve it
 
         BEWARE: this method is patched by zc.buildout in patches.py.
@@ -596,7 +596,7 @@ class PackageIndex(Environment):
         )
         list(itertools.starmap(self.scan_egg_link, egg_links))
 
-    def scan_egg_link(self, path, entry) -> None:
+    def scan_egg_link(self, path: str, entry: str) -> None:
         content = _read_utf8_with_fallback(os.path.join(path, entry))
         # filter non-empty lines
         lines = list(filter(None, map(str.strip, content.splitlines())))
@@ -628,7 +628,7 @@ class PackageIndex(Environment):
         self.package_pages.setdefault(pkg.lower(), {})[link] = True
         return to_filename(pkg), to_filename(ver)
 
-    def process_index(self, url: str, page: str):
+    def process_index(self, url: str, page: str) -> str:
         """Process the contents of a PyPI page"""
 
         # process an index page into the package-page index
@@ -657,14 +657,14 @@ class PackageIndex(Environment):
             lambda m: '<a href="{}#md5={}">{}</a>'.format(*m.group(1, 3, 2)), page
         )
 
-    def need_version_info(self, url) -> None:
+    def need_version_info(self, url: str) -> None:
         self.scan_all(
             "Page at %s links to .py file(s) without version info; an index "
             "scan is required.",
             url,
         )
 
-    def scan_all(self, msg: Optional[str]=None, *args) -> None:
+    def scan_all(self, msg: Optional[str]=None, *args: Any) -> None:
         if self.index_url not in self.fetched_urls:
             if msg:
                 self.warn(msg, *args)
@@ -795,12 +795,12 @@ class PackageIndex(Environment):
 
     def fetch_distribution(  # noqa: C901  # is too complex (14)  # FIXME
         self,
-        requirement,
-        tmpdir,
+        requirement: Requirement,
+        tmpdir: str,
         force_scan: bool = False,
         source: bool = False,
         develop_ok: bool = False,
-        local_index=None,
+        local_index: Optional[Environment]=None,
     ) -> Distribution | None:
         """Obtain a distribution suitable for fulfilling `requirement`
 
@@ -823,7 +823,7 @@ class PackageIndex(Environment):
         skipped = set()
         dist = None
 
-        def find(req, env: Environment | None = None) -> _DownloadedDistribution | None:
+        def find(req: Requirement, env: Environment | None = None) -> _DownloadedDistribution | None:
             if env is None:
                 env = self
             # Find a matching distribution; may be called more than once
@@ -877,7 +877,7 @@ class PackageIndex(Environment):
             return dist.clone(location=dist.download_location)
 
     def fetch(
-        self, requirement, tmpdir, force_scan: bool = False, source: bool = False
+        self, requirement: Requirement, tmpdir: str, force_scan: bool = False, source: bool = False
     ) -> str | None:
         """Obtain a file suitable for fulfilling `requirement`
 
@@ -891,7 +891,7 @@ class PackageIndex(Environment):
             return dist.location
         return None
 
-    def gen_setup(self, filename, fragment, tmpdir):
+    def gen_setup(self, filename: str, fragment: str, tmpdir: str) -> str:
         match = EGG_FRAGMENT.match(fragment)
         dists = (
             match
@@ -1086,7 +1086,7 @@ class PackageIndex(Environment):
         allowed = set(['svn', 'git'] + ['hg'] * bool(sep))
         return next(iter({pre} & allowed), None)
 
-    def _download_vcs(self, url: str, spec_filename: str):
+    def _download_vcs(self, url: str, spec_filename: str) -> Optional[str]:
         vcs = self._resolve_vcs(url)
         if not vcs:
             return None
@@ -1101,11 +1101,14 @@ class PackageIndex(Environment):
         self.info(f"Doing {vcs} clone from {url} to {filename}")
         subprocess.check_call([vcs, 'clone', '--quiet', url, filename])
 
-        co_commands = dict(
-            git=[vcs, '-C', filename, 'checkout', '--quiet', rev],
-            hg=[vcs, '--cwd', filename, 'up', '-C', '-r', rev, '-q'],
-        )
         if rev is not None:
+            # Built inside the guard: the command lists embed rev, which is
+            # only a str once the None case (no '@revision' in the URL) is
+            # excluded here.
+            co_commands = dict(
+                git=[vcs, '-C', filename, 'checkout', '--quiet', rev],
+                hg=[vcs, '--cwd', filename, 'up', '-C', '-r', rev, '-q'],
+            )
             self.info(f"Checking out {rev}")
             subprocess.check_call(co_commands[vcs])
 
@@ -1129,12 +1132,12 @@ class PackageIndex(Environment):
         else:
             return filename
 
-    def _invalid_download_html(self, url, headers, filename):
+    def _invalid_download_html(self, url: str, headers: http.client.HTTPMessage, filename: str) -> NoReturn:
         os.unlink(filename)
         raise DistutilsError(f"Unexpected HTML page found at {url}")
 
     @staticmethod
-    def _vcs_split_rev_from_url(url):
+    def _vcs_split_rev_from_url(url: str) -> Tuple[str, Optional[str]]:
         """
         Given a possible VCS URL, return a clean URL and resolved revision if any.
 
@@ -1165,13 +1168,13 @@ class PackageIndex(Environment):
 
         return resolved, rev
 
-    def debug(self, msg: str, *args) -> None:
+    def debug(self, msg: str, *args: Any) -> None:
         log.debug(msg, *args)
 
-    def info(self, msg: str, *args) -> None:
+    def info(self, msg: str, *args: Any) -> None:
         log.info(msg, *args)
 
-    def warn(self, msg: str, *args) -> None:
+    def warn(self, msg: str, *args: Any) -> None:
         log.warn(msg, *args)
 
 
@@ -1180,7 +1183,7 @@ class PackageIndex(Environment):
 entity_sub = re.compile(r'&(#(\d+|x[\da-fA-F]+)|[\w.:-]+);?').sub
 
 
-def decode_entity(match):
+def decode_entity(match: re.Match[str]) -> str:
     what = match.group(0)
     return html.unescape(what)
 
@@ -1198,8 +1201,8 @@ def htmldecode(text: str) -> str:
 
 
 def socket_timeout(timeout: int=15) -> Callable:
-    def _socket_timeout(func):
-        def _socket_timeout(*args, **kwargs):
+    def _socket_timeout(func: Callable) -> Callable:
+        def _socket_timeout(*args: Any, **kwargs: Any) -> Any:
             old_timeout = socket.getdefaulttimeout()
             socket.setdefaulttimeout(timeout)
             try:
@@ -1212,7 +1215,7 @@ def socket_timeout(timeout: int=15) -> Callable:
     return _socket_timeout
 
 
-def _encode_auth(auth):
+def _encode_auth(auth: str) -> str:
     """
     Encode auth from a URL suitable for an HTTP header.
     >>> str(_encode_auth('username%3Apassword'))
@@ -1250,7 +1253,7 @@ class Credential(NamedTuple):
 
 
 class PyPIConfig(configparser.RawConfigParser):
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Load from ~/.pypirc
         """
@@ -1271,14 +1274,14 @@ class PyPIConfig(configparser.RawConfigParser):
 
         return dict(map(self._get_repo_cred, sections_with_repositories))
 
-    def _get_repo_cred(self, section):
+    def _get_repo_cred(self, section: str) -> Tuple[str, Credential]:
         repo = self.get(section, 'repository').strip()
         return repo, Credential(
             self.get(section, 'username').strip(),
             self.get(section, 'password').strip(),
         )
 
-    def find_credential(self, url: str):
+    def find_credential(self, url: str) -> Optional[Credential]:
         """
         If the URL indicated appears to be a repository defined in this
         config, return the credential for that repository.
@@ -1289,7 +1292,7 @@ class PyPIConfig(configparser.RawConfigParser):
         return None
 
 
-def open_with_auth(url, opener=urllib.request.urlopen):
+def open_with_auth(url: str, opener: Callable[..., Any]=urllib.request.urlopen) -> Any:
     """Open a urllib2 request, handling HTTP authentication"""
 
     parsed = urllib.parse.urlparse(url)
@@ -1348,7 +1351,7 @@ def _splituser(host: str) -> Tuple[Optional[str], str]:
 open_with_auth = socket_timeout(_SOCKET_TIMEOUT)(open_with_auth)
 
 
-def fix_sf_url(url):
+def fix_sf_url(url: str) -> str:
     return url  # backward compatibility
 
 
