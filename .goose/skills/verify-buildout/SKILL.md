@@ -156,6 +156,11 @@ and never substitutes for them.
      worker errors at collection with `ModuleNotFoundError` for the
      eggs, so the file reports 0 passed.
      Scoped smoke: one file, e.g. `... test_pytest_rmtree.py -q`.
+   - `make coverage` / `make coverage-pytest` — coverage variants of
+     both suites: every spawned interpreter is traced via
+     `etc/coverage/sitecustomize.py` on PYTHONPATH, then
+     `bin/coverage combine/report/html`. See
+     [`features/coverage.md`](./features/coverage.md).
 4. **Static** (type gate): `make typecheck` — Astral's ty over the
    checkout, with the repo venv as its Python environment and
    `_vendor/` excluded via `[tool.ty]` in pyproject.toml. Treat the
@@ -219,4 +224,5 @@ Proof standards:
 See [`features/README.md`](./features/README.md). Current coverage:
 install-and-inspect (hermetic core), configure-and-substitute,
 rerun-modes, project scaffolding (init/bootstrap, networked), the two
-repo test suites, and static lint (`make lint`, ruff).
+repo test suites, their coverage variants (`make coverage` /
+`make coverage-pytest`), and static lint (`make lint`, ruff).

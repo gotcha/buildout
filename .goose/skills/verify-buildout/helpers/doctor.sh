@@ -14,6 +14,7 @@ ver=$("$REPO/bin/buildout" --version 2>/dev/null | tail -1)
 
 [ -x "$REPO/bin/test" ]; check "bin/test exists (make test runner)" $?
 [ -x "$REPO/bin/py" ];   check "bin/py exists (make pytest runner)" $?
+[ -x "$REPO/bin/coverage" ]; check "bin/coverage exists (coverage combine/report)" $?
 
 pybin=$(ls -d "$REPO"/venvs/*/bin/python* 2>/dev/null | head -1)
 [ -n "$pybin" ] && [ -x "$pybin" ]; check "venvs python" $? "$pybin"
