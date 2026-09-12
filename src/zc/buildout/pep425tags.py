@@ -6,7 +6,7 @@ import warnings
 import sysconfig
 import distutils.util  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 
-from typing import Optional
+from typing import Callable, List, Optional, Tuple
 
 
 def get_config_var(var: str) -> Optional[str]:
@@ -30,7 +30,7 @@ def get_abbr_impl() -> str:
     return pyimpl
 
 
-def get_impl_ver():
+def get_impl_ver() -> str:
     """Return implementation version."""
     impl_ver = get_config_var("py_version_nodot")
     if not impl_ver or get_abbr_impl() == 'pp':
@@ -38,7 +38,7 @@ def get_impl_ver():
     return impl_ver
 
 
-def get_impl_version_info():
+def get_impl_version_info() -> Tuple[int, ...]:
     """Return sys.version_info-like tuple for use in decrementing the minor
     version."""
     if get_abbr_impl() == 'pp':
@@ -49,7 +49,7 @@ def get_impl_version_info():
         return sys.version_info[0], sys.version_info[1]
 
 
-def get_flag(var, fallback, expected=True, warn=True):
+def get_flag(var: str, fallback: Callable[[], bool], expected: object=True, warn: bool=True) -> bool:
     """Use a fallback method for determining SOABI flags if the needed config
     var is unset or unavailable."""
     val = get_config_var(var)
@@ -95,7 +95,7 @@ def get_abi_tag() -> Optional[str]:
     return abi
 
 
-def get_platform():
+def get_platform() -> str:
     """Return our platform name 'win32', 'linux_x86_64'"""
     # XXX remove distutils dependency
     result = distutils.util.get_platform().replace('.', '_').replace('-', '_')
@@ -105,7 +105,7 @@ def get_platform():
     return result
 
 
-def get_supported(versions=None, supplied_platform=None):
+def get_supported(versions: Optional[List[str]]=None, supplied_platform: Optional[str]=None) -> List[Tuple[str, str, str]]:
     """Return a list of supported tags for each version specified in
     `versions`.
 
