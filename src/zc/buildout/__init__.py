@@ -35,6 +35,8 @@ warnings.filterwarnings('ignore', category=PkgResourcesDeprecationWarning)
 warnings.filterwarnings('ignore', message='Setuptools is replacing distutils.')
 
 import sys
+import contextlib
+from typing import Any, Iterator
 import zc.buildout.patches  # NOQA
 
 
@@ -47,3 +49,21 @@ class UserError(Exception):
 
     def __str__(self) -> str:
         return " ".join(map(str, self.args))
+
+
+@contextlib.contextmanager
+def _activity(message: str, *args: Any) -> Iterator[None]:
+    """Record what buildout was doing, for error reporting.
+
+    Attaches the activity to a propagating exception: a context
+    manager's own state unwinds with the stack, but the exception
+    object travels to the handler in ``main()`` that prints it
+    (``While:`` lines). Lives in the package root so both buildout.py
+    and easy_install.py can use it without an import cycle.
+    """
+    try:
+        yield
+    except BaseException as e:
+        setattr(e, '_zc_doing',
+                getattr(e, '_zc_doing', []) + [(message, args)])
+        raise

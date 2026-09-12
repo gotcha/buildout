@@ -38,6 +38,7 @@ import subprocess
 import sys
 import tempfile
 import zc.buildout
+from zc.buildout import _activity
 import zc.buildout.download
 from typing import (
     Any, Callable, ClassVar, Dict, Iterator, List, NoReturn, Optional,
@@ -326,331 +327,331 @@ class Buildout(DictMixin):
                  use_user_defaults: bool=True,
                  command: Optional[str]=None, args: Union[Tuple[str, ...], List[str]]=()) -> None:
 
-        __doing__ = 'Initializing.'
+        with _activity('Initializing.'):
 
-        # default options
-        _buildout_default_options_copy = copy.deepcopy(
-            _buildout_default_options)
-        data: ConfigData = dict(buildout=_buildout_default_options_copy)
-        self._buildout_dir = os.getcwd()
+            # default options
+            _buildout_default_options_copy = copy.deepcopy(
+                _buildout_default_options)
+            data: ConfigData = dict(buildout=_buildout_default_options_copy)
+            self._buildout_dir = os.getcwd()
 
-        if config_file and not _isurl(config_file):
-            config_file = os.path.abspath(config_file)
-            if not os.path.exists(config_file):
-                if command == 'init':
-                    self._init_config(config_file, args)
-                elif command == 'setup':
-                    # Sigh. This model of a buildout instance
-                    # with methods is breaking down. :(
-                    config_file = None
-                    data['buildout']['directory'] = SectionKey(
-                        '.', 'COMPUTED_VALUE')
-                else:
+            if config_file and not _isurl(config_file):
+                config_file = os.path.abspath(config_file)
+                if not os.path.exists(config_file):
+                    if command == 'init':
+                        self._init_config(config_file, args)
+                    elif command == 'setup':
+                        # Sigh. This model of a buildout instance
+                        # with methods is breaking down. :(
+                        config_file = None
+                        data['buildout']['directory'] = SectionKey(
+                            '.', 'COMPUTED_VALUE')
+                    else:
+                        raise zc.buildout.UserError(
+                            "Couldn't open %s" % config_file)
+                elif command == 'init':
                     raise zc.buildout.UserError(
-                        "Couldn't open %s" % config_file)
-            elif command == 'init':
-                raise zc.buildout.UserError(
-                    "%r already exists." % config_file)
+                        "%r already exists." % config_file)
 
+                if config_file:
+                    data['buildout']['directory'] = SectionKey(
+                        os.path.dirname(config_file), 'COMPUTED_VALUE')
+
+            cloptions_dict: ConfigData = dict(
+                (section, dict((option, SectionKey(value, 'COMMAND_LINE_VALUE'))
+                               for (_, option, value) in v))
+                for (section, v) in itertools.groupby(sorted(cloptions),
+                                                      lambda v: v[0])
+                )
+            override = copy.deepcopy(cloptions_dict.get('buildout', {}))
+
+            # load user defaults, which override defaults
+            user_config = _get_user_config()
+            if use_user_defaults and os.path.exists(user_config):
+                download_options = data['buildout']
+                user_defaults, _ = _open(
+                    os.path.dirname(user_config),
+                    user_config, [], download_options,
+                    override, set(), {}
+                )
+                # A top-level _open call returns the dict form.
+                assert isinstance(user_defaults, dict)
+                for_download_options = _update(data, user_defaults)
+            else:
+                user_defaults = {}
+                for_download_options = copy.deepcopy(data)
+
+            # load configuration files
             if config_file:
-                data['buildout']['directory'] = SectionKey(
-                    os.path.dirname(config_file), 'COMPUTED_VALUE')
+                download_options = for_download_options['buildout']
+                cfg_data, _ = _open(
+                    os.path.dirname(config_file),
+                    config_file, [], download_options,
+                    override, set(), user_defaults
+                )
+                # A top-level _open call returns the dict form.
+                assert isinstance(cfg_data, dict)
+                data = _update(data, cfg_data)
 
-        cloptions_dict: ConfigData = dict(
-            (section, dict((option, SectionKey(value, 'COMMAND_LINE_VALUE'))
-                           for (_, option, value) in v))
-            for (section, v) in itertools.groupby(sorted(cloptions),
-                                                  lambda v: v[0])
-            )
-        override = copy.deepcopy(cloptions_dict.get('buildout', {}))
+            # extends from command-line
+            if 'buildout' in cloptions_dict:
+                cl_extends = cloptions_dict['buildout'].pop('extends', None)
+                if cl_extends:
+                    for extends in cl_extends.value.split():
+                        download_options = for_download_options['buildout']
+                        cfg_data, _ = _open(
+                            os.path.dirname(extends),
+                            os.path.basename(extends),
+                            [], download_options,
+                            override, set(), user_defaults
+                        )
+                        # A top-level _open call returns the dict form.
+                        assert isinstance(cfg_data, dict)
+                        data = _update(data, cfg_data)
 
-        # load user defaults, which override defaults
-        user_config = _get_user_config()
-        if use_user_defaults and os.path.exists(user_config):
-            download_options = data['buildout']
-            user_defaults, _ = _open(
-                os.path.dirname(user_config),
-                user_config, [], download_options,
-                override, set(), {}
-            )
-            # A top-level _open call returns the dict form.
-            assert isinstance(user_defaults, dict)
-            for_download_options = _update(data, user_defaults)
-        else:
-            user_defaults = {}
-            for_download_options = copy.deepcopy(data)
+            # apply command-line options
+            data = _update(data, cloptions_dict)
 
-        # load configuration files
-        if config_file:
-            download_options = for_download_options['buildout']
-            cfg_data, _ = _open(
-                os.path.dirname(config_file),
-                config_file, [], download_options,
-                override, set(), user_defaults
-            )
-            # A top-level _open call returns the dict form.
-            assert isinstance(cfg_data, dict)
-            data = _update(data, cfg_data)
+            # Set up versions section, if necessary
+            if 'versions' not in data['buildout']:
+                data['buildout']['versions'] = SectionKey(
+                    'versions', 'DEFAULT_VALUE')
+                if 'versions' not in data:
+                    data['versions'] = {}
 
-        # extends from command-line
-        if 'buildout' in cloptions_dict:
-            cl_extends = cloptions_dict['buildout'].pop('extends', None)
-            if cl_extends:
-                for extends in cl_extends.value.split():
-                    download_options = for_download_options['buildout']
-                    cfg_data, _ = _open(
-                        os.path.dirname(extends),
-                        os.path.basename(extends),
-                        [], download_options,
-                        override, set(), user_defaults
-                    )
-                    # A top-level _open call returns the dict form.
-                    assert isinstance(cfg_data, dict)
-                    data = _update(data, cfg_data)
-
-        # apply command-line options
-        data = _update(data, cloptions_dict)
-
-        # Set up versions section, if necessary
-        if 'versions' not in data['buildout']:
-            data['buildout']['versions'] = SectionKey(
-                'versions', 'DEFAULT_VALUE')
-            if 'versions' not in data:
-                data['versions'] = {}
-
-        # Default versions:
-        versions_section_name = data['buildout']['versions'].value
-        if versions_section_name:
-            versions = data[versions_section_name]
-        else:
-            versions = {}
-        if 'zc.buildout' not in versions:
-            # Prevent downgrading of zc.buildout itself due to prefer-final.
-            ws = pkg_resources.working_set
-            dist = ws.find(
-                pkg_resources.Requirement.parse('zc-buildout')
-            )
-            if dist is None:
-                # older setuptools
+            # Default versions:
+            versions_section_name = data['buildout']['versions'].value
+            if versions_section_name:
+                versions = data[versions_section_name]
+            else:
+                versions = {}
+            if 'zc.buildout' not in versions:
+                # Prevent downgrading of zc.buildout itself due to prefer-final.
+                ws = pkg_resources.working_set
                 dist = ws.find(
-                    pkg_resources.Requirement.parse('zc.buildout')
+                    pkg_resources.Requirement.parse('zc-buildout')
                 )
                 if dist is None:
-                    # This would be really strange, but I prefer an explicit
-                    # failure here over an unclear error later.
-                    raise ValueError(
-                        "Could not find distribution for zc.buildout in working set."
+                    # older setuptools
+                    dist = ws.find(
+                        pkg_resources.Requirement.parse('zc.buildout')
                     )
-            minimum = dist.version
-            versions['zc.buildout'] = SectionKey(f'>={minimum}', 'DEFAULT_VALUE')
-        if 'zc.recipe.egg' not in versions:
-            # zc.buildout and zc.recipe egg are closely linked, but zc.buildout
-            # does NOT depend on it: we do not want to add it to our
-            # install_requires.  (One could debate why, although one answer
-            # would be to avoid a circular dependency.  Maybe we could merge them,
-            # as I see no use case for Buildout without recipes.  But we would
-            # need to update the zc.recipe.egg test setup first.)
-            #
-            # Anyway: we use a different way to set a minimum version.
-            # Originally (in 2013, zc.buildout 2.0.0b1) we made sure
-            # zc.recipe.egg>=2.0.0a3 was pinned, mostly to avoid problems
-            # when prefer-final is true.
-            # Later (in 2018, zc.buildout 2.12.1) we updated the minimum version
-            # to 2.0.6, to avoid a KeyError: 'allow-unknown-extras'.
-            # See https://github.com/buildout/buildout/pull/461
-            # I wonder if we really need a minimum version, as older versions
-            # are unlikely to even be installable by supported Python versions.
-            # But if we ever really need a more recent minimum version,
-            # it is easy to update a version here.
-            versions['zc.recipe.egg'] = SectionKey('>=2.0.6', 'DEFAULT_VALUE')
+                    if dist is None:
+                        # This would be really strange, but I prefer an explicit
+                        # failure here over an unclear error later.
+                        raise ValueError(
+                            "Could not find distribution for zc.buildout in working set."
+                        )
+                minimum = dist.version
+                versions['zc.buildout'] = SectionKey(f'>={minimum}', 'DEFAULT_VALUE')
+            if 'zc.recipe.egg' not in versions:
+                # zc.buildout and zc.recipe egg are closely linked, but zc.buildout
+                # does NOT depend on it: we do not want to add it to our
+                # install_requires.  (One could debate why, although one answer
+                # would be to avoid a circular dependency.  Maybe we could merge them,
+                # as I see no use case for Buildout without recipes.  But we would
+                # need to update the zc.recipe.egg test setup first.)
+                #
+                # Anyway: we use a different way to set a minimum version.
+                # Originally (in 2013, zc.buildout 2.0.0b1) we made sure
+                # zc.recipe.egg>=2.0.0a3 was pinned, mostly to avoid problems
+                # when prefer-final is true.
+                # Later (in 2018, zc.buildout 2.12.1) we updated the minimum version
+                # to 2.0.6, to avoid a KeyError: 'allow-unknown-extras'.
+                # See https://github.com/buildout/buildout/pull/461
+                # I wonder if we really need a minimum version, as older versions
+                # are unlikely to even be installable by supported Python versions.
+                # But if we ever really need a more recent minimum version,
+                # it is easy to update a version here.
+                versions['zc.recipe.egg'] = SectionKey('>=2.0.6', 'DEFAULT_VALUE')
 
-        # Absolutize some particular directory, handling also the ~/foo form,
-        # and considering the location of the configuration file that generated
-        # the setting as the base path, falling back to the main configuration
-        # file location
-        for name in ('download-cache', 'eggs-directory', 'extends-cache'):
-            if name in data['buildout']:
-                sectionkey = data['buildout'][name]
-                origdir = sectionkey.value
-                src = sectionkey.source
-                if '${' in origdir:
-                    continue
-                if not os.path.isabs(origdir):
-                    if src in ('DEFAULT_VALUE',
-                               'COMPUTED_VALUE',
-                               'COMMAND_LINE_VALUE'):
-                        if 'directory' in data['buildout']:
-                            basedir = data['buildout']['directory'].value
+            # Absolutize some particular directory, handling also the ~/foo form,
+            # and considering the location of the configuration file that generated
+            # the setting as the base path, falling back to the main configuration
+            # file location
+            for name in ('download-cache', 'eggs-directory', 'extends-cache'):
+                if name in data['buildout']:
+                    sectionkey = data['buildout'][name]
+                    origdir = sectionkey.value
+                    src = sectionkey.source
+                    if '${' in origdir:
+                        continue
+                    if not os.path.isabs(origdir):
+                        if src in ('DEFAULT_VALUE',
+                                   'COMPUTED_VALUE',
+                                   'COMMAND_LINE_VALUE'):
+                            if 'directory' in data['buildout']:
+                                basedir = data['buildout']['directory'].value
+                            else:
+                                basedir = self._buildout_dir
                         else:
-                            basedir = self._buildout_dir
-                    else:
-                        if _isurl(src):
-                            raise zc.buildout.UserError(
-                                'Setting "%s" to a non absolute location ("%s") '
-                                'within a\n'
-                                'remote configuration file ("%s") is ambiguous.' % (
-                                    name, origdir, src))
-                        basedir = os.path.dirname(src)
-                    absdir = os.path.expanduser(origdir)
-                    if not os.path.isabs(absdir):
-                        absdir = os.path.join(basedir, absdir)
-                    absdir = os.path.abspath(absdir)
-                    sectionkey.setDirectory(absdir)
+                            if _isurl(src):
+                                raise zc.buildout.UserError(
+                                    'Setting "%s" to a non absolute location ("%s") '
+                                    'within a\n'
+                                    'remote configuration file ("%s") is ambiguous.' % (
+                                        name, origdir, src))
+                            basedir = os.path.dirname(src)
+                        absdir = os.path.expanduser(origdir)
+                        if not os.path.isabs(absdir):
+                            absdir = os.path.join(basedir, absdir)
+                        absdir = os.path.abspath(absdir)
+                        sectionkey.setDirectory(absdir)
 
-        self._annotated = copy.deepcopy(data)
-        self._raw = _unannotate(data)
-        self._data = {}
-        self._parts = []
+            self._annotated = copy.deepcopy(data)
+            self._raw = _unannotate(data)
+            self._data = {}
+            self._parts = []
 
-        # provide some defaults before options are parsed
-        # because while parsing options those attributes might be
-        # used already (Gottfried Ganssauge)
-        buildout_section = self._raw['buildout']
+            # provide some defaults before options are parsed
+            # because while parsing options those attributes might be
+            # used already (Gottfried Ganssauge)
+            buildout_section = self._raw['buildout']
 
-        # Try to make sure we have absolute paths for standard
-        # directories. We do this before doing substitutions, in case
-        # a one of these gets read by another section.  If any
-        # variable references are used though, we leave it as is in
-        # _buildout_path.
-        if 'directory' in buildout_section:
-            self._buildout_dir = buildout_section['directory']
+            # Try to make sure we have absolute paths for standard
+            # directories. We do this before doing substitutions, in case
+            # a one of these gets read by another section.  If any
+            # variable references are used though, we leave it as is in
+            # _buildout_path.
+            if 'directory' in buildout_section:
+                self._buildout_dir = buildout_section['directory']
+                for name in ('bin', 'parts', 'eggs', 'develop-eggs'):
+                    d = self._buildout_path(buildout_section[name+'-directory'])
+                    buildout_section[name+'-directory'] = d
+
+            # Attributes on this buildout object shouldn't be used by
+            # recipes in their __init__.  It can cause bugs, because the
+            # recipes will be instantiated below (``options = self['buildout']``)
+            # before this has completed initializing.  These attributes are
+            # left behind for legacy support but recipe authors should
+            # beware of using them.  A better practice is for a recipe to
+            # use the buildout['buildout'] options.
+            links = buildout_section['find-links']
+            self._links = links and links.split() or ()
+            allow_hosts = buildout_section['allow-hosts'].split('\n')
+            self._allow_hosts = tuple([host.strip() for host in allow_hosts
+                                       if host.strip() != ''])
+            self._logger = logging.getLogger('zc.buildout')
+            self.offline = bool_option(buildout_section, 'offline')
+            self.newest = ((not self.offline) and
+                           bool_option(buildout_section, 'newest')
+                           )
+
+            ##################################################################
+            ## WARNING!!!
+            ## ALL ATTRIBUTES MUST HAVE REASONABLE DEFAULTS AT THIS POINT
+            ## OTHERWISE ATTRIBUTEERRORS MIGHT HAPPEN ANY TIME FROM RECIPES.
+            ## RECIPES SHOULD GENERALLY USE buildout['buildout'] OPTIONS, NOT
+            ## BUILDOUT ATTRIBUTES.
+            ##################################################################
+            # initialize some attrs and buildout directories.
+            options = self['buildout']
+
+            # now reinitialize
+            links = options.get('find-links', '')
+            self._links = links and links.split() or ()
+
+            allow_hosts = options['allow-hosts'].split('\n')
+            self._allow_hosts = tuple([host.strip() for host in allow_hosts
+                                       if host.strip() != ''])
+
+            self._buildout_dir = options['directory']
+
+            # Make sure we have absolute paths for standard directories.  We do this
+            # a second time here in case someone overrode these in their configs.
             for name in ('bin', 'parts', 'eggs', 'develop-eggs'):
-                d = self._buildout_path(buildout_section[name+'-directory'])
-                buildout_section[name+'-directory'] = d
+                d = self._buildout_path(options[name+'-directory'])
+                options[name+'-directory'] = d
 
-        # Attributes on this buildout object shouldn't be used by
-        # recipes in their __init__.  It can cause bugs, because the
-        # recipes will be instantiated below (``options = self['buildout']``)
-        # before this has completed initializing.  These attributes are
-        # left behind for legacy support but recipe authors should
-        # beware of using them.  A better practice is for a recipe to
-        # use the buildout['buildout'] options.
-        links = buildout_section['find-links']
-        self._links = links and links.split() or ()
-        allow_hosts = buildout_section['allow-hosts'].split('\n')
-        self._allow_hosts = tuple([host.strip() for host in allow_hosts
-                                   if host.strip() != ''])
-        self._logger = logging.getLogger('zc.buildout')
-        self.offline = bool_option(buildout_section, 'offline')
-        self.newest = ((not self.offline) and
-                       bool_option(buildout_section, 'newest')
-                       )
+            if options['installed']:
+                options['installed'] = os.path.join(options['directory'],
+                                                    options['installed'])
 
-        ##################################################################
-        ## WARNING!!!
-        ## ALL ATTRIBUTES MUST HAVE REASONABLE DEFAULTS AT THIS POINT
-        ## OTHERWISE ATTRIBUTEERRORS MIGHT HAPPEN ANY TIME FROM RECIPES.
-        ## RECIPES SHOULD GENERALLY USE buildout['buildout'] OPTIONS, NOT
-        ## BUILDOUT ATTRIBUTES.
-        ##################################################################
-        # initialize some attrs and buildout directories.
-        options = self['buildout']
+            self._setup_logging()
+            self._setup_socket_timeout()
 
-        # now reinitialize
-        links = options.get('find-links', '')
-        self._links = links and links.split() or ()
+            # finish w versions
+            if versions_section_name:
+                # refetching section name just to avoid a warning
+                versions = self[versions_section_name]
+            else:
+                # remove annotations
+                versions = dict((k, v.value) for (k, v) in versions.items())
+            options['versions'] # refetching section name just to avoid a warning
+            self.versions = versions
+            zc.buildout.easy_install.default_versions(versions)
 
-        allow_hosts = options['allow-hosts'].split('\n')
-        self._allow_hosts = tuple([host.strip() for host in allow_hosts
-                                   if host.strip() != ''])
+            zc.buildout.easy_install.prefer_final(
+                bool_option(options, 'prefer-final'))
+            zc.buildout.easy_install.use_dependency_links(
+                bool_option(options, 'use-dependency-links'))
+            zc.buildout.easy_install.index_url(options.get('index', '').strip())
+            zc.buildout.easy_install.allow_picked_versions(
+                    bool_option(options, 'allow-picked-versions'))
+            self.show_picked_versions = bool_option(options,
+                                                    'show-picked-versions')
+            self.update_versions_file = options['update-versions-file']
+            zc.buildout.easy_install.store_required_by(self.show_picked_versions or
+                                                       self.update_versions_file)
 
-        self._buildout_dir = options['directory']
+            download_cache = options.get('download-cache')
+            extends_cache = options.get('extends-cache')
 
-        # Make sure we have absolute paths for standard directories.  We do this
-        # a second time here in case someone overrode these in their configs.
-        for name in ('bin', 'parts', 'eggs', 'develop-eggs'):
-            d = self._buildout_path(options[name+'-directory'])
-            options[name+'-directory'] = d
+            # Since zc.buildout version 5 we maintain separate directories for each
+            # buildout eggs format version.  Current idea: we use v5 from zc.buildout
+            # 5.x onwards.  Later versions will likely also use v5, as the current
+            # expectation is that they will be compatible, just like zc.buildout
+            # 1.x through 4.x are compatible.
+            # If you know what you are doing, you can set eggs-directory-version to
+            # an empty string.  This can be fine if you don't have any previous eggs
+            # and only use zc.buildout 5 or later.  It should also be fine in case
+            # you don't use any namespace packages; but you would be wrong, because
+            # you are using zc.buildout and probably zc.recipe.egg, so you use the
+            # zc namespace.  Still, if those are the only two packages, it might
+            # possibly work.
+            if options['eggs-directory-version']:
+                options['eggs-directory'] = os.path.join(
+                    options['eggs-directory'], options['eggs-directory-version'])
 
-        if options['installed']:
-            options['installed'] = os.path.join(options['directory'],
-                                                options['installed'])
+            if bool_option(options, 'abi-tag-eggs', 'false'):
+                from zc.buildout.pep425tags import get_abi_tag
+                abi_tag = get_abi_tag()
+                # get_abi_tag() only returns None on platforms without a known
+                # ABI tag, where joining it into a path would fail anyway.
+                assert abi_tag is not None
+                options['eggs-directory'] = os.path.join(
+                    options['eggs-directory'], abi_tag)
 
-        self._setup_logging()
-        self._setup_socket_timeout()
+            eggs_cache = options.get('eggs-directory')
 
-        # finish w versions
-        if versions_section_name:
-            # refetching section name just to avoid a warning
-            versions = self[versions_section_name]
-        else:
-            # remove annotations
-            versions = dict((k, v.value) for (k, v) in versions.items())
-        options['versions'] # refetching section name just to avoid a warning
-        self.versions = versions
-        zc.buildout.easy_install.default_versions(versions)
+            for cache in [download_cache, extends_cache, eggs_cache]:
+                if cache:
+                    cache = os.path.join(options['directory'], cache)
+                    if not os.path.exists(cache):
+                        self._logger.info('Creating directory %r.', cache)
+                        os.makedirs(cache)
 
-        zc.buildout.easy_install.prefer_final(
-            bool_option(options, 'prefer-final'))
-        zc.buildout.easy_install.use_dependency_links(
-            bool_option(options, 'use-dependency-links'))
-        zc.buildout.easy_install.index_url(options.get('index', '').strip())
-        zc.buildout.easy_install.allow_picked_versions(
-                bool_option(options, 'allow-picked-versions'))
-        self.show_picked_versions = bool_option(options,
-                                                'show-picked-versions')
-        self.update_versions_file = options['update-versions-file']
-        zc.buildout.easy_install.store_required_by(self.show_picked_versions or
-                                                   self.update_versions_file)
+            if download_cache:
+                # Actually, we want to use a subdirectory in there called 'dist'.
+                download_cache = os.path.join(download_cache, 'dist')
+                if not os.path.exists(download_cache):
+                    os.mkdir(download_cache)
+                zc.buildout.easy_install.download_cache(download_cache)
 
-        download_cache = options.get('download-cache')
-        extends_cache = options.get('extends-cache')
+            if bool_option(options, 'install-from-cache'):
+                if self.offline:
+                    raise zc.buildout.UserError(
+                        "install-from-cache can't be used with offline mode.\n"
+                        "Nothing is installed, even from cache, in offline\n"
+                        "mode, which might better be called 'no-install mode'.\n"
+                        )
+                zc.buildout.easy_install.install_from_cache(True)
 
-        # Since zc.buildout version 5 we maintain separate directories for each
-        # buildout eggs format version.  Current idea: we use v5 from zc.buildout
-        # 5.x onwards.  Later versions will likely also use v5, as the current
-        # expectation is that they will be compatible, just like zc.buildout
-        # 1.x through 4.x are compatible.
-        # If you know what you are doing, you can set eggs-directory-version to
-        # an empty string.  This can be fine if you don't have any previous eggs
-        # and only use zc.buildout 5 or later.  It should also be fine in case
-        # you don't use any namespace packages; but you would be wrong, because
-        # you are using zc.buildout and probably zc.recipe.egg, so you use the
-        # zc namespace.  Still, if those are the only two packages, it might
-        # possibly work.
-        if options['eggs-directory-version']:
-            options['eggs-directory'] = os.path.join(
-                options['eggs-directory'], options['eggs-directory-version'])
+            # "Use" each of the defaults so they aren't reported as unused options.
+            for name in _buildout_default_options:
+                options[name]
 
-        if bool_option(options, 'abi-tag-eggs', 'false'):
-            from zc.buildout.pep425tags import get_abi_tag
-            abi_tag = get_abi_tag()
-            # get_abi_tag() only returns None on platforms without a known
-            # ABI tag, where joining it into a path would fail anyway.
-            assert abi_tag is not None
-            options['eggs-directory'] = os.path.join(
-                options['eggs-directory'], abi_tag)
-
-        eggs_cache = options.get('eggs-directory')
-
-        for cache in [download_cache, extends_cache, eggs_cache]:
-            if cache:
-                cache = os.path.join(options['directory'], cache)
-                if not os.path.exists(cache):
-                    self._logger.info('Creating directory %r.', cache)
-                    os.makedirs(cache)
-
-        if download_cache:
-            # Actually, we want to use a subdirectory in there called 'dist'.
-            download_cache = os.path.join(download_cache, 'dist')
-            if not os.path.exists(download_cache):
-                os.mkdir(download_cache)
-            zc.buildout.easy_install.download_cache(download_cache)
-
-        if bool_option(options, 'install-from-cache'):
-            if self.offline:
-                raise zc.buildout.UserError(
-                    "install-from-cache can't be used with offline mode.\n"
-                    "Nothing is installed, even from cache, in offline\n"
-                    "mode, which might better be called 'no-install mode'.\n"
-                    )
-            zc.buildout.easy_install.install_from_cache(True)
-
-        # "Use" each of the defaults so they aren't reported as unused options.
-        for name in _buildout_default_options:
-            options[name]
-
-        os.chdir(options['directory'])
+            os.chdir(options['directory'])
 
     def _buildout_path(self, name: str) -> str:
         if '${' in name:
@@ -659,57 +660,57 @@ class Buildout(DictMixin):
 
     @command
     def bootstrap(self, args: Union[List[str], Tuple[str, ...]]) -> None:
-        __doing__ = 'Bootstrapping.'
+        with _activity('Bootstrapping.'):
 
-        if os.path.exists(self['buildout']['develop-eggs-directory']):
-            if os.path.isdir(self['buildout']['develop-eggs-directory']):
-                rmtree(self['buildout']['develop-eggs-directory'])
-                self._logger.debug(
-                    "Removed existing develop-eggs directory")
+            if os.path.exists(self['buildout']['develop-eggs-directory']):
+                if os.path.isdir(self['buildout']['develop-eggs-directory']):
+                    rmtree(self['buildout']['develop-eggs-directory'])
+                    self._logger.debug(
+                        "Removed existing develop-eggs directory")
 
-        self._setup_directories()
+            self._setup_directories()
 
-        # Now copy buildout and setuptools eggs, and record destination eggs:
-        entries = []
-        for dist in zc.buildout.easy_install.buildout_and_setuptools_dists:
-            # These are the dists running the current buildout, so they
-            # always live on disk.
-            location = zc.buildout.easy_install._dist_location(dist)
-            if dist.precedence == pkg_resources.DEVELOP_DIST:
-                dest = os.path.join(self['buildout']['develop-eggs-directory'],
-                                    dist.key + '.egg-link')
-                with open(dest, 'w') as fh:
-                    fh.write(location)
-                entries.append(location)
-            else:
-                dest = os.path.join(self['buildout']['eggs-directory'],
-                                    os.path.basename(location))
-                entries.append(dest)
-                if not os.path.exists(dest):
-                    if os.path.isdir(location):
-                        shutil.copytree(location, dest)
-                    else:
-                        shutil.copy2(location, dest)
+            # Now copy buildout and setuptools eggs, and record destination eggs:
+            entries = []
+            for dist in zc.buildout.easy_install.buildout_and_setuptools_dists:
+                # These are the dists running the current buildout, so they
+                # always live on disk.
+                location = zc.buildout.easy_install._dist_location(dist)
+                if dist.precedence == pkg_resources.DEVELOP_DIST:
+                    dest = os.path.join(self['buildout']['develop-eggs-directory'],
+                                        dist.key + '.egg-link')
+                    with open(dest, 'w') as fh:
+                        fh.write(location)
+                    entries.append(location)
+                else:
+                    dest = os.path.join(self['buildout']['eggs-directory'],
+                                        os.path.basename(location))
+                    entries.append(dest)
+                    if not os.path.exists(dest):
+                        if os.path.isdir(location):
+                            shutil.copytree(location, dest)
+                        else:
+                            shutil.copy2(location, dest)
 
-        # Create buildout script
-        ws = pkg_resources.WorkingSet(entries)
-        ws.require('zc.buildout')
-        options = self['buildout']
-        eggs_dir = options['eggs-directory']
-        develop_eggs_dir = options['develop-eggs-directory']
-        ws = zc.buildout.easy_install.sort_working_set(
-                ws,
-                eggs_dir=eggs_dir,
-                develop_eggs_dir=develop_eggs_dir
+            # Create buildout script
+            ws = pkg_resources.WorkingSet(entries)
+            ws.require('zc.buildout')
+            options = self['buildout']
+            eggs_dir = options['eggs-directory']
+            develop_eggs_dir = options['develop-eggs-directory']
+            ws = zc.buildout.easy_install.sort_working_set(
+                    ws,
+                    eggs_dir=eggs_dir,
+                    develop_eggs_dir=develop_eggs_dir
+                    )
+            zc.buildout.easy_install.scripts(
+                ['zc.buildout'], ws, sys.executable,
+                options['bin-directory'],
+                relative_paths = (
+                    bool_option(options, 'relative-paths', False)
+                    and options['directory']
+                    or ''),
                 )
-        zc.buildout.easy_install.scripts(
-            ['zc.buildout'], ws, sys.executable,
-            options['bin-directory'],
-            relative_paths = (
-                bool_option(options, 'relative-paths', False)
-                and options['directory']
-                or ''),
-            )
 
     def _init_config(self, config_file: str, args: Union[Tuple[str, ...], List[str]]) -> None:
         print_('Creating %r.' % config_file)
@@ -749,117 +750,117 @@ class Buildout(DictMixin):
 
     @command
     def install(self, install_args: Union[List[str], Tuple[str, ...]]) -> None:
-        __doing__ = 'Installing.'
+        with _activity('Installing.'):
 
-        self._load_extensions()
-        self._setup_directories()
+            self._load_extensions()
+            self._setup_directories()
 
-        # Add develop-eggs directory to path so that it gets searched
-        # for eggs:
-        sys.path.insert(0, self['buildout']['develop-eggs-directory'])
+            # Add develop-eggs directory to path so that it gets searched
+            # for eggs:
+            sys.path.insert(0, self['buildout']['develop-eggs-directory'])
 
-        # Check for updates. This could cause the process to be restarted
-        self._maybe_upgrade()
+            # Check for updates. This could cause the process to be restarted
+            self._maybe_upgrade()
 
-        # load installed data
-        (installed_part_options, installed_exists
-         )= self._read_installed_part_options()
+            # load installed data
+            (installed_part_options, installed_exists
+             )= self._read_installed_part_options()
 
-        # Build develop eggs, reusing the egg-links of sources whose
-        # packaging metadata is unchanged, and removing the egg-links
-        # of sources no longer being developed.
-        installed_develop_eggs = self._develop(
-            installed_part_options['buildout'].get(
-                'installed_develop_eggs', '')
-            )
-        installed_part_options['buildout']['installed_develop_eggs'
-                                           ] = installed_develop_eggs
-
-        if installed_exists:
-            self._update_installed(
-                installed_develop_eggs=installed_develop_eggs)
-
-        # get configured and installed part lists
-        conf_parts = self['buildout']['parts']
-        conf_parts = conf_parts.split() if conf_parts else []
-        installed_parts = installed_part_options['buildout']['parts']
-        installed_parts = (installed_parts.split()
-                           if installed_parts else [])
-
-        if install_args:
-            install_parts = install_args
-            uninstall_missing = False
-        else:
-            install_parts = conf_parts
-            uninstall_missing = True
-
-        # load and initialize recipes
-        [self[part]['recipe'] for part in install_parts]
-        if not install_args:
-            install_parts = self._parts
-
-        if self._log_level < logging.DEBUG:
-            sections = list(self)
-            sections.sort()
-            print_()
-            print_('Configuration data:')
-            for section in sorted(self._data):
-                _save_options(section, self[section], sys.stdout)
-            print_()
-
-
-        # compute new part recipe signatures
-        self._compute_part_signatures(install_parts)
-
-        # uninstall parts that are no-longer used or who's configs
-        # have changed
-        for part in reversed(installed_parts):
-            if part in install_parts:
-                old_options = installed_part_options[part].copy()
-                installed_files = old_options.pop('__buildout_installed__')
-                new_options = self.get(part)
-                # part is in install_parts, whose sections were all loaded
-                # above, so the section exists.
-                assert new_options is not None
-                if old_options == new_options:
-                    # The options are the same, but are all of the
-                    # installed files still there?  If not, we should
-                    # reinstall.
-                    if not installed_files:
-                        continue
-                    for f in installed_files.split('\n'):
-                        if not os.path.exists(self._buildout_path(f)):
-                            break
-                    else:
-                        continue
-
-                # output debugging info
-                if self._logger.getEffectiveLevel() < logging.DEBUG:
-                    for k in old_options:
-                        if k not in new_options:
-                            self._logger.debug("Part %s, dropped option %s.",
-                                               part, k)
-                        elif old_options[k] != new_options[k]:
-                            self._logger.debug(
-                                "Part %s, option %s changed:\n%r != %r",
-                                part, k, new_options[k], old_options[k],
-                                )
-                    for k in new_options:
-                        if k not in old_options:
-                            self._logger.debug("Part %s, new option %s.",
-                                               part, k)
-
-            elif not uninstall_missing:
-                continue
-
-            self._uninstall_part(part, installed_part_options)
-            installed_parts = [p for p in installed_parts if p != part]
+            # Build develop eggs, reusing the egg-links of sources whose
+            # packaging metadata is unchanged, and removing the egg-links
+            # of sources no longer being developed.
+            installed_develop_eggs = self._develop(
+                installed_part_options['buildout'].get(
+                    'installed_develop_eggs', '')
+                )
+            installed_part_options['buildout']['installed_develop_eggs'
+                                               ] = installed_develop_eggs
 
             if installed_exists:
-                self._update_installed(parts=' '.join(installed_parts))
+                self._update_installed(
+                    installed_develop_eggs=installed_develop_eggs)
 
-        # Check for unused buildout options:
-        _check_for_unused_options_in_section(self, 'buildout')
+            # get configured and installed part lists
+            conf_parts = self['buildout']['parts']
+            conf_parts = conf_parts.split() if conf_parts else []
+            installed_parts = installed_part_options['buildout']['parts']
+            installed_parts = (installed_parts.split()
+                               if installed_parts else [])
+
+            if install_args:
+                install_parts = install_args
+                uninstall_missing = False
+            else:
+                install_parts = conf_parts
+                uninstall_missing = True
+
+            # load and initialize recipes
+            [self[part]['recipe'] for part in install_parts]
+            if not install_args:
+                install_parts = self._parts
+
+            if self._log_level < logging.DEBUG:
+                sections = list(self)
+                sections.sort()
+                print_()
+                print_('Configuration data:')
+                for section in sorted(self._data):
+                    _save_options(section, self[section], sys.stdout)
+                print_()
+
+
+            # compute new part recipe signatures
+            self._compute_part_signatures(install_parts)
+
+            # uninstall parts that are no-longer used or who's configs
+            # have changed
+            for part in reversed(installed_parts):
+                if part in install_parts:
+                    old_options = installed_part_options[part].copy()
+                    installed_files = old_options.pop('__buildout_installed__')
+                    new_options = self.get(part)
+                    # part is in install_parts, whose sections were all loaded
+                    # above, so the section exists.
+                    assert new_options is not None
+                    if old_options == new_options:
+                        # The options are the same, but are all of the
+                        # installed files still there?  If not, we should
+                        # reinstall.
+                        if not installed_files:
+                            continue
+                        for f in installed_files.split('\n'):
+                            if not os.path.exists(self._buildout_path(f)):
+                                break
+                        else:
+                            continue
+
+                    # output debugging info
+                    if self._logger.getEffectiveLevel() < logging.DEBUG:
+                        for k in old_options:
+                            if k not in new_options:
+                                self._logger.debug("Part %s, dropped option %s.",
+                                                   part, k)
+                            elif old_options[k] != new_options[k]:
+                                self._logger.debug(
+                                    "Part %s, option %s changed:\n%r != %r",
+                                    part, k, new_options[k], old_options[k],
+                                    )
+                        for k in new_options:
+                            if k not in old_options:
+                                self._logger.debug("Part %s, new option %s.",
+                                                   part, k)
+
+                elif not uninstall_missing:
+                    continue
+
+                self._uninstall_part(part, installed_part_options)
+                installed_parts = [p for p in installed_parts if p != part]
+
+                if installed_exists:
+                    self._update_installed(parts=' '.join(installed_parts))
+
+            # Check for unused buildout options:
+            _check_for_unused_options_in_section(self, 'buildout')
 
         # install new parts
         for part in install_parts:
@@ -868,62 +869,62 @@ class Buildout(DictMixin):
             recipe = self[part].recipe
             if part in installed_parts: # update
                 need_to_save_installed = False
-                __doing__ = 'Updating %s.', part
-                self._logger.info(*__doing__)
-                old_options = installed_part_options[part]
-                old_installed_files = old_options['__buildout_installed__']
+                with _activity('Updating %s.', part):
+                    self._logger.info('Updating %s.', part)
+                    old_options = installed_part_options[part]
+                    old_installed_files = old_options['__buildout_installed__']
 
-                try:
-                    update = recipe.update
-                except AttributeError:
-                    update = recipe.install
-                    self._logger.warning(
-                        "The recipe for %s doesn't define an update "
-                        "method. Using its install method.",
-                        part)
+                    try:
+                        update = recipe.update
+                    except AttributeError:
+                        update = recipe.install
+                        self._logger.warning(
+                            "The recipe for %s doesn't define an update "
+                            "method. Using its install method.",
+                            part)
 
-                try:
-                    installed_files = self[part]._call(update)
-                except Exception:
-                    installed_parts.remove(part)
-                    self._uninstall(old_installed_files)
-                    if installed_exists:
-                        self._update_installed(
-                            parts=' '.join(installed_parts))
-                    raise
+                    try:
+                        installed_files = self[part]._call(update)
+                    except Exception:
+                        installed_parts.remove(part)
+                        self._uninstall(old_installed_files)
+                        if installed_exists:
+                            self._update_installed(
+                                parts=' '.join(installed_parts))
+                        raise
 
-                old_installed_files = old_installed_files.split('\n')
-                if installed_files is None:
-                    installed_files = old_installed_files
-                else:
-                    if isinstance(installed_files, str):
-                        installed_files = [installed_files]
+                    old_installed_files = old_installed_files.split('\n')
+                    if installed_files is None:
+                        installed_files = old_installed_files
                     else:
-                        installed_files = list(installed_files)
+                        if isinstance(installed_files, str):
+                            installed_files = [installed_files]
+                        else:
+                            installed_files = list(installed_files)
 
-                    need_to_save_installed = [
-                        p for p in installed_files
-                        if p not in old_installed_files]
+                        need_to_save_installed = [
+                            p for p in installed_files
+                            if p not in old_installed_files]
 
-                    if need_to_save_installed:
-                        installed_files = (old_installed_files
-                                           + need_to_save_installed)
+                        if need_to_save_installed:
+                            installed_files = (old_installed_files
+                                               + need_to_save_installed)
 
             else: # install
                 need_to_save_installed = True
-                __doing__ = 'Installing %s.', part
-                self._logger.info(*__doing__)
-                installed_files = self[part]._call(recipe.install)
-                if installed_files is None:
-                    self._logger.warning(
-                        "The %s install returned None.  A path or "
-                        "iterable os paths should be returned.",
-                        part)
-                    installed_files = ()
-                elif isinstance(installed_files, str):
-                    installed_files = [installed_files]
-                else:
-                    installed_files = list(installed_files)
+                with _activity('Installing %s.', part):
+                    self._logger.info('Installing %s.', part)
+                    installed_files = self[part]._call(recipe.install)
+                    if installed_files is None:
+                        self._logger.warning(
+                            "The %s install returned None.  A path or "
+                            "iterable os paths should be returned.",
+                            part)
+                        installed_files = ()
+                    elif isinstance(installed_files, str):
+                        installed_files = [installed_files]
+                    else:
+                        installed_files = list(installed_files)
 
             installed_part_options[part] = saved_options
             saved_options['__buildout_installed__'
@@ -964,32 +965,32 @@ class Buildout(DictMixin):
 
     def _uninstall_part(self, part: str, installed_part_options: Dict[str, Union['Options', Dict[str, str]]]) -> None:
         # uninstall part
-        __doing__ = 'Uninstalling %s.', part
-        self._logger.info(*__doing__)
+        with _activity('Uninstalling %s.', part):
+            self._logger.info('Uninstalling %s.', part)
 
-        # run uninstall recipe
-        recipe, entry = _recipe(installed_part_options[part])
-        try:
-            uninstaller = _install_and_load(
-                recipe, 'zc.buildout.uninstall', entry, self)
-            self._logger.info('Running uninstall recipe.')
-            uninstaller(part, installed_part_options[part])
-        except (ImportError, pkg_resources.DistributionNotFound):
-            pass
+            # run uninstall recipe
+            recipe, entry = _recipe(installed_part_options[part])
+            try:
+                uninstaller = _install_and_load(
+                    recipe, 'zc.buildout.uninstall', entry, self)
+                self._logger.info('Running uninstall recipe.')
+                uninstaller(part, installed_part_options[part])
+            except (ImportError, pkg_resources.DistributionNotFound):
+                pass
 
-        # remove created files and directories
-        self._uninstall(
-            installed_part_options[part]['__buildout_installed__'])
+            # remove created files and directories
+            self._uninstall(
+                installed_part_options[part]['__buildout_installed__'])
 
     def _setup_directories(self) -> None:
-        __doing__ = 'Setting up buildout directories'
+        with _activity('Setting up buildout directories'):
 
-        # Create buildout directories
-        for name in ('bin', 'parts', 'develop-eggs'):
-            d = self['buildout'][name+'-directory']
-            if not os.path.exists(d):
-                self._logger.info('Creating directory %r.', d)
-                os.mkdir(d)
+            # Create buildout directories
+            for name in ('bin', 'parts', 'develop-eggs'):
+                d = self['buildout'][name+'-directory']
+                if not os.path.exists(d):
+                    self._logger.info('Creating directory %r.', d)
+                    os.mkdir(d)
 
     def _develop(self, previously_installed: str='') -> str:
         """Install sources by running in editable mode.
@@ -1011,44 +1012,44 @@ class Buildout(DictMixin):
         find reusable egg-links and to remove egg-links of sources that are
         no longer listed in the ``develop`` option.
         """
-        __doing__ = 'Processing directories listed in the develop option'
+        with _activity('Processing directories listed in the develop option'):
 
-        develop = self['buildout'].get('develop')
-        if not develop:
-            self._uninstall(previously_installed)
-            return ''
+            develop = self['buildout'].get('develop')
+            if not develop:
+                self._uninstall(previously_installed)
+                return ''
 
-        dest = self['buildout']['develop-eggs-directory']
-        old_files = os.listdir(dest)
+            dest = self['buildout']['develop-eggs-directory']
+            old_files = os.listdir(dest)
 
-        # Map the previously installed egg-links to the source directory
-        # they point at, so we can tell which ones are still current.
-        previous_links = {}
-        for f in previously_installed.split('\n'):
-            if not f:
-                continue
-            f = self._buildout_path(f)
-            if not f.endswith('.egg-link') or not os.path.isfile(f):
-                continue
-            with open(f) as fp:
-                egg_path = fp.readline().strip()
-            # The egg path is the source directory itself or, for
-            # src-layouts, its 'src' subdirectory.  Note that the source
-            # directory itself may also be named 'src' (a flat layout in a
-            # directory called src), so check which of the candidates
-            # holds the packaging metadata.
-            source = egg_path
-            if os.path.basename(egg_path) == 'src':
-                parent = os.path.dirname(egg_path)
-                metadata = ('setup.py', 'setup.cfg', 'pyproject.toml')
-                if (any(os.path.isfile(os.path.join(parent, name))
-                        for name in metadata)
-                        and not any(os.path.isfile(os.path.join(egg_path, name))
-                                    for name in metadata)):
-                    source = parent
-            previous_links[os.path.realpath(source)] = f
+            # Map the previously installed egg-links to the source directory
+            # they point at, so we can tell which ones are still current.
+            previous_links = {}
+            for f in previously_installed.split('\n'):
+                if not f:
+                    continue
+                f = self._buildout_path(f)
+                if not f.endswith('.egg-link') or not os.path.isfile(f):
+                    continue
+                with open(f) as fp:
+                    egg_path = fp.readline().strip()
+                # The egg path is the source directory itself or, for
+                # src-layouts, its 'src' subdirectory.  Note that the source
+                # directory itself may also be named 'src' (a flat layout in a
+                # directory called src), so check which of the candidates
+                # holds the packaging metadata.
+                source = egg_path
+                if os.path.basename(egg_path) == 'src':
+                    parent = os.path.dirname(egg_path)
+                    metadata = ('setup.py', 'setup.cfg', 'pyproject.toml')
+                    if (any(os.path.isfile(os.path.join(parent, name))
+                            for name in metadata)
+                            and not any(os.path.isfile(os.path.join(egg_path, name))
+                                        for name in metadata)):
+                        source = parent
+                previous_links[os.path.realpath(source)] = f
 
-        here = os.getcwd()
+            here = os.getcwd()
         try:
             try:
                 installed = []
@@ -1062,38 +1063,38 @@ class Buildout(DictMixin):
                         files.sort()
                     for setup in files:
                         self._logger.info("Develop: %r", setup)
-                        __doing__ = ('Processing develop directory %r.',
-                                     setup)
-                        directory = os.path.realpath(
-                            os.path.expanduser(setup))
-                        existing = previous_links.pop(directory, None)
-                        if existing is not None and os.path.dirname(
-                                existing) != os.path.realpath(dest):
-                            # The develop-eggs directory changed since the
-                            # previous run: the old egg-link cannot be
-                            # reused in the new directory.
-                            self._uninstall(existing)
-                            existing = None
-                        if existing is not None:
-                            if self._develop_link_fresh(existing, directory):
-                                self._logger.debug(
-                                    "Keeping editable install of %s: "
-                                    "its packaging metadata (setup.py, "
-                                    "setup.cfg, pyproject.toml) is "
-                                    "unchanged since the previous run",
-                                    setup)
-                                self._logger.debug(
-                                    "Reusing editable install: %s",
-                                    existing)
+                        with _activity('Processing develop directory %r.',
+                                       setup):
+                            directory = os.path.realpath(
+                                os.path.expanduser(setup))
+                            existing = previous_links.pop(directory, None)
+                            if existing is not None and os.path.dirname(
+                                    existing) != os.path.realpath(dest):
+                                # The develop-eggs directory changed since the
+                                # previous run: the old egg-link cannot be
+                                # reused in the new directory.
+                                self._uninstall(existing)
+                                existing = None
+                            if existing is not None:
+                                if self._develop_link_fresh(existing, directory):
+                                    self._logger.debug(
+                                        "Keeping editable install of %s: "
+                                        "its packaging metadata (setup.py, "
+                                        "setup.cfg, pyproject.toml) is "
+                                        "unchanged since the previous run",
+                                        setup)
+                                    self._logger.debug(
+                                        "Reusing editable install: %s",
+                                        existing)
+                                    installed.append(os.path.join(
+                                        dest, os.path.basename(existing)))
+                                    continue
+                                # Stale egg-link: reinstall from scratch.
+                                self._uninstall(existing)
+                            link = zc.buildout.easy_install.develop(setup, dest)
+                            if link:
                                 installed.append(os.path.join(
-                                    dest, os.path.basename(existing)))
-                                continue
-                            # Stale egg-link: reinstall from scratch.
-                            self._uninstall(existing)
-                        link = zc.buildout.easy_install.develop(setup, dest)
-                        if link:
-                            installed.append(os.path.join(
-                                dest, os.path.basename(link)))
+                                    dest, os.path.basename(link)))
             except Exception:
                 # if we had an error, we need to roll back changes, by
                 # removing any files we created.
@@ -1285,148 +1286,148 @@ class Buildout(DictMixin):
     def _maybe_upgrade(self) -> None:
         # See if buildout or setuptools or other dependencies need to be upgraded.
         # If they do, do the upgrade and restart the buildout process.
-        __doing__ = 'Checking for upgrades.'
+        with _activity('Checking for upgrades.'):
 
-        if 'BUILDOUT_RESTART_AFTER_UPGRADE' in os.environ:
-            return
+            if 'BUILDOUT_RESTART_AFTER_UPGRADE' in os.environ:
+                return
 
-        if not self.newest:
-            return
+            if not self.newest:
+                return
 
-        # We must install `wheel` before `setuptools`` to avoid confusion between
-        # the true `wheel` package and the one vendorized by `setuptools`.
-        # See https://github.com/buildout/buildout/issues/691
-        projects = ('zc.buildout', 'wheel', 'pip', 'setuptools')
-        ws = zc.buildout.easy_install.install(
-            projects,
-            self['buildout']['eggs-directory'],
-            links = self['buildout'].get('find-links', '').split(),
-            index = self['buildout'].get('index'),
-            path = [self['buildout']['develop-eggs-directory']],
-            allow_hosts = self._allow_hosts
-            )
-
-        upgraded = []
-
-        for project in projects:
-            canonicalized_name = packaging_utils.canonicalize_name(project)
-            req = pkg_resources.Requirement.parse(canonicalized_name)
-            dist = ws.find(req)
-            if dist is None and canonicalized_name != project:
-                # Try with the original project name.  Depending on which setuptools
-                # version is used, this is either useless or a life saver.
-                req = pkg_resources.Requirement.parse(project)
-                dist = ws.find(req)
-            importlib.import_module(project)
-            if dist is None:
-                # This is unexpected.  This must be some problem with how we use
-                # setuptools/pkg_resources.  But since the import worked, it feels
-                # safe to ignore.
-                self._logger.warning(
-                    "Could not find %s in working set during upgrade check. Ignoring.",
-                    project,
-                )
-                continue
-            if not inspect.getfile(sys.modules[project]).startswith(
-                    zc.buildout.easy_install._dist_location(dist)):
-                upgraded.append(dist)
-
-        if not upgraded:
-            return
-
-        __doing__ = 'Upgrading.'
-
-        should_run = realpath(
-            os.path.join(os.path.abspath(self['buildout']['bin-directory']),
-                         'buildout')
-            )
-        if sys.platform == 'win32':
-            should_run += '-script.py'
-
-        if (realpath(os.path.abspath(sys.argv[0])) != should_run):
-            self._logger.debug("Running %r.", realpath(sys.argv[0]))
-            self._logger.debug("Local buildout is %r.", should_run)
-            self._logger.warning("Not upgrading because not running a local "
-                                 "buildout command.")
-            return
-
-        self._logger.info("Upgraded:\n  %s;\nRestarting.",
-                          ",\n  ".join([("%s version %s"
-                                       % (dist.project_name, dist.version)
-                                       )
-                                      for dist in upgraded
-                                      ]
-                                     ),
-                          )
-
-        # the new dist is different, so we've upgraded.
-        # Update the scripts and return True
-        options = self['buildout']
-        eggs_dir = options['eggs-directory']
-        develop_eggs_dir = options['develop-eggs-directory']
-        ws = zc.buildout.easy_install.sort_working_set(
-                ws,
-                eggs_dir=eggs_dir,
-                develop_eggs_dir=develop_eggs_dir
-                )
-        zc.buildout.easy_install.scripts(
-            ['zc.buildout'], ws, sys.executable,
-            options['bin-directory'],
-            relative_paths = (
-                bool_option(options, 'relative-paths', False)
-                and options['directory']
-                or ''),
-            )
-
-        # Restart
-        args = sys.argv[:]
-        if not __debug__:
-            args.insert(0, '-O')
-        args.insert(0, sys.executable)
-        env=dict(os.environ, BUILDOUT_RESTART_AFTER_UPGRADE='1')
-        sys.exit(subprocess.call(args, env=env))
-
-    def _load_extensions(self) -> None:
-        __doing__ = 'Loading extensions.'
-        specs = self['buildout'].get('extensions', '').split()
-        for superceded_extension in ['buildout-versions',
-                                     'buildout.dumppickedversions']:
-            if superceded_extension in specs:
-                msg = ("Buildout now includes 'buildout-versions' (and part "
-                       "of the older 'buildout.dumppickedversions').\n"
-                       "Remove the extension from your configuration and "
-                       "look at the 'show-picked-versions' option in "
-                       "buildout's documentation.")
-                raise zc.buildout.UserError(msg)
-        if specs:
-            path = [self['buildout']['develop-eggs-directory']]
-            if self.offline:
-                dest = None
-                path.append(self['buildout']['eggs-directory'])
-            else:
-                dest = self['buildout']['eggs-directory']
-
-            zc.buildout.easy_install.install(
-                specs, dest, path=path,
-                working_set=pkg_resources.working_set,
+            # We must install `wheel` before `setuptools`` to avoid confusion between
+            # the true `wheel` package and the one vendorized by `setuptools`.
+            # See https://github.com/buildout/buildout/issues/691
+            projects = ('zc.buildout', 'wheel', 'pip', 'setuptools')
+            ws = zc.buildout.easy_install.install(
+                projects,
+                self['buildout']['eggs-directory'],
                 links = self['buildout'].get('find-links', '').split(),
                 index = self['buildout'].get('index'),
-                newest=self.newest, allow_hosts=self._allow_hosts)
+                path = [self['buildout']['develop-eggs-directory']],
+                allow_hosts = self._allow_hosts
+                )
 
-            # Clear cache because extensions might now let us read pages we
-            # couldn't read before.
-            zc.buildout.easy_install.clear_index_cache()
+            upgraded = []
 
-            for ep in pkg_resources.iter_entry_points('zc.buildout.extension'):
-                ep.load()(self)
+            for project in projects:
+                canonicalized_name = packaging_utils.canonicalize_name(project)
+                req = pkg_resources.Requirement.parse(canonicalized_name)
+                dist = ws.find(req)
+                if dist is None and canonicalized_name != project:
+                    # Try with the original project name.  Depending on which setuptools
+                    # version is used, this is either useless or a life saver.
+                    req = pkg_resources.Requirement.parse(project)
+                    dist = ws.find(req)
+                importlib.import_module(project)
+                if dist is None:
+                    # This is unexpected.  This must be some problem with how we use
+                    # setuptools/pkg_resources.  But since the import worked, it feels
+                    # safe to ignore.
+                    self._logger.warning(
+                        "Could not find %s in working set during upgrade check. Ignoring.",
+                        project,
+                    )
+                    continue
+                if not inspect.getfile(sys.modules[project]).startswith(
+                        zc.buildout.easy_install._dist_location(dist)):
+                    upgraded.append(dist)
+
+            if not upgraded:
+                return
+
+            with _activity('Upgrading.'):
+
+                should_run = realpath(
+                    os.path.join(os.path.abspath(self['buildout']['bin-directory']),
+                                 'buildout')
+                    )
+                if sys.platform == 'win32':
+                    should_run += '-script.py'
+
+                if (realpath(os.path.abspath(sys.argv[0])) != should_run):
+                    self._logger.debug("Running %r.", realpath(sys.argv[0]))
+                    self._logger.debug("Local buildout is %r.", should_run)
+                    self._logger.warning("Not upgrading because not running a local "
+                                         "buildout command.")
+                    return
+
+                self._logger.info("Upgraded:\n  %s;\nRestarting.",
+                                  ",\n  ".join([("%s version %s"
+                                               % (dist.project_name, dist.version)
+                                               )
+                                              for dist in upgraded
+                                              ]
+                                             ),
+                                  )
+
+                # the new dist is different, so we've upgraded.
+                # Update the scripts and return True
+                options = self['buildout']
+                eggs_dir = options['eggs-directory']
+                develop_eggs_dir = options['develop-eggs-directory']
+                ws = zc.buildout.easy_install.sort_working_set(
+                        ws,
+                        eggs_dir=eggs_dir,
+                        develop_eggs_dir=develop_eggs_dir
+                        )
+                zc.buildout.easy_install.scripts(
+                    ['zc.buildout'], ws, sys.executable,
+                    options['bin-directory'],
+                    relative_paths = (
+                        bool_option(options, 'relative-paths', False)
+                        and options['directory']
+                        or ''),
+                    )
+
+                # Restart
+                args = sys.argv[:]
+                if not __debug__:
+                    args.insert(0, '-O')
+                args.insert(0, sys.executable)
+                env=dict(os.environ, BUILDOUT_RESTART_AFTER_UPGRADE='1')
+                sys.exit(subprocess.call(args, env=env))
+
+    def _load_extensions(self) -> None:
+        with _activity('Loading extensions.'):
+            specs = self['buildout'].get('extensions', '').split()
+            for superceded_extension in ['buildout-versions',
+                                         'buildout.dumppickedversions']:
+                if superceded_extension in specs:
+                    msg = ("Buildout now includes 'buildout-versions' (and part "
+                           "of the older 'buildout.dumppickedversions').\n"
+                           "Remove the extension from your configuration and "
+                           "look at the 'show-picked-versions' option in "
+                           "buildout's documentation.")
+                    raise zc.buildout.UserError(msg)
+            if specs:
+                path = [self['buildout']['develop-eggs-directory']]
+                if self.offline:
+                    dest = None
+                    path.append(self['buildout']['eggs-directory'])
+                else:
+                    dest = self['buildout']['eggs-directory']
+
+                zc.buildout.easy_install.install(
+                    specs, dest, path=path,
+                    working_set=pkg_resources.working_set,
+                    links = self['buildout'].get('find-links', '').split(),
+                    index = self['buildout'].get('index'),
+                    newest=self.newest, allow_hosts=self._allow_hosts)
+
+                # Clear cache because extensions might now let us read pages we
+                # couldn't read before.
+                zc.buildout.easy_install.clear_index_cache()
+
+                for ep in pkg_resources.iter_entry_points('zc.buildout.extension'):
+                    ep.load()(self)
 
     def _unload_extensions(self) -> None:
-        __doing__ = 'Unloading extensions.'
-        specs = self['buildout'].get('extensions', '').split()
-        if specs:
-            for ep in pkg_resources.iter_entry_points(
-                'zc.buildout.unloadextension'):
-                ep.load()(self)
+        with _activity('Unloading extensions.'):
+            specs = self['buildout'].get('extensions', '').split()
+            if specs:
+                for ep in pkg_resources.iter_entry_points(
+                    'zc.buildout.unloadextension'):
+                    ep.load()(self)
 
     def _print_picked_versions(self) -> None:
         picked_versions, required_by = (zc.buildout.easy_install
@@ -1585,21 +1586,21 @@ The following list shows the affected packages and their namespaces:
                 print_("%s =%s" % (k, v))
 
     def __getitem__(self, section: str) -> "Options":
-        __doing__ = 'Getting section %s.', section
-        try:
-            return self._data[section]
-        except KeyError:
-            pass
+        with _activity('Getting section %s.', section):
+            try:
+                return self._data[section]
+            except KeyError:
+                pass
 
-        try:
-            data = self._raw[section]
-        except KeyError:
-            raise MissingSection(section)
+            try:
+                data = self._raw[section]
+            except KeyError:
+                raise MissingSection(section)
 
-        options = self.Options(self, section, data)
-        self._data[section] = options
-        options._initialize()
-        return options
+            options = self.Options(self, section, data)
+            self._data[section] = options
+            options._initialize()
+            return options
 
     def __setitem__(self, name: str, data: Dict[str, Any]) -> None:  # values str()-ified
         if name in self._raw:
@@ -1637,42 +1638,43 @@ The following list shows the affected packages and their namespaces:
 
 
 def _install_and_load(spec: str, group: str, entry: str, buildout: Buildout) -> Callable:
-    __doing__ = 'Loading recipe %r.', spec
     try:
-        req = pkg_resources.Requirement.parse(spec)
+        with _activity('Loading recipe %r.', spec):
+            req = pkg_resources.Requirement.parse(spec)
 
-        buildout_options = buildout['buildout']
-        if pkg_resources.working_set.find(req) is None:
-            __doing__ = 'Installing recipe %s.', spec
-            if buildout.offline:
-                dest = None
-                path = [buildout_options['develop-eggs-directory'],
-                        buildout_options['eggs-directory'],
-                        ]
-            else:
-                dest = buildout_options['eggs-directory']
-                path = [buildout_options['develop-eggs-directory']]
+            buildout_options = buildout['buildout']
+            installed = pkg_resources.working_set.find(req)
+        if installed is None:
+            with _activity('Installing recipe %s.', spec):
+                if buildout.offline:
+                    dest = None
+                    path = [buildout_options['develop-eggs-directory'],
+                            buildout_options['eggs-directory'],
+                            ]
+                else:
+                    dest = buildout_options['eggs-directory']
+                    path = [buildout_options['develop-eggs-directory']]
 
-            # Pin versions when processing the buildout section
-            versions_section_name = buildout['buildout'].get('versions', 'versions')
-            versions = buildout.get(versions_section_name, {})
-            zc.buildout.easy_install.allow_picked_versions(
-                bool_option(buildout['buildout'], 'allow-picked-versions')
-                )
-            zc.buildout.easy_install.install(
-                [spec], dest,
-                links=buildout._links,
-                index=buildout_options.get('index'),
-                path=path,
-                working_set=pkg_resources.working_set,
-                newest=buildout.newest,
-                allow_hosts=buildout._allow_hosts,
-                versions=versions,
-                )
+                # Pin versions when processing the buildout section
+                versions_section_name = buildout['buildout'].get('versions', 'versions')
+                versions = buildout.get(versions_section_name, {})
+                zc.buildout.easy_install.allow_picked_versions(
+                    bool_option(buildout['buildout'], 'allow-picked-versions')
+                    )
+                zc.buildout.easy_install.install(
+                    [spec], dest,
+                    links=buildout._links,
+                    index=buildout_options.get('index'),
+                    path=path,
+                    working_set=pkg_resources.working_set,
+                    newest=buildout.newest,
+                    allow_hosts=buildout._allow_hosts,
+                    versions=versions,
+                    )
 
-        __doing__ = 'Loading %s recipe entry %s:%s.', group, spec, entry
-        return pkg_resources.load_entry_point(
-            req.project_name, group, entry)
+        with _activity('Loading %s recipe entry %s:%s.', group, spec, entry):
+            return pkg_resources.load_entry_point(
+                req.project_name, group, entry)
 
     except Exception:
         v = sys.exc_info()[1]
@@ -1699,26 +1701,26 @@ class Options(DictMixin):
 
     def _initialize(self) -> None:
         name = self.name
-        __doing__ = 'Initializing section %s.', name
+        with _activity('Initializing section %s.', name):
 
-        if '<' in self._raw:
-            self._raw = self._do_extend_raw(name, self._raw, [])
+            if '<' in self._raw:
+                self._raw = self._do_extend_raw(name, self._raw, [])
 
-        # force substitutions
-        for k, v in sorted(self._raw.items()):
-            if '${' in v:
-                self._dosub(k, v)
+            # force substitutions
+            for k, v in sorted(self._raw.items()):
+                if '${' in v:
+                    self._dosub(k, v)
 
-        if name == 'buildout':
-            return # buildout section can never be a part
+            if name == 'buildout':
+                return # buildout section can never be a part
 
-        for dname in self.get('<part-dependencies>', '').split():
-            # force use of dependencies in buildout:
-            self.buildout[dname]
+            for dname in self.get('<part-dependencies>', '').split():
+                # force use of dependencies in buildout:
+                self.buildout[dname]
 
-        if self.get('recipe'):
-            self.initialize()
-            self.buildout._parts.append(name)
+            if self.get('recipe'):
+                self.initialize()
+                self.buildout._parts.append(name)
 
     def initialize(self) -> None:
         reqs, entry = _recipe(self._data)
@@ -1738,32 +1740,32 @@ class Options(DictMixin):
             to_do = data.get('<', None)
             if to_do is None:
                 return data
-            __doing__ = 'Loading input sections for %r', name
+            with _activity('Loading input sections for %r', name):
 
-            result = {}
-            for iname in to_do.split('\n'):
-                iname = iname.strip()
-                if not iname:
-                    continue
-                raw = self.buildout._raw.get(iname)
-                if raw is None:
-                    raise zc.buildout.UserError("No section named %r" % iname)
-                result.update(self._do_extend_raw(iname, raw, doing))
+                result = {}
+                for iname in to_do.split('\n'):
+                    iname = iname.strip()
+                    if not iname:
+                        continue
+                    raw = self.buildout._raw.get(iname)
+                    if raw is None:
+                        raise zc.buildout.UserError("No section named %r" % iname)
+                    result.update(self._do_extend_raw(iname, raw, doing))
 
-            annotated_result = _annotate_section(result, "")
-            annotated_data = _annotate_section(copy.deepcopy(data), "")
-            result = _unannotate_section(
-                _update_section(annotated_result, annotated_data))
-            result.pop('<', None)
-            return result
+                annotated_result = _annotate_section(result, "")
+                annotated_data = _annotate_section(copy.deepcopy(data), "")
+                result = _unannotate_section(
+                    _update_section(annotated_result, annotated_data))
+                result.pop('<', None)
+                return result
         finally:
             assert doing.pop() == name
 
     def _dosub(self, option: str, v: str) -> None:
-        __doing__ = 'Getting option %s:%s.', self.name, option
-        seen = [(self.name, option)]
-        v = '$$'.join([self._sub(s, seen) for s in v.split('$$')])
-        self._cooked[option] = v
+        with _activity('Getting option %s:%s.', self.name, option):
+            seen = [(self.name, option)]
+            v = '$$'.join([self._sub(s, seen) for s in v.split('$$')])
+            self._cooked[option] = v
 
     # Option values are always strings; a non-string ``default`` is
     # returned as is, so its type shows up in the overloads.  The key
@@ -1785,23 +1787,23 @@ class Options(DictMixin):
             if v is None:
                 return default
 
-        __doing__ = 'Getting option %s:%s.', self.name, key
+        with _activity('Getting option %s:%s.', self.name, key):
 
-        if '${' in v:
-            seen_key = self.name, key
-            if seen is None:
-                seen = [seen_key]
-            elif seen_key in seen:
-                raise zc.buildout.UserError(
-                    "Circular reference in substitutions.\n"
-                    )
-            else:
-                seen.append(seen_key)
-            v = '$$'.join([self._sub(s, seen) for s in v.split('$$')])
-            seen.pop()
+            if '${' in v:
+                seen_key = self.name, key
+                if seen is None:
+                    seen = [seen_key]
+                elif seen_key in seen:
+                    raise zc.buildout.UserError(
+                        "Circular reference in substitutions.\n"
+                        )
+                else:
+                    seen.append(seen_key)
+                v = '$$'.join([self._sub(s, seen) for s in v.split('$$')])
+                seen.pop()
 
-        self._data[key] = v
-        return v
+            self._data[key] = v
+            return v
 
     _template_split = re.compile('([$]{[^}]*})').split
     _simple = re.compile('[-a-zA-Z0-9 ._]+$').match
@@ -2318,21 +2320,24 @@ def _recipe(options: Union[Options, Dict[str, str]]) -> Tuple[str, str]:
     return recipe, entry
 
 def _doing() -> None:
-    _, v, tb = sys.exc_info()
-    message = str(v)
+    # Activities are attached to the exception objects by _activity.
+    # Walk the re-raise chain too: easy_install re-wraps lower-level
+    # errors (e.g. pkg_resources.VersionConflict) into fresh
+    # exceptions, so activities recorded before the re-wrap sit on the
+    # __context__, not on the exception main() catches.
+    _, v, _ = sys.exc_info()
     doing = []
-    while tb is not None:
-        d = tb.tb_frame.f_locals.get('__doing__')
-        if d:
-            doing.append(d)
-        tb = tb.tb_next
-
+    seen = set()
+    while v is not None and id(v) not in seen:
+        seen.add(id(v))
+        doing.extend(reversed(getattr(v, '_zc_doing', [])))
+        v = v.__cause__ if v.__cause__ is not None else v.__context__
     if doing:
         sys.stderr.write('While:\n')
-        for d in doing:
-            if not isinstance(d, str):
-                d = d[0] % d[1:]
-            sys.stderr.write('  %s\n' % d)
+        for message, args in doing:
+            if args:
+                message = message % args
+            sys.stderr.write('  %s\n' % message)
 
 def _error(*message: Any) -> NoReturn:
     sys.stderr.write('Error: ' + ' '.join(message) +'\n')

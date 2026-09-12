@@ -728,70 +728,71 @@ class Installer(object):
         return dist.clone(location=new_location)
 
     def _get_dist(self, requirement: pkg_resources.Requirement, ws: pkg_resources.WorkingSet) -> List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]:
-        __doing__ = 'Getting distribution for %r.', str(requirement)
+        with zc.buildout._activity('Getting distribution for %r.',
+                                   str(requirement)):
 
-        # Maybe an existing dist is already the best dist that satisfies the
-        # requirement.  If not, get a link to an available distribution that
-        # we could download.  The method returns a tuple with an existing
-        # dist or an available dist.  Either 'dist' is None, or 'avail'
-        # is None, or both are None.
-        dist, avail = self._satisfied(requirement)
+            # Maybe an existing dist is already the best dist that satisfies the
+            # requirement.  If not, get a link to an available distribution that
+            # we could download.  The method returns a tuple with an existing
+            # dist or an available dist.  Either 'dist' is None, or 'avail'
+            # is None, or both are None.
+            dist, avail = self._satisfied(requirement)
 
-        if dist is None:
-            if self._dest is None:
-                raise zc.buildout.UserError(
-                    "We don't have a distribution for %s\n"
-                    "and can't install one in offline (no-install) mode.\n"
-                    % requirement)
-
-            logger.info(*__doing__)
-
-            if avail is None:
-                # We have no existing dist, and none is available for download.
-                raise MissingDistribution(requirement, ws)
-
-            # We may overwrite distributions, so clear importer
-            # cache.
-            sys.path_importer_cache.clear()
-
-            tmp = self._download_cache
-            if tmp is None:
-                tmp = tempfile.mkdtemp('get_dist')
-
-            try:
-                dist = self._fetch(avail, tmp, self._download_cache)
-
-                if dist is None:
+            if dist is None:
+                if self._dest is None:
                     raise zc.buildout.UserError(
-                        "Couldn't download distribution %s." % avail)
+                        "We don't have a distribution for %s\n"
+                        "and can't install one in offline (no-install) mode.\n"
+                        % requirement)
 
-                dists = [_move_to_eggs_dir_and_compile(dist, self._dest)]
-                for _d in dists:
-                    if _d not in ws:
-                        ws.add(_d, replace=True)
+                logger.info('Getting distribution for %r.', str(requirement))
 
-            finally:
-                if tmp != self._download_cache:
-                    zc.buildout.rmtree.rmtree(tmp)
+                if avail is None:
+                    # We have no existing dist, and none is available for download.
+                    raise MissingDistribution(requirement, ws)
 
-            self._env_rescan_dest()
-            dist = self._env.best_match(requirement, ws)
+                # We may overwrite distributions, so clear importer
+                # cache.
+                sys.path_importer_cache.clear()
 
-            logger.info("Got %s.", dist)
+                tmp = self._download_cache
+                if tmp is None:
+                    tmp = tempfile.mkdtemp('get_dist')
 
-        else:
-            dists = [dist]
-            if dist not in ws:
-                ws.add(dist)
+                try:
+                    dist = self._fetch(avail, tmp, self._download_cache)
+
+                    if dist is None:
+                        raise zc.buildout.UserError(
+                            "Couldn't download distribution %s." % avail)
+
+                    dists = [_move_to_eggs_dir_and_compile(dist, self._dest)]
+                    for _d in dists:
+                        if _d not in ws:
+                            ws.add(_d, replace=True)
+
+                finally:
+                    if tmp != self._download_cache:
+                        zc.buildout.rmtree.rmtree(tmp)
+
+                self._env_rescan_dest()
+                dist = self._env.best_match(requirement, ws)
+
+                logger.info("Got %s.", dist)
+
+            else:
+                dists = [dist]
+                if dist not in ws:
+                    ws.add(dist)
 
 
-        if not self._install_from_cache and self._use_dependency_links:
-            self._add_dependency_links_from_dists(dists)
+            if not self._install_from_cache and self._use_dependency_links:
+                self._add_dependency_links_from_dists(dists)
 
-        if self._check_picked:
-            self._check_picked_requirement_versions(requirement, dists)
+            if self._check_picked:
+                self._check_picked_requirement_versions(requirement, dists)
 
-        return dists
+            return dists
 
     def _add_dependency_links_from_dists(self, dists: List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]) -> None:
         reindex = False
