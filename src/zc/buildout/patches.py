@@ -12,14 +12,17 @@
 #
 ##############################################################################
 
-def patch_Distribution():
+from typing import Any, Optional, Tuple
+
+
+def patch_Distribution() -> None:
     try:
         from pkg_resources import Distribution
         from packaging import version
     except ImportError:
         return
 
-    def hashcmp(self):
+    def hashcmp(self: Any) -> Tuple[Any, ...]:
         if hasattr(self, '_hashcmp'):
             return self._hashcmp
         else:
@@ -54,7 +57,7 @@ def patch_Distribution():
 # you should try a different setuptools version.
 
 
-def patch_PackageIndex():
+def patch_PackageIndex() -> None:
     """Patch the package index from setuptools.
 
     Main goal: check the package urls on an index page to see if they are
@@ -93,7 +96,7 @@ def patch_PackageIndex():
 
     # method copied over from setuptools 46.1.3
     # Unchanged in setuptools 70.0.0.
-    def process_url(self, url, retrieve=False):
+    def process_url(self: Any, url: str, retrieve: bool=False) -> None:
         """Evaluate a URL as a possible download, and maybe retrieve it"""
         if url in self.scanned_urls and not retrieve:
             return
@@ -211,7 +214,7 @@ patch_PackageIndex()
 
 
 
-def patch_pkg_resources_requirement_contains():
+def patch_pkg_resources_requirement_contains() -> None:
     """Patch pkg_resources.Requirement contains method.
 
     What this hopefully solves, is checking if a Requirement contains
@@ -225,7 +228,7 @@ def patch_pkg_resources_requirement_contains():
     except ImportError:
         return
 
-    def __contains__(self, item):
+    def __contains__(self: Requirement, item: Any) -> bool:
         if isinstance(item, Distribution):
             # if item.key != self.key:
             if normalize_name(item.key) != normalize_name(self.key):
@@ -251,7 +254,7 @@ def patch_pkg_resources_requirement_contains():
 patch_pkg_resources_requirement_contains()
 
 
-def patch_pkg_resources_working_set_find():
+def patch_pkg_resources_working_set_find() -> None:
     """Patch pkg_resources.WorkingSet find method.
 
     setuptools 75.8.1 fixed wheel file naming to follow the binary distribution
@@ -299,7 +302,7 @@ def patch_pkg_resources_working_set_find():
     except ImportError:
         return
 
-    def find(self, req):
+    def find(self: WorkingSet, req: Requirement) -> Optional[Distribution]:
         """Find a distribution matching requirement `req`
 
         Note: I removed the type hints, because they failed on Python 3.9:
