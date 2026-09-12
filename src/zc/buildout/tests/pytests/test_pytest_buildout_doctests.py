@@ -1235,6 +1235,7 @@ def test_exit_codes_success(easy_install_env):
     import subprocess
     def call(s):
         p = subprocess.Popen(s, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        assert p.stdin is not None and p.stdout is not None
         p.stdin.close()
         print_(p.stdout.read().decode())
         print_('Exit:', bool(p.wait()))
@@ -1253,6 +1254,7 @@ def test_exit_codes_error_on_undefined_section(easy_install_env):
     import subprocess
     def call(s):
         p = subprocess.Popen(s, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        assert p.stdin is not None and p.stdout is not None
         p.stdin.close()
         print_(p.stdout.read().decode())
         print_('Exit:', bool(p.wait()))
@@ -1276,6 +1278,7 @@ def test_exit_codes_internal_error_in_recipe(easy_install_env):
     import subprocess
     def call(s):
         p = subprocess.Popen(s, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        assert p.stdin is not None and p.stdout is not None
         p.stdin.close()
         print_(p.stdout.read().decode())
         print_('Exit:', bool(p.wait()))
@@ -1643,9 +1646,10 @@ def test_wont_downgrade_due_to_prefer_final(easy_install_env):
     # requirement gets set to >=CURRENT_VERSION.
     write('buildout.cfg', '\n[buildout]\nparts =\n')
     [v] = [l.split('= >=', 1)[1].strip() for l in system(buildout + ' -vv').split('\n') if l.startswith('zc.buildout = >=')]
-    _val = (v == pkg_resources.working_set.find(
-        pkg_resources.Requirement.parse('zc.buildout')
-        ).version)
+    _dist = pkg_resources.working_set.find(
+        pkg_resources.Requirement.parse('zc.buildout'))
+    assert _dist is not None
+    _val = (v == _dist.version)
     assert repr(_val) == 'True' or str(_val) == 'True'
     write('buildout.cfg', '\n[buildout]\nparts =\n[versions]\nzc.buildout = >0.1\n')
     _val = ([str(l.split('= >', 1)[1].strip())

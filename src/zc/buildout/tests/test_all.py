@@ -135,6 +135,7 @@ class TestEasyInstall(unittest.TestCase):
             self.project_dist_dir
         )
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.version, '3.3')
 
     def test_move_to_eggs_dir_and_compile(self):
@@ -154,6 +155,7 @@ class TestEasyInstall(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertEqual(result.version, '3.3')
+        assert result.location is not None
         if zc.buildout.WINDOWS:
             self.assertIn(dest.lower(), result.location)
         else:
@@ -2061,6 +2063,7 @@ def test_exit_codes():
     >>> def call(s):
     ...     p = subprocess.Popen(s, stdin=subprocess.PIPE,
     ...                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    ...     assert p.stdin is not None and p.stdout is not None
     ...     p.stdin.close()
     ...     print_(p.stdout.read().decode())
     ...     print_('Exit:', bool(p.wait()))
@@ -2673,9 +2676,10 @@ def wont_downgrade_due_to_prefer_final():
     >>> [v] = [l.split('= >=', 1)[1].strip()
     ...        for l in system(buildout+' -vv').split('\n')
     ...        if l.startswith('zc.buildout = >=')]
-    >>> v == pkg_resources.working_set.find(
-    ...         pkg_resources.Requirement.parse('zc.buildout')
-    ...         ).version
+    >>> _dist = pkg_resources.working_set.find(
+    ...         pkg_resources.Requirement.parse('zc.buildout'))
+    >>> assert _dist is not None
+    >>> v == _dist.version
     True
 
     >>> write('buildout.cfg',
@@ -3375,6 +3379,8 @@ def buildout_txt_setup(test):
 
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse('zc.recipe.egg'))
+    assert dist is not None
+    assert dist.location is not None
     mkdir(index, 'zc.recipe.egg')
     zc.buildout.testing.bdist_wheel(
         os.path.dirname(dist.location),
