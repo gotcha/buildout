@@ -266,6 +266,60 @@ jobs:
         TEMP: C:\tmp
       run: make pytest
 
+  coverage:
+    # Coverage variant of the legacy suite, in parallel with the windows
+    # job. make coverage runs bin/test under coverage (every spawned
+    # interpreter traced via etc/coverage/sitecustomize.py on PYTHONPATH)
+    # and finishes with bin/coverage combine/report/html.
+    name: coverage legacy
+    needs: setuptools
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v6.2.0
+      with:
+        python-version: "3.12"
+        cache: 'pip' # caching pip dependencies
+    - name: Run legacy suite with coverage
+      env:
+        PYTHONWARNINGS: ignore
+        PYTHON_VERSION: "3.12"
+        SETUPTOOLS_VERSION: "75.8.2"
+      run: make coverage
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-legacy-html
+        path: htmlcov/
+
+  coverage-pytest:
+    # Coverage variant of the pytest suite, in parallel with the windows
+    # job. Same mechanism as the coverage job, over make coverage-pytest.
+    name: coverage pytest
+    needs: setuptools
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v6.2.0
+      with:
+        python-version: "3.12"
+        cache: 'pip' # caching pip dependencies
+    - name: Run pytest suite with coverage
+      env:
+        PYTHONWARNINGS: ignore
+        PYTHON_VERSION: "3.12"
+        SETUPTOOLS_VERSION: "75.8.2"
+      run: make coverage-pytest
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-pytest-html
+        path: htmlcov/
+
   generate-scripts:
     name: Scripts Python ${{ matrix.python-version }}
     needs: pip
