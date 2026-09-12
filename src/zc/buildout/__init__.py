@@ -45,5 +45,5 @@ class UserError(Exception):
     """Errors made by a user
     """
 
-    def __str__(self):
+    def __str__(self) -> str:
         return " ".join(map(str, self.args))
