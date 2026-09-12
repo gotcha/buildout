@@ -1,6 +1,16 @@
 [run]
 source = zc.buildout
 parallel = true
+# The debugging tests drop into pdb, which installs its own trace function.
+disable_warnings = trace-changed
+
+[paths]
+# The update tests package the current source as fake-release eggs
+# (zc.buildout-91.0, zc.buildout-99.99) and run them from sample
+# buildouts. Fold those copies back onto the real source tree.
+source =
+    src/zc/buildout
+    */eggs/v5/zc.buildout-*.egg/zc/buildout
 
 [report]
 exclude_lines =

@@ -1,4 +1,4 @@
-.PHONY: all test pytest typecheck test-traced lint help
+.PHONY: all test pytest coverage coverage-pytest typecheck test-traced lint help
 PYTHON_VERSION ?= 3.12
 all: test
 
@@ -16,6 +16,34 @@ test-recipe: bin/test
 
 test-small: bin/test
 	PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
+
+# Coverage variants of both suites. etc/coverage/sitecustomize.py on
+# PYTHONPATH starts coverage in the suite process itself and in every
+# spawned Python subprocess (bin/buildout drives, pip installs, xdist
+# workers) — each interpreter writes its own data file (.coveragerc has
+# parallel = true). COVERAGE_PROCESS_START arms the sitecustomize hook.
+# An absolute COVERAGE_FILE keeps all data files in the repo root: bin/test
+# exits with parts/test as cwd and test-spawned processes chdir around.
+# combine/report/html go through bin/coverage: the bare venv python has no
+# coverage installed.
+COVERAGE_ENV = COVERAGE_PROCESS_START=$(CURDIR)/.coveragerc \
+	COVERAGE_FILE=$(CURDIR)/.coverage \
+	PYTHONWARNINGS=ignore \
+	PYTHONPATH="$(CURDIR)/etc/coverage$$(bin/py -c 'import glob, os; print(os.pathsep + os.pathsep.join(glob.glob(os.path.join(os.getcwd(), "eggs", "v5", "*.egg"))))')"
+
+coverage: bin/test
+	rm -f .coverage .coverage.*
+	$(COVERAGE_ENV) bin/test -pvc
+	bin/coverage combine
+	bin/coverage report
+	bin/coverage html
+
+coverage-pytest: bin/test
+	rm -f .coverage .coverage.*
+	$(COVERAGE_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
+	bin/coverage combine
+	bin/coverage report
+	bin/coverage html
 
 typecheck: bin/test
 	# Static tier of verify-buildout: Astral's ty over the checkout with

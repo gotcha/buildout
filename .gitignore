@@ -14,6 +14,7 @@ dist
 .tox
 .coverage
 .coverage.*
+htmlcov/
 .vscode/
 .devenv/
 .monkeytype-trace/
