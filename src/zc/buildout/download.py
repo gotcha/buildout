@@ -55,9 +55,13 @@ class Download(object):
         if options is None:
             options = {}
         self.directory = options.get('directory', '')
-        self.cache = cache
+        self.cache: Optional[str]
         if cache == -1:
             self.cache = options.get('download-cache')
+        elif isinstance(cache, str):
+            self.cache = cache
+        else:
+            self.cache = None
         self.namespace = namespace
         self.offline = offline
         if offline == -1:
