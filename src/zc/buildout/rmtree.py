@@ -17,8 +17,12 @@ import shutil
 import os
 import doctest
 import time
+import unittest
 
-def rmtree (path: str):
+from types import TracebackType
+from typing import Callable, Tuple, Type
+
+def rmtree (path: str) -> None:
     """
     A variant of shutil.rmtree which tries hard to be successful.
     On windows shutil.rmtree aborts when it tries to delete a
@@ -55,7 +59,9 @@ def rmtree (path: str):
     >>> os.path.isdir (d)
     0
     """
-    def retry_writeable (func, path, exc):
+    def retry_writeable (func: Callable[[str], None], path: str,
+                         exc: Tuple[Type[BaseException], BaseException,
+                                    TracebackType]) -> None:
         os.chmod (path, 384) # 0600
         for i in range(10):
             try:
@@ -71,7 +77,7 @@ def rmtree (path: str):
     # onexc replaces onerror in 3.12+, but the floor here is 3.9.
     shutil.rmtree (path, onerror = retry_writeable)  # ty: ignore[deprecated]
 
-def test_suite():
+def test_suite() -> unittest.TestSuite:
     return doctest.DocTestSuite()
 
 if "__main__" == __name__:
