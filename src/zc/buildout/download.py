@@ -51,7 +51,7 @@ class Download(object):
     """
 
     def __init__(self, options: Optional[Dict[str, str]]=None, cache: Optional[Union[str, int]]=-1, namespace: Optional[str]=None,
-                 offline: Union[int, bool]=-1, fallback: bool=False, hash_name: bool=False, logger: Optional[logging.Logger]=None):
+                 offline: Union[int, bool]=-1, fallback: bool=False, hash_name: bool=False, logger: Optional[logging.Logger]=None) -> None:
         if options is None:
             options = {}
         self.directory = options.get('directory', '')
@@ -72,12 +72,12 @@ class Download(object):
         self.logger = logger or logging.getLogger('zc.buildout')
 
     @property
-    def download_cache(self):
+    def download_cache(self) -> Optional[str]:
         if self.cache is not None:
             return realpath(os.path.join(self.directory, self.cache))
 
     @property
-    def cache_dir(self):
+    def cache_dir(self) -> Optional[str]:
         if self.download_cache is not None:
             return os.path.join(self.download_cache, self.namespace or '')
 
@@ -106,13 +106,16 @@ class Download(object):
         but will not remove the copy in that case.
 
         """
-        if not os.path.exists(self.download_cache):
+        download_cache = self.download_cache
+        assert download_cache is not None
+        if not os.path.exists(download_cache):
             raise zc.buildout.UserError(
                 'The directory:\n'
                 '%r\n'
                 "to be used as a download cache doesn't exist.\n"
-                % self.download_cache)
+                % download_cache)
         cache_dir = self.cache_dir
+        assert cache_dir is not None
         if not os.path.exists(cache_dir):
             os.mkdir(cache_dir)
         cache_key = self.filename(url)
@@ -241,7 +244,7 @@ def check_md5sum(path: str, md5sum: Optional[str]) -> bool:
         f.close()
 
 
-def remove(path):
+def remove(path: str) -> None:
     if os.path.exists(path):
         os.remove(path)
 
