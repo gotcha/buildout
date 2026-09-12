@@ -294,9 +294,13 @@ version number:
 
     >>> import pkg_resources
     >>> req = pkg_resources.Requirement.parse('setuptools')
-    >>> setuptools_version = pkg_resources.working_set.find(req).version
+    >>> _dist = pkg_resources.working_set.find(req)
+    >>> assert _dist is not None
+    >>> setuptools_version = _dist.version
     >>> req = pkg_resources.Requirement.parse('pip')
-    >>> pip_version = pkg_resources.working_set.find(req).version
+    >>> _dist = pkg_resources.working_set.find(req)
+    >>> assert _dist is not None
+    >>> pip_version = _dist.version
 
 If you set the ``show-picked-versions`` option, buildout will print
 versions it picked at the end of its run:
