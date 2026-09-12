@@ -6,6 +6,21 @@ description: >-
   inside `devenv shell` so CI uses the same toolchain (Python, uv,
   ruff, ty, make) as a local developer shell. Not usable on Windows
   runners (no Nix) — the Windows job keeps actions/setup-python.
+inputs:
+  cachix-cache:
+    description: >-
+      Name of the project's cachix binary cache. Empty (the default)
+      skips cachix entirely. Pulling from a public cache needs no token;
+      set cachix-auth-token to also push the devenv closure as jobs
+      realise it.
+    required: false
+    default: ''
+  cachix-auth-token:
+    description: >-
+      cachix auth token for the cache (a repo secret). Empty means
+      pull-only.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -13,6 +28,13 @@ runs:
     uses: cachix/install-nix-action@v31.11.1
     with:
       github_access_token: ${{ github.token }}
+  - name: Configure cachix (no-op until CACHIX_CACHE_NAME is set)
+    if: inputs.cachix-cache != ''
+    uses: cachix/cachix-action@v17
+    with:
+      name: ${{ inputs.cachix-cache }}
+      authToken: ${{ inputs.cachix-auth-token }}
+      skipPush: ${{ inputs.cachix-auth-token == '' }}
   - name: Install devenv (nixpkgs revision pinned by devenv.lock)
     shell: bash
     run: >-

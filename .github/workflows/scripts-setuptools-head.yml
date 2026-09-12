@@ -21,6 +21,12 @@ jobs:
     steps:
     - uses: actions/checkout@v6.0.2
     - uses: ./.github/actions/devenv-setup
+      with:
+        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
+        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
+        # means this step is skipped entirely.
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Setup buildout virtualenv
       run: >-
         devenv shell

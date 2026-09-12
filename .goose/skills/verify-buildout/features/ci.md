@@ -11,7 +11,11 @@ inside the devenv, then read the pushed-branch CI run.
 GitHub actions only bootstrap the repo's own environment. The allowed
 actions are `actions/checkout` and the repo-owned composite action
 `.github/actions/devenv-setup` (Nix + the devenv CLI, built from the
-nixpkgs revision pinned in `devenv.lock`). Everything else — Python
+nixpkgs revision pinned in `devenv.lock`; it also wraps
+`cachix/cachix-action` for the optional project binary cache, active
+only when the `CACHIX_CACHE_NAME` variable / `CACHIX_AUTH_TOKEN`
+secret are set — public caches pull without a token, pushing needs
+one). Everything else — Python
 3.9–3.14, uv, ruff, ty, make — comes from the devenv, so CI and a local
 `devenv shell` agree by construction.
 
