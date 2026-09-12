@@ -141,7 +141,7 @@ class EnvironmentMixin(object):
         distribution_key = normalize_name(project_name)
         return self._distmap.get(distribution_key, [])
 
-    def add(self, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]):
+    def add(self, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> None:
         """Add `dist` if we ``can_add()`` it and it has not already been added
         """
         if self.can_add(dist) and dist.has_version():
@@ -193,7 +193,7 @@ class Environment(EnvironmentMixin, pkg_resources.Environment):
     """
 
     @cached_property
-    def _mac_machine_type(self):
+    def _mac_machine_type(self) -> str:
         """Machine type (architecture) on Mac.
 
         Adapted from pkg_resources.compatible_platforms.
@@ -288,7 +288,7 @@ clear_index_cache = _indexes.clear
 if is_win32:
     # work around spawn lamosity on windows
     # XXX need safe quoting (see the subproces.list2cmdline) and test
-    def _safe_arg(arg):
+    def _safe_arg(arg: str) -> str:
         return '"%s"' % arg
 else:
     _safe_arg = str
@@ -305,14 +305,14 @@ else:
     get_win_launcher = None
 
 
-def call_subprocess(args: Sequence[Union[str, Path]], **kw):
+def call_subprocess(args: Sequence[Union[str, Path]], **kw: Any) -> None:
     if subprocess.call(args, **kw) != 0:
         raise Exception(
             "Failed to run command:\n%s"
             % repr(args)[1:-1])
 
 
-def get_subprocess_output(args: List[str], **kw) -> str:
+def get_subprocess_output(args: List[str], **kw: Any) -> str:
     result = subprocess.run(
         args, **kw,
         stdout=subprocess.PIPE,
@@ -348,7 +348,7 @@ def get_namespace_package_paths(dist: pkg_resources.Distribution) -> Iterator[st
     for namespace in dist.get_metadata_lines('namespace_packages.txt'):
         yield os.path.join(*(base + namespace.split('.') + init))
 
-def namespace_packages_need_pkg_resources(dist: Union[pkg_resources.EggInfoDistribution, pkg_resources.Distribution]):
+def namespace_packages_need_pkg_resources(dist: Union[pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> bool:
     if os.path.isfile(_dist_location(dist)):
         # Zipped egg, with namespaces, surely needs setuptools
         return True
@@ -439,7 +439,7 @@ class Installer(object):
                  allow_hosts: Tuple[str, ...]=('*',),
                  check_picked: bool=True,
                  allow_unknown_extras: bool=False,
-                 ):
+                 ) -> None:
         assert executable == sys.executable, (executable, sys.executable)
         self._dest = dest if dest is None else pkg_resources.normalize_path(dest)
         self._allow_hosts = allow_hosts
@@ -482,7 +482,7 @@ class Installer(object):
         self._eggify_env_dest_dists(env, self._dest)
         return env
 
-    def _env_rescan_dest(self):
+    def _env_rescan_dest(self) -> None:
         self._env.scan(self._get_dest_dist_paths())
         self._eggify_env_dest_dists(self._env, self._dest)
 
@@ -496,7 +496,7 @@ class Installer(object):
         return list(set(eggs + dists))
 
     @staticmethod
-    def _eggify_env_dest_dists(env: Environment, dest: Optional[str]):
+    def _eggify_env_dest_dists(env: Environment, dest: Optional[str]) -> None:
         """
         Make sure everything found under `dest` is seen as an egg, even if it's
         some other kind of dist.
@@ -794,7 +794,7 @@ class Installer(object):
 
         return dists
 
-    def _add_dependency_links_from_dists(self, dists: List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]):
+    def _add_dependency_links_from_dists(self, dists: List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]) -> None:
         reindex = False
         links = self._links
         for dist in dists:
@@ -809,7 +809,7 @@ class Installer(object):
         if reindex:
             self._index = _get_index(self._index_url, links, self._allow_hosts)
 
-    def _check_picked_requirement_versions(self, requirement: pkg_resources.Requirement, dists: List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]):
+    def _check_picked_requirement_versions(self, requirement: pkg_resources.Requirement, dists: List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]) -> None:
         """ Check whether we picked a version and, if we did, report it """
         for dist in dists:
             if not (dist.precedence == pkg_resources.DEVELOP_DIST
@@ -829,7 +829,7 @@ class Installer(object):
                     )
                     raise zc.buildout.UserError(msg)
 
-    def _maybe_add_setuptools(self, ws: pkg_resources.WorkingSet, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]):
+    def _maybe_add_setuptools(self, ws: pkg_resources.WorkingSet, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> None:
         if dist_needs_pkg_resources(dist):
             # We have a namespace package but no requirement for setuptools
             if dist.precedence == pkg_resources.DEVELOP_DIST:
@@ -1070,7 +1070,7 @@ class Installer(object):
                     link += '/'
             yield link
 
-    def _log_requirement(self, ws: pkg_resources.WorkingSet, req: pkg_resources.Requirement):
+    def _log_requirement(self, ws: pkg_resources.WorkingSet, req: pkg_resources.Requirement) -> None:
         if (not logger.isEnabledFor(logging.DEBUG) and
             not Installer._store_required_by):
             # Sorting the working set and iterating over it's requirements
@@ -1213,7 +1213,7 @@ def build(spec: str, dest: Optional[str], build_ext: Dict[str, str],
     return installer.build(spec, build_ext)
 
 
-def _rm(*paths):
+def _rm(*paths: str) -> None:
     for path in paths:
         if os.path.isdir(path):
             zc.buildout.rmtree.rmtree(path)
@@ -1261,7 +1261,7 @@ def _create_egg_link(directory: Path, dest: str, egg_name: str) -> str:
     return egg_link
 
 
-def _copyeggs(src: str, dest: str, suffix: str, undo: List[Callable]):
+def _copyeggs(src: str, dest: str, suffix: str, undo: List[Callable]) -> Optional[str]:
     """Copy eggs.
 
     Expected is:
@@ -1290,7 +1290,7 @@ def _copyeggs(src: str, dest: str, suffix: str, undo: List[Callable]):
 _develop_distutils_scripts = {}
 
 
-def _detect_distutils_scripts(directory: str):
+def _detect_distutils_scripts(directory: str) -> None:
     """Record detected distutils scripts from develop eggs
 
     ``setup.py develop`` doesn't generate metadata on distutils scripts, in
@@ -1927,7 +1927,7 @@ root_logger.addHandler(handler)
 
 class VersionConflict(zc.buildout.UserError):
 
-    def __init__(self, err: pkg_resources.VersionConflict, ws: Iterable[pkg_resources.Distribution]):
+    def __init__(self, err: pkg_resources.VersionConflict, ws: Iterable[pkg_resources.Distribution]) -> None:
         ws = list(ws)
         ws.sort()
         self.err, self.ws = err, ws
@@ -1948,7 +1948,7 @@ class VersionConflict(zc.buildout.UserError):
 
 class MissingDistribution(zc.buildout.UserError):
 
-    def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet):
+    def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet) -> None:
         sorted_dists = list(ws)
         sorted_dists.sort()
         self.data = req, sorted_dists
@@ -2115,7 +2115,7 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
     return name
 
 
-def check_namespace_init_file(ns_file: Union[str, Path]):
+def check_namespace_init_file(ns_file: Union[str, Path]) -> bool:
     """Look for namespace declaration in file.
 
     This can be spelled in different ways.  It can be a one-liner:
@@ -2281,7 +2281,7 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
     return [egg_dir]
 
 
-def unpack_egg(location: str, dest: str):
+def unpack_egg(location: str, dest: str) -> None:
     # Buildout 2 no longer installs zipped eggs,
     # so we always want to unpack it.
     # XXX The next line seems double now.
@@ -2289,7 +2289,7 @@ def unpack_egg(location: str, dest: str):
     setuptools.archive_util.unpack_archive(location, dest)
 
 
-def unpack_wheel(location, dest):
+def unpack_wheel(location: str, dest: str) -> None:
     wheel = Wheel(location)
     # The egg_name method returns a string that includes:
     # platform = None if self.platform == 'any' else get_platform()
@@ -2351,7 +2351,7 @@ class BuildoutWheel(Wheel):
             return metadata.get("Name")
 
 
-def _maybe_copy_and_rename_wheel(dist, dest):
+def _maybe_copy_and_rename_wheel(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], dest: str) -> Optional[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]]:
     """Maybe copy and rename wheel.
 
     Return the new dist or None.
@@ -2392,19 +2392,25 @@ def _maybe_copy_and_rename_wheel(dist, dest):
     gets called after installing a source dist, has its own home grown way
     of creating an egg.
     """
-    wheel = BuildoutWheel(dist.location)
+    # The dists handled in this module are installed or downloadable dists,
+    # which always live on disk and thus have a location (see _dist_location).
+    location = _dist_location(dist)
+    wheel = BuildoutWheel(location)
     actual_project_name = wheel.get_project_name()
     if actual_project_name and wheel.project_name == actual_project_name:
         return
-    filename = os.path.basename(dist.location)
+    # A valid wheel always has a Name in its METADATA, so at this point we
+    # know the actual project name (otherwise there is nothing to rename to).
+    assert actual_project_name is not None
+    filename = os.path.basename(location)
     new_filename = filename.replace(wheel.project_name, actual_project_name)
     if filename == new_filename:
         return
-    logger.debug("Renaming wheel %s to %s", dist.location, new_filename)
+    logger.debug("Renaming wheel %s to %s", location, new_filename)
     tmp_wheeldir = tempfile.mkdtemp()
     try:
         new_location = os.path.join(tmp_wheeldir, new_filename)
-        shutil.copy(dist.location, new_location)
+        shutil.copy(location, new_location)
         # Now we create a clone of the original distribution,
         # but with the new location and the wanted project name.
         new_dist = Distribution(
