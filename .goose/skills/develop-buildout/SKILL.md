@@ -81,3 +81,34 @@ content is unchanged:
   `ModuleNotFoundError` and the file reports 0 passed — recognize the
   symptom, do not mistake it for a red suite. Full details in
   verify-buildout (`features/repo-test-suites.md`).
+
+## Static tier (ty)
+
+`make typecheck` gates on Astral's `ty` (provided by the devenv) at zero
+diagnostics over the checkout, with the test eggs on its search path.
+Run it before committing typing-adjacent work and keep the gate at zero.
+
+Clearing diagnostics, in order of preference:
+
+- Narrow truthfully. Optional producers (`working_set.find`, Popen
+  pipes, `options.get`) get real guards in library code and
+  `assert x is not None` in tests. `self.assertIsNotNone` does not
+  narrow for ty — add the bare `assert` where the value is consumed.
+- Fix the call when the call is wrong. A shifted positional call in a
+  test patch once survived only because a cache fallback swallowed the
+  TypeError; the diagnostic exposed a latent bug, not a typing gap.
+- Scoped `# ty: ignore[rule]` with the reason inline is the convention
+  for corners that cannot be typed truthfully: version-compat branches
+  behind runtime guards (old-pip signatures), platform-only attributes
+  (`sys.pypy_version_info`), deliberate instance shadows. Name the
+  guard or the version in the comment.
+
+Generated pytest ports (`test_pytest_*.py`) come from `gen_pytest.py`
+over doctest sources (`.txt` files, `test_all.py` docstrings):
+
+- Edit doctest source and generated port in lockstep, so a regen
+  reproduces the port.
+- Trailing comments in doctest code do not survive generation, so a
+  line-level suppression cannot come from the source. Prefer truthful
+  fixes in ported code; a suppression hand-added to a port is lost on
+  the next regen.
