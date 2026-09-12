@@ -66,6 +66,9 @@ driving, then use the matching feature file as the recipe.
 - **Static**: lint. `make lint` (ruff) is a seconds-fast hygiene gate
   that reads only the source tree — a complement, never a behavioral
   proof.
+- **CI**: ci. Changes under `.github/workflows/` have their own proof
+  ladder (parse, local devenv run of the changed job commands,
+  pushed-branch runner evidence) — no local suite exercises CI yaml.
 
 ## Features
 
@@ -88,3 +91,6 @@ driving, then use the matching feature file as the recipe.
   reports.
 - [Static lint](./lint.md) — `make lint` (ruff) as the fast hygiene
   gate; pinned baseline config in `pyproject.toml`.
+- [CI workflows](./ci.md) — the proof ladder for changes under
+  `.github/workflows/`: parse, local devenv run of the changed job
+  commands, pushed-branch runner evidence.

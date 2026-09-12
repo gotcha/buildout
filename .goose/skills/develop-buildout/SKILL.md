@@ -126,6 +126,21 @@ happened first; do not count on it.
 - **The durable record is the truth.** At every moment, the channel
   plus the work log must reflect the real state of the work. An
   unreported result is one kill away from never having happened.
+## CI changes
+
+Workflows under `.github/workflows/` follow the provisioning contract:
+GitHub actions only bootstrap the repo-owned environment — allowed
+actions are `actions/checkout` and the repo's own composite action
+`.github/actions/devenv-setup` (Nix + devenv, pinned by
+`devenv.lock`). Job commands run inside `devenv shell`, using
+`--option languages.python.version:string` for the Python matrix and
+plain env vars (`SETUPTOOLS_VERSION`, `PIP_VERSION`) for the rest, so
+CI exercises the same toolchain as a local developer shell. Never
+reintroduce per-tool actions (`actions/setup-python`, `pip install
+ruff`/`ty`) outside the sanctioned Windows exception (no Nix on
+Windows runners). The proof ladder for a CI change lives in the
+verify-buildout skill (`features/ci.md`); a CI change still carries a
+towncrier entry like any other.
 
 ## Static tier (ty)
 
