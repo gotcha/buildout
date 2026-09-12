@@ -86,6 +86,21 @@ content is unchanged:
   symptom, do not mistake it for a red suite. Full details in
   verify-buildout (`features/repo-test-suites.md`).
 
+## Legacy suite cost: announce it, skip it when it is blind
+
+The legacy doctest suite (`make test`) takes ~8-10 minutes; on a short
+task it *is* the critical path. Two rules follow:
+
+- **Announce before running it.** When the remaining guard on a task
+  is essentially the legacy suite, post a one-line message before
+  starting it ("everything else green, legacy suite running, ~10 min").
+  Silent 10-minute gaps read as stalls to the human watching.
+- **Skip it when it cannot measure the change.** A change confined to
+  `.github/workflows/` (CI yaml) or `.goose/skills/` (agent guidance)
+  is not exercised by any local suite — a legacy run proves nothing
+  for it. Verify the yaml parses and the changed job commands succeed
+  locally, and skip the suites.
+
 ## Static tier (ty)
 
 `make typecheck` gates on Astral's `ty` (provided by the devenv) at zero
