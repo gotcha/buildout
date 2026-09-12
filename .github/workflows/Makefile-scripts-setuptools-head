@@ -1,13 +1,19 @@
-# Upgrade packaging: the version bundled by virtualenv can be too old
+# Runs inside `devenv shell` (see
+# .github/workflows/scripts-setuptools-head.yml): the sandbox is created by
+# uv from the devenv, seeded with pip, based on the devenv-provided Python.
+# setuptools is then removed before installing it from git head — uv venv
+# seeds no setuptools on Python 3.12+, but the uninstall makes the
+# "no bundled setuptools" precondition explicit on every version, matching
+# the old `virtualenv --no-setuptools` behavior.
+# Upgrade packaging: the version bundled with the seeded venv can be too old
 # for the requirements of the packages installed in the test buildout
 # (e.g. twine 7 needs packaging>=26.1), and buildout cannot upgrade a
 # distribution that is already active in the sandbox.
 sandbox/bin/python:
-	pip install virtualenv
-	virtualenv --no-setuptools sandbox
+	uv venv --seed --python "$$(command -v python)" sandbox
+	sandbox/bin/pip uninstall --yes setuptools
 	sandbox/bin/pip install -e "git+https://github.com/pypa/setuptools.git#egg=setuptools"
 	sandbox/bin/pip install --upgrade packaging
 
 sandbox/bin/buildout: sandbox/bin/python
 	sandbox/bin/python setup.py develop
-

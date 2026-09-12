@@ -6,6 +6,16 @@ on:
   # Allow to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+# Tool provisioning philosophy: GitHub actions only bootstrap the
+# repo's own development environment (Nix + the devenv CLI, via the
+# repo-owned composite action in .github/actions/devenv-setup). Every
+# development tool — Python 3.9-3.14 (selected per job with
+# `devenv shell --option languages.python.version:string`), uv, ruff,
+# ty, make — comes from devenv.nix, so CI runs the same toolchain a
+# local developer shell provides, pinned by devenv.lock.
+# Exception: the Windows job keeps actions/setup-python because Nix
+# does not run on Windows runners.
+
 jobs:
   setuptools:
     name: setuptools ${{ matrix.setuptools-version}}
@@ -19,72 +29,57 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip' # caching pip dependencies
+    - uses: ./.github/actions/devenv-setup
     - name: Run tests
       env:
         # When you install packages, you see far too many setuptools warnings.
         # They drown out useful output, so ignore all warnings.
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make
     - name: Run pytest suite
       if: matrix.setuptools-version != '63.0.0'
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make pytest
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make pytest
 
   lint:
     # Static hygiene gate, parallel to the test matrix: ruff needs no
-    # bootstrap. Pinned to the version the devenv provides, so CI and
-    # local `make lint` agree (rule selection: [tool.ruff] in
+    # bootstrap. It comes from the devenv, so CI and local `make lint`
+    # agree by construction (rule selection: [tool.ruff] in
     # pyproject.toml).
     name: ruff
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: "3.12"
-        cache: 'pip' # caching pip dependencies
-    - name: Install ruff
-      run: pip install ruff==0.16.6
+    - uses: ./.github/actions/devenv-setup
     - name: Run ruff
-      run: make lint
+      run: devenv shell -- make lint
 
   typecheck:
     # Static tier, parallel to the test matrix. `make typecheck`
     # bootstraps bin/test first: the buildout run materializes eggs/,
     # which ty needs on its search path to resolve imports.
-    # ty is pinned to the version the devenv provides.
+    # ty comes from the devenv, and the devenv exports the
+    # PYTHON_VERSION / SETUPTOOLS_VERSION pins the bootstrap needs.
     name: ty
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: "3.12"
-        cache: 'pip' # caching pip dependencies
-    - name: Install ty
-      run: pip install ty==0.0.78
+    - uses: ./.github/actions/devenv-setup
     - name: Run ty
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: "3.12"
-        SETUPTOOLS_VERSION: "75.8.2"
-      run: make typecheck
+      run: devenv shell -- make typecheck
 
   setuptools61:
     # setuptools 61 is much slower, so we do not run all tests on it.
@@ -100,20 +95,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip' # caching pip dependencies
+    - uses: ./.github/actions/devenv-setup
     - name: Run tests
       env:
-        # When you install packages, you see far too many setuptools warnings.
-        # They drown out useful output, so ignore all warnings.
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make test-small
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make test-small
 
   python:
     name: Python ${{ matrix.python-version}}
@@ -130,25 +120,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        allow-prereleases: true
-        cache: 'pip' # caching pip dependencies
+    - uses: ./.github/actions/devenv-setup
     - name: Run tests
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make
     - name: Run pytest suite
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make pytest
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make pytest
 
   pip:
     name: pip ${{ matrix.pip-version}} st ${{ matrix.setuptools-version}}
@@ -164,25 +152,25 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip' # caching pip dependencies
+    - uses: ./.github/actions/devenv-setup
     - name: Run tests
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
         PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make
     - name: Run pytest suite
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
         PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make pytest
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make pytest
 
   mac:
     name: Mac
@@ -197,27 +185,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip' # caching pip dependencies
+    - uses: ./.github/actions/devenv-setup
     - name: Run tests
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make
     - name: Run pytest suite
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: make pytest
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make pytest
 
   windows:
+    # Exception to the devenv rule: Nix does not run on Windows
+    # runners, so this job keeps actions/setup-python and the
+    # pip-cached bootstrap. It still drives the repo-owned entry
+    # points (`make`, `make pytest`).
     name: Windows
     # These tests are the slowest, so start them immediately after the first batch
     # of tests have finished, instead of after the both the Python and pip matrixes.
@@ -241,7 +231,6 @@ jobs:
       env:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
         # Defining temporary directories is needed on Windows for
         # test_all.TestEasyInstall.test_move_to_eggs_dir_and_compile
@@ -257,7 +246,6 @@ jobs:
       env:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
-        # PIP_VERSION: ${{matrix.pip-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
         # Defining temporary directories is needed on Windows for
         # test_all.TestEasyInstall.test_move_to_eggs_dir_and_compile
@@ -270,24 +258,28 @@ jobs:
     # Coverage variant of the legacy suite, in parallel with the windows
     # job. make coverage runs bin/test under coverage (every spawned
     # interpreter traced via etc/coverage/sitecustomize.py on PYTHONPATH)
-    # and finishes with bin/coverage combine/report/html.
+    # and finishes with bin/coverage combine/report/html. Python 3.12 via
+    # the devenv; the devenv also exports the SETUPTOOLS_VERSION pin.
     name: coverage legacy
     needs: setuptools
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v6.2.0
+    - uses: ./.github/actions/devenv-setup
       with:
-        python-version: "3.12"
-        cache: 'pip' # caching pip dependencies
+        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
+        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
+        # means this step is skipped entirely.
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Run legacy suite with coverage
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: "3.12"
-        SETUPTOOLS_VERSION: "75.8.2"
-      run: make coverage
+      run: >-
+        devenv shell
+        --option languages.python.version:string "3.12"
+        -- make coverage
     - name: Upload HTML coverage report
       uses: actions/upload-artifact@v4
       with:
@@ -303,17 +295,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v6.2.0
+    - uses: ./.github/actions/devenv-setup
       with:
-        python-version: "3.12"
-        cache: 'pip' # caching pip dependencies
+        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
+        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
+        # means this step is skipped entirely.
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Run pytest suite with coverage
       env:
         PYTHONWARNINGS: ignore
-        PYTHON_VERSION: "3.12"
-        SETUPTOOLS_VERSION: "75.8.2"
-      run: make coverage-pytest
+      run: >-
+        devenv shell
+        --option languages.python.version:string "3.12"
+        -- make coverage-pytest
     - name: Upload HTML coverage report
       uses: actions/upload-artifact@v4
       with:
@@ -332,14 +327,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        allow-prereleases: true
+    - uses: ./.github/actions/devenv-setup
     - name: Setup buildout virtualenv
-      run: |
-        make -f .github/workflows/Makefile-scripts sandbox/bin/buildout
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make -f .github/workflows/Makefile-scripts sandbox/bin/buildout
     - name: Run buildout
       env:
         PYTHONWARNINGS: ignore

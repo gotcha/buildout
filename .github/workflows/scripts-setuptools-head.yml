@@ -6,6 +6,9 @@ on:
   # Allow to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+# Same provisioning philosophy as run-tests.yml: Nix + devenv bootstrap
+# only (repo-owned composite action), all tools from the devenv.
+
 jobs:
   build:
 
@@ -17,16 +20,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        allow-prereleases: true
+    - uses: ./.github/actions/devenv-setup
     - name: Setup buildout virtualenv
-      run: |
-        make -f .github/workflows/Makefile-scripts-setuptools-head sandbox/bin/buildout
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make -f .github/workflows/Makefile-scripts-setuptools-head sandbox/bin/buildout
     - name: Run buildout
       env:
+        PYTHONWARNINGS: ignore
         PACKAGE: ${{matrix.package}}
         PYTHON_VERSION: ${{matrix.python-version}}
       run: |
@@ -36,4 +38,3 @@ jobs:
       run: |
         ls -al sandbox/eggs
         ls -al sandbox/downloads/dist
-

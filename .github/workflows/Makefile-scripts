@@ -1,12 +1,14 @@
-# Upgrade packaging: the version bundled by virtualenv can be too old
+# Runs inside `devenv shell` (see .github/workflows/run-tests.yml): the
+# sandbox is created by uv from the devenv, seeded with pip, based on the
+# devenv-provided Python (`command -v python` resolves to it — an explicit
+# path, so uv does not substitute a uv-managed interpreter).
+# Upgrade packaging: the version bundled with the seeded venv can be too old
 # for the requirements of the packages installed in the test buildout
 # (e.g. twine 7 needs packaging>=26.1), and buildout cannot upgrade a
 # distribution that is already active in the sandbox.
 sandbox/bin/python:
-	pip install virtualenv
-	virtualenv sandbox
+	uv venv --seed --python "$$(command -v python)" sandbox
 	sandbox/bin/python -mpip install 'setuptools<80' --upgrade packaging
 
 sandbox/bin/buildout: sandbox/bin/python
 	sandbox/bin/python setup.py develop
-

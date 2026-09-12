@@ -1,0 +1,23 @@
+name: devenv setup
+description: >-
+  Bootstrap the repo-owned development environment on a CI runner:
+  install Nix, then the devenv CLI built from the exact nixpkgs
+  revision pinned in devenv.lock. After this step, run job commands
+  inside `devenv shell` so CI uses the same toolchain (Python, uv,
+  ruff, ty, make) as a local developer shell. Not usable on Windows
+  runners (no Nix) — the Windows job keeps actions/setup-python.
+runs:
+  using: composite
+  steps:
+  - name: Install Nix
+    uses: cachix/install-nix-action@v31.11.1
+    with:
+      github_access_token: ${{ github.token }}
+  - name: Install devenv (nixpkgs revision pinned by devenv.lock)
+    shell: bash
+    run: >-
+      nix profile install
+      "github:NixOS/nixpkgs/$(jq -r .nodes.nixpkgs.locked.rev devenv.lock)#devenv"
+  - name: Show devenv version
+    shell: bash
+    run: devenv version
