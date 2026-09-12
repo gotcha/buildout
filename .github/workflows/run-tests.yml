@@ -42,6 +42,50 @@ jobs:
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
       run: make pytest
 
+  lint:
+    # Static hygiene gate, parallel to the test matrix: ruff needs no
+    # bootstrap. Pinned to the version the devenv provides, so CI and
+    # local `make lint` agree (rule selection: [tool.ruff] in
+    # pyproject.toml).
+    name: ruff
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v6.2.0
+      with:
+        python-version: "3.12"
+        cache: 'pip' # caching pip dependencies
+    - name: Install ruff
+      run: pip install ruff==0.16.6
+    - name: Run ruff
+      run: make lint
+
+  typecheck:
+    # Static tier, parallel to the test matrix. `make typecheck`
+    # bootstraps bin/test first: the buildout run materializes eggs/,
+    # which ty needs on its search path to resolve imports.
+    # ty is pinned to the version the devenv provides.
+    name: ty
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v6.2.0
+      with:
+        python-version: "3.12"
+        cache: 'pip' # caching pip dependencies
+    - name: Install ty
+      run: pip install ty==0.0.78
+    - name: Run ty
+      env:
+        PYTHONWARNINGS: ignore
+        PYTHON_VERSION: "3.12"
+        SETUPTOOLS_VERSION: "75.8.2"
+      run: make typecheck
+
   setuptools61:
     # setuptools 61 is much slower, so we do not run all tests on it.
     name: setuptools 61
