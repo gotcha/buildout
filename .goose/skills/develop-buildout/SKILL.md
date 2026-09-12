@@ -29,8 +29,12 @@ contributor doc: `doc/ADD-A-NEWS-ITEM.rst`.
 - Content: reStructuredText; all lines are joined into one paragraph, so
   avoid markup that needs multiple lines. Use ```` ``literal`` ```` for
   command and option names. End with the author handle, e.g. `[gotcha]`.
-- Validate before committing when towncrier is installed:
-  `towncrier --version=X.Y.Z --draft`.
+- towncrier is provided by the devenv (devenv.nix at the repo root) —
+  inside `devenv shell`, `towncrier create -c "..." +.<type>.rst`
+  creates an orphan fragment with a random hex name, and
+  `towncrier build --version=X.Y.Z --draft` renders the pending entries
+  for validation before committing. (Modern CLI: the version goes on the
+  `build` subcommand, not on the bare `towncrier` call.)
 - Classify honestly: new user-visible capability → `feature`; wrong or
   confusing existing behavior made right → `bugfix`.
 

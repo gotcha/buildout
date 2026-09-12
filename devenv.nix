@@ -29,12 +29,17 @@
   # - uv: fast path of prepare.sh (USE_UV), also fetches pythons
   # - coreutils: provides `timeout` etc. on macOS, where it is missing
   # - ty: Astral's type checker; the static tier of verify-buildout
+  # - towncrier: news entries in news/ are required by the
+  #   develop-buildout skill (config: [tool.towncrier] in pyproject.toml)
   packages = with pkgs; [
     git
     gnumake
     uv
     coreutils
     ty
+    # No top-level towncrier attr in nixpkgs; the python3Packages
+    # application ships the standalone `towncrier` CLI.
+    python3Packages.towncrier
   ];
 
   # MonkeyType and autotyping are not in nixpkgs, and they must share
