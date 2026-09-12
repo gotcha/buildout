@@ -2,11 +2,7 @@
 
 easy_install.txt is split into one test per prose section
 (test_easy_install_*); the other legacy files map 1:1 to tests below."""
-import os
-import re
-import shutil
 import sys
-import textwrap
 
 import pkg_resources
 import zc.buildout.easy_install
@@ -564,7 +560,6 @@ def test_easy_install_script_generation(easy_install_env):
     #
     # The scripts method can be used to generate scripts. Let's create a
     # destination directory for it to place them in:
-    import tempfile
     bin = tmpdir('bin')
     # Now, we'll use the scripts method to generate scripts in this directory
     # from the demo egg:
@@ -584,7 +579,8 @@ def test_easy_install_script_generation(easy_install_env):
     # The bin directory now contains a generated script:
     assert_output(capture_print(ls, bin), '-  demo', N)
     # The return value is a list of the scripts generated:
-    import os, sys
+    import os
+    import sys
     if sys.platform == 'win32':
         scripts == [os.path.join(bin, 'demo.exe'),
                     os.path.join(bin, 'demo-script.py')]

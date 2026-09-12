@@ -184,10 +184,10 @@ def add_source_dist(test, version=1.4):
     tmp = test.globs['extdemo']
     write = test.globs['write']
     try:
-        write(tmp, 'extdemo.c', extdemo_c);
-        write(tmp, 'setup.py', extdemo_setup_py % version);
-        write(tmp, 'README', "");
-        write(tmp, 'MANIFEST.in', "include *.c\n");
+        write(tmp, 'extdemo.c', extdemo_c)
+        write(tmp, 'setup.py', extdemo_setup_py % version)
+        write(tmp, 'README', "")
+        write(tmp, 'MANIFEST.in', "include *.c\n")
         test.globs['sdist'](tmp, test.globs['sample_eggs'])
     except Exception:
         shutil.rmtree(tmp)

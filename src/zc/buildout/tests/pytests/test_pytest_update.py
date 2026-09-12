@@ -5,17 +5,10 @@ either (test_all.py) — instead of "Upgraded: ..." / "Restarting.",
 Windows produces "Not upgrading because not running a local buildout
 command."
 """
-import os
 import re
-import shutil
 import sys
-import textwrap
 
-import pkg_resources
 import pytest
-import zc.buildout.easy_install
-import zc.buildout.buildout
-import zc.buildout.testing
 
 from zc.buildout.tests.pytests.conftest import (
     assert_output,

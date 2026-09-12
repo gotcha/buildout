@@ -1,6 +1,5 @@
 """Pytest port of test_extras.py — no DocTestRunner."""
 import zc.buildout.easy_install
-from zc.buildout.tests.pytests.conftest import assert_output, NORMALIZERS_EASY_INSTALL
 
 
 def test_install_extras_with_greater_than_constrains(easy_install_env):

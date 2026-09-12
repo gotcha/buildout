@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pkg_resources
 import pytest
-from zope.testing import renormalizing
 
 import zc.buildout.easy_install  # ensure submodule is loaded before tests/__init__.py runs
 import zc.buildout.testing

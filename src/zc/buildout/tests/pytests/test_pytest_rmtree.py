@@ -1,8 +1,6 @@
 import os
-import stat
 import tempfile
 
-import pytest
 
 from zc.buildout.rmtree import rmtree
 

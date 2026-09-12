@@ -51,7 +51,6 @@ from pathlib import Path
 from pkg_resources import Distribution
 from setuptools.wheel import Wheel
 from zc.buildout import WINDOWS
-from zc.buildout.utils import IS_SETUPTOOLS_80_PLUS
 from zc.buildout.utils import normalize_name
 import warnings
 import csv
@@ -360,7 +359,7 @@ def namespace_packages_need_pkg_resources(dist: Union[pkg_resources.EggInfoDistr
                 source = f.read()
                 if (source and
                         b'pkg_resources' in source and
-                        not b'pkgutil' in source):
+                        b'pkgutil' not in source):
                     return True
     return False
 
@@ -1703,13 +1702,13 @@ def _distutils_script(path: str, dest: str, script_content: str, initialization:
         dest += '-script.py'
 
     lines = script_content.splitlines(True)
-    if not ('#!' in lines[0]) and ('python' in lines[0]):
+    if '#!' not in lines[0] and ('python' in lines[0]):
         # The script doesn't follow distutil's rules.  Ignore it.
         return []
     lines = lines[1:]  # Strip off the first hashbang line.
     line_with_first_import = len(lines)
     for line_number, line in enumerate(lines):
-        if not 'import' in line:
+        if 'import' not in line:
             continue
         if not (line.startswith('import') or line.startswith('from')):
             continue

@@ -2071,7 +2071,7 @@ def _open(
     download_options = _update_section(download_options, override)
     raw_download_options = _unannotate_section(download_options)
     newest = bool_option(raw_download_options, 'newest', 'false')
-    fallback = newest and not (filename in downloaded)
+    fallback = newest and filename not in downloaded
     extends_cache = raw_download_options.get('extends-cache')
     if extends_cache and variable_template_split(extends_cache)[1::2]:
         raise ValueError(
@@ -2575,7 +2575,8 @@ def main(args: Optional[List[str]]=None) -> None:
             v = sys.exc_info()[1]
             _doing()
             exc_info = sys.exc_info()
-            import pdb, traceback
+            import pdb
+            import traceback
             if debug:
                 traceback.print_exception(*exc_info)
                 sys.stderr.write('\nStarting pdb:\n')

@@ -339,7 +339,6 @@ def buildoutSetUp(test):
         # Now we must modify the newly created bin/buildout to
         # actually begin coverage.
         with open('bin/buildout') as f:
-            import textwrap
             lines = f.read().splitlines()
             assert lines[1] == '', lines
             lines[1] = 'import coverage; coverage.process_startup()'

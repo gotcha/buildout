@@ -1,14 +1,5 @@
 """Pytest port of runsetup.txt, repeatable.txt, setup.txt, debugging.txt, windows.txt — no DocTestRunner."""
-import os
-import re
-import shutil
-import sys
-import textwrap
 
-import pkg_resources
-import zc.buildout.easy_install
-import zc.buildout.buildout
-import zc.buildout.testing
 
 from zc.buildout.tests.pytests.conftest import (
     assert_output,

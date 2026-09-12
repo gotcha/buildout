@@ -399,10 +399,8 @@
 # .. -> text
 #
 import platform
-import re
 import sys
 from io import StringIO
-from pprint import pformat
 
 import pytest
 

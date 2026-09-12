@@ -16,7 +16,6 @@ Usage (.txt file):
 import ast
 import doctest
 import re
-import sys
 import textwrap
 from pathlib import Path
 

@@ -1,11 +1,7 @@
 """Pytest port of inline doctest functions from test_all.py — no DocTestRunner."""
-import logging
 import os
-import re
 import shutil
-import subprocess
 import sys
-import textwrap
 
 import pkg_resources
 import pytest
@@ -13,7 +9,6 @@ import zc.buildout.easy_install
 import zc.buildout.buildout
 import zc.buildout.testing
 
-from zope.testing import loggingsupport
 
 from zc.buildout.tests.pytests.conftest import (
     assert_output,
@@ -625,7 +620,8 @@ The following list shows the affected packages and their namespaces:
     #
     # Now, if we generate a working set using the egg link, we will get a warning
     # and we will get setuptools included in the working set.
-    import logging, zope.testing.loggingsupport
+    import logging
+    import zope.testing.loggingsupport
     handler = zope.testing.loggingsupport.InstalledHandler('zc.buildout.easy_install', level=logging.WARNING)
     logging.getLogger('zc.buildout.easy_install').propagate = False
     def get_working_set(*project_names):
@@ -1379,7 +1375,6 @@ def test_dealing_with_extremely_insane_dependencies(easy_install_env):
     # time, in part because the analysis would get repeated every time a
     # package was encountered in a dependency list.  Now, we don't do
     # the analysis any more:
-    import os
     for i in range(5):
         p = 'pack%s' % i
         deps = ['pack%s' % j for j in range(5) if j is not i]

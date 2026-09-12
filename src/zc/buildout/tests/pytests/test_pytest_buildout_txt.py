@@ -1,14 +1,5 @@
 """Pytest port of buildout.txt, configuration.txt, extending.txt, options.txt, init.txt, extensions.txt — no DocTestRunner."""
-import os
-import re
-import shutil
-import sys
-import textwrap
 
-import pkg_resources
-import zc.buildout.easy_install
-import zc.buildout.buildout
-import zc.buildout.testing
 
 from zc.buildout.tests.pytests.conftest import (
     assert_output,
@@ -736,7 +727,7 @@ def test_configuration_file_syntax(buildout_txt_env):
     #
     # .. -> text
     from io import StringIO
-    import pprint, zc.buildout.configparser
+    import zc.buildout.configparser
     text = "[foo]\nbar = 1\nbaz = a\n      b\n\n      c\n"
     _val = zc.buildout.configparser.parse(StringIO(text), 'test')
     assert _val == {'foo': {'bar': '1', 'baz': 'a\nb\nc'}}
