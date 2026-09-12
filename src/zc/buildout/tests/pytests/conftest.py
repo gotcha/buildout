@@ -289,6 +289,8 @@ def _buildout_txt_index_cache(_sample_eggs_cache, tmp_path_factory):
 
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse('zc.recipe.egg'))
+    assert dist is not None
+    assert dist.location is not None
     (index / 'zc.recipe.egg').mkdir(exist_ok=True)
     # Build the wheel from a private copy of the source tree: running
     # ``setup.py bdist_wheel`` in the shared checkout would collide when
@@ -359,6 +361,8 @@ def update_env():
 
     ws = pkg_resources.working_set
     dist = ws.find(pkg_resources.Requirement.parse('zc.buildout'))
+    assert dist is not None
+    assert dist.location is not None
     old_ver = dist.version
     location = Path(dist.location)
     if location.name == 'src':
