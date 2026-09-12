@@ -35,12 +35,12 @@ logger = logging.getLogger('zc.buildout')
 class Error(Exception):
     """Base class for ConfigParser exceptions."""
 
-    def _get_message(self):
+    def _get_message(self) -> str:
         """Getter for 'message'; needed only to override deprecation in
         BaseException."""
         return self.__message
 
-    def _set_message(self, value: str):
+    def _set_message(self, value: str) -> None:
         """Setter for 'message'; needed only to override deprecation in
         BaseException."""
         self.__message = value
@@ -50,11 +50,11 @@ class Error(Exception):
     # a new property that takes lookup precedence.
     message = property(_get_message, _set_message)
 
-    def __init__(self, msg: str=''):
+    def __init__(self, msg: str='') -> None:
         self.message = msg
         Exception.__init__(self, msg)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.message
 
     __str__ = __repr__
@@ -62,19 +62,19 @@ class Error(Exception):
 class ParsingError(Error):
     """Raised when a configuration file does not follow legal syntax."""
 
-    def __init__(self, filename):
+    def __init__(self, filename: str) -> None:
         Error.__init__(self, 'File contains parsing errors: %s' % filename)
         self.filename = filename
         self.errors = []
 
-    def append(self, lineno, line):
+    def append(self, lineno: int, line: str) -> None:
         self.errors.append((lineno, line))
         self.message += '\n\t[line %2d]: %s' % (lineno, line)
 
 class MissingSectionHeaderError(ParsingError):
     """Raised when a key-value pair is found before any section header."""
 
-    def __init__(self, filename: str, lineno: int, line: str):
+    def __init__(self, filename: str, lineno: int, line: str) -> None:
         Error.__init__(
             self,
             'File contains no section headers.\nfile: %s, line: %d\n%r' %
