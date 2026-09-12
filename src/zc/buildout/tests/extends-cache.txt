@@ -494,7 +494,7 @@ a better solution would re-use the logging already done by the utility.)
 >>> old_download = zc.buildout.download.Download.download
 >>> def wrapper_download(self, url, md5sum=None, path=None):
 ...   print_("The URL %s was downloaded." % url)
-...   return old_download(url, md5sum, path)
+...   return old_download(self, url, md5sum, path)
 >>> zc.buildout.download.Download.download = wrapper_download
 
 >>> zc.buildout.buildout.main([])

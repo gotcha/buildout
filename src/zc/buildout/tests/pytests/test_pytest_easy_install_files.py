@@ -733,7 +733,7 @@ if _interactive:
     assert_output(system(join(bin, 'py') + ' -m pdb what'), 'Error: what does not exist', N)
     # An interpreter can also be generated without other eggs:
     scripts = zc.buildout.easy_install.scripts(
-        [], [], sys.executable, bin, interpreter='py')
+        [], pkg_resources.WorkingSet([]), sys.executable, bin, interpreter='py')
     assert_output(capture_print(cat, bin, 'py'), """
 #!/usr/local/bin/python2.7
 
@@ -3210,7 +3210,7 @@ This may be an indication for either a typo in the option's name or a bug in the
     old_download = zc.buildout.download.Download.download
     def wrapper_download(self, url, md5sum=None, path=None):
       print_("The URL %s was downloaded." % url)
-      return old_download(url, md5sum, path)
+      return old_download(self, url, md5sum, path)
     zc.buildout.download.Download.download = wrapper_download
     assert_output(capture_print(lambda: zc.buildout.buildout.main([])), """
 The URL http://localhost/baseA.cfg was downloaded.

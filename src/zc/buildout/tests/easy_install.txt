@@ -763,8 +763,9 @@ You can also use the -m option to run a module:
 
 An interpreter can also be generated without other eggs:
 
+    >>> import pkg_resources
     >>> scripts = zc.buildout.easy_install.scripts(
-    ...     [], [], sys.executable, bin, interpreter='py')
+    ...     [], pkg_resources.WorkingSet([]), sys.executable, bin, interpreter='py')
     >>> cat(bin, 'py') # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     #!/usr/local/bin/python2.7
     <BLANKLINE>
