@@ -253,9 +253,11 @@ def collect_doctest_fns(source_path):
             continue
         if node.name == 'test_suite':
             continue
-        if not (node.body and isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)
-                and '>>>' in node.body[0].value.value):
+        if not (node.body and isinstance(node.body[0], ast.Expr)):
             continue
-        results.append((node.name, node.body[0].value.value))
+        doc = node.body[0].value
+        if not (isinstance(doc, ast.Constant) and isinstance(doc.value, str)
+                and '>>>' in doc.value):
+            continue
+        results.append((node.name, doc.value))
     return results
