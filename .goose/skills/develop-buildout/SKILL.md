@@ -101,6 +101,32 @@ task it *is* the critical path. Two rules follow:
   for it. Verify the yaml parses and the changed job commands succeed
   locally, and skip the suites.
 
+## Turn budget: a turn can die at any moment
+
+Agent turns run under a harness with a hard wall-clock cap (two
+hours in the managed default). A turn that exceeds it is killed
+mid-flight: whatever lived only in the turn — results, decisions,
+"CI is green" — is lost, and the channel sees a dead agent, not a
+report. A long CI run fits inside the budget only if nothing else
+happened first; do not count on it.
+
+- **Checkpoint before you wait.** The moment work is pushed or a
+  long wait starts, post a channel message naming the state:
+  "branch X pushed, CI run N running, suites green locally". A
+  result held back "until everything is done" dies with the turn;
+  the same result as a one-line message survives it.
+- **Report "running", then end the turn.** CI babysitting is not a
+  reason to stay alive: post the run id, end the turn, and check
+  the outcome next turn. "Wait for green, then report" is exactly
+  the pattern the cap kills.
+- **Leave recoverable state before any wait over ~10 minutes.**
+  Record branch, commit hash, what is verified, and what is pending
+  in your persistent notes (work log), so the next turn — or the
+  next agent — resumes from the record instead of from scratch.
+- **The durable record is the truth.** At every moment, the channel
+  plus the work log must reflect the real state of the work. An
+  unreported result is one kill away from never having happened.
+
 ## Static tier (ty)
 
 `make typecheck` gates on Astral's `ty` (provided by the devenv) at zero

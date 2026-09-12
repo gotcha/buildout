@@ -138,7 +138,9 @@ seconds-fast static hygiene gate — see
 [`features/lint.md`](./features/lint.md). It complements the suites
 and never substitutes for them.
    - `make test` — legacy doctest/testrunner suite (`bin/test -pvc`).
-     The official truth. Several minutes. Scoped smoke:
+     The official truth. Several minutes — long enough for the
+     turn-budget rules in develop-buildout: announce the run and
+     checkpoint state before starting it. Scoped smoke:
      `make test-small` (single `buildout.txt` file) or
      `bin/test -pvc -t <name>`.
    - `make pytest` — ported pytest suite in
