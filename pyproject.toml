@@ -5,6 +5,39 @@
 # install; the gate venv intentionally lacks it.
 exclude = ["src/zc/buildout/_vendor", "etc/tracing"]
 
+[tool.ruff]
+# The repo supports Python 3.9+ (setup.py python_requires).
+target-version = "py39"
+
+[tool.ruff.lint]
+# Pragmatic baseline for a legacy tree: the classic ruff default set
+# (pyflakes F + pycodestyle E4/E7/E9) minus the rules the existing code
+# violates wholesale. Everything else stays enforced for new code —
+# tighten by removing entries from `ignore` as the code gets cleaned.
+# (ruff >= 0.16 defaults to a much wider set; pin the baseline here so
+# `make lint` means the same thing across ruff versions.)
+select = ["E4", "E7", "E9", "F"]
+ignore = [
+    "E401",  # multiple imports on one line
+    "E402",  # module-level import not at top (sys.path dance)
+    "E701",  # multiple statements on one line (colon)
+    "E702",  # multiple statements on one line (semicolon)
+    "E703",  # trailing semicolon
+    "E731",  # assign a lambda expression
+    "E713",  # test for membership should be 'not in'
+    "E722",  # bare except
+    "E741",  # ambiguous variable name (l, O, ...)
+    "F401",  # unused import (incl. re-exports)
+    "F811",  # redefinition (pytest port class injection)
+    "F841",  # unused local variable
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Ported doctest writes a buildout.cfg containing `${...}` substitutions
+# and applies `% dict` for legacy reasons; a mapping argument with no
+# %-placeholder is a deliberate no-op, not a bug.
+"src/zc/buildout/tests/pytests/test_pytest_buildout_doctests.py" = ["F507"]
+
 [tool.towncrier]
 filename = "CHANGES.rst"
 directory = "news/"

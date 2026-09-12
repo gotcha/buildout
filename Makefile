@@ -1,4 +1,4 @@
-.PHONY: all test pytest typecheck test-traced help
+.PHONY: all test pytest typecheck test-traced lint help
 PYTHON_VERSION ?= 3.12
 all: test
 
@@ -34,6 +34,12 @@ pytest: bin/test
 	# is ';' on Windows but ':' elsewhere.
 	PYTHONWARNINGS=ignore PYTHONPATH="$$(bin/py -c 'import glob, os; print(os.pathsep.join(glob.glob(os.path.join(os.getcwd(), "eggs", "v5", "*.egg"))))')" \
 		bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
+
+lint:
+	# ruff comes from the devenv (devenv.nix); run inside `devenv shell`.
+	# Rule selection lives in [tool.ruff] in pyproject.toml — a pragmatic
+	# baseline for this legacy tree; tighten it there as code gets cleaned.
+	ruff check .
 
 help:
 	./prepare.sh --help

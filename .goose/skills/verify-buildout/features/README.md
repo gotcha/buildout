@@ -62,6 +62,9 @@ driving, then use the matching feature file as the recipe.
   truth — every change is proven with it eventually; `make pytest`
   (ported) is the fast development loop, not yet a standalone source
   of truth.
+- **Static**: lint. `make lint` (ruff) is a seconds-fast hygiene gate
+  that reads only the source tree — a complement, never a behavioral
+  proof.
 
 ## Features
 
@@ -78,3 +81,5 @@ driving, then use the matching feature file as the recipe.
 - [Repo test suites](./repo-test-suites.md) — `make test` (legacy
   doctest suite, the official truth) and `make pytest` (ported pytest
   suite, the fast development loop) as the deep behavior proof.
+- [Static lint](./lint.md) — `make lint` (ruff) as the fast hygiene
+  gate; pinned baseline config in `pyproject.toml`.

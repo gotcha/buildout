@@ -31,6 +31,8 @@
   # - ty: Astral's type checker; the static tier of verify-buildout
   # - towncrier: news entries in news/ are required by the
   #   develop-buildout skill (config: [tool.towncrier] in pyproject.toml)
+  # - ruff: linting; driven by `make lint` (config: [tool.ruff] in
+  #   pyproject.toml)
   packages = with pkgs; [
     git
     gnumake
@@ -40,6 +42,7 @@
     # No top-level towncrier attr in nixpkgs; the python3Packages
     # application ships the standalone `towncrier` CLI.
     python3Packages.towncrier
+    ruff
   ];
 
   # MonkeyType and autotyping are not in nixpkgs, and they must share

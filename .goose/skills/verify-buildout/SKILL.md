@@ -31,9 +31,11 @@ build the runner once, then start each drive in its own throwaway
 project directory.
 
 Toolchain: enter `devenv shell` first (devenv.nix at the repo root).
-It provides Python (default 3.12), git, gnumake, uv and coreutils, and
-exports `PYTHON_VERSION` + `USE_UV` + `UV_VENV_CLEAR` +
-`SETUPTOOLS_VERSION=75.8.2` so the bootstrap below just works.
+It provides Python (default 3.12), git, gnumake, uv, coreutils,
+towncrier (news fragments, see the develop-buildout skill) and ruff
+(`make lint`), and exports `PYTHON_VERSION` + `USE_UV` +
+`UV_VENV_CLEAR` + `SETUPTOOLS_VERSION=75.8.2` so the bootstrap below
+just works.
 Pick another supported Python (3.9–3.14) from the command line, no
 file edit:
 
@@ -130,6 +132,11 @@ index, then follow the feature file. The tiers:
    loop, still too young to stand alone. If legacy fails while pytest
    passes, the pytest port is wrong — fix pytest to match. A change
    that impacts existing tests updates BOTH suites.
+
+Alongside the tiers, `make lint` (ruff, from the devenv) is a
+seconds-fast static hygiene gate — see
+[`features/lint.md`](./features/lint.md). It complements the suites
+and never substitutes for them.
    - `make test` — legacy doctest/testrunner suite (`bin/test -pvc`).
      The official truth. Several minutes. Scoped smoke:
      `make test-small` (single `buildout.txt` file) or
@@ -209,5 +216,5 @@ Proof standards:
 
 See [`features/README.md`](./features/README.md). Current coverage:
 install-and-inspect (hermetic core), configure-and-substitute,
-rerun-modes, project scaffolding (init/bootstrap, networked), and the
-two repo test suites.
+rerun-modes, project scaffolding (init/bootstrap, networked), the two
+repo test suites, and static lint (`make lint`, ruff).
