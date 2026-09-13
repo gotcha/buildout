@@ -1950,6 +1950,46 @@ class MissingDistribution(zc.buildout.UserError):
         req, ws = self.data
         return "Couldn't find a distribution for %r." % str(req)
 
+def _pip_install_args(spec: str, dest: str, editable: bool,
+                      package_index_url: Optional[str],
+                      log_level: int) -> List[str]:
+    """Assemble the ``pip install`` argument list for ``call_pip_install``.
+
+    ``package_index_url`` is the configured package index. pip 25+ does
+    not accept a bare directory as index, which buildout does support, so
+    a scheme-less value is converted to a ``file://`` URI when the
+    directory exists and dropped otherwise. ``log_level`` selects the pip
+    verbosity flag.
+    """
+    args = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', dest]
+    if package_index_url:
+        url: Optional[str] = package_index_url
+        if not urllib.parse.urlsplit(url).scheme:
+            # pip 25+ does not accept a directory as index, which buildout
+            # does support.
+            index_path = Path(url)
+            if index_path.exists():
+                url = index_path.expanduser().resolve().as_uri()
+            else:
+                url = None
+        if url:
+            # We could pass the index in the '--index-url' parameter.
+            # But then some of our tests start failing when we pass an index
+            # with only a few zc.buildout distributions.  Reason is that pip
+            # will try to find setuptools there as well, as this is needed as
+            # build-system for most packages.  And this fails.
+            # So we pass the index as *extra* url.
+            args.extend(["--extra-index-url", url])
+    if log_level >= logging.INFO:
+        args.append('-q')
+    else:
+        args.append('-v')
+    if editable:
+        args.append('-e')
+    args.append(spec)
+    return args
+
+
 def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, List[str]]:
     """
     Call `pip install` from a subprocess to install a
@@ -1960,33 +2000,8 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
     These very different return values may seem strange, but it is because
     what needs to happen afterwards is very different for the two cases.
     """
-    args = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', dest]
-    package_index_url = index_url()
-    if package_index_url:
-        if not urllib.parse.urlsplit(package_index_url).scheme:
-            # pip 25+ does not accept a directory as index, which buildout
-            # does support.
-            package_index_url = Path(package_index_url)
-            if package_index_url.exists():
-                package_index_url = package_index_url.expanduser().resolve().as_uri()
-            else:
-                package_index_url = None
-        if package_index_url:
-            # We could pass the index in the '--index-url' parameter.
-            # But then some of our tests start failing when we pass an index
-            # with only a few zc.buildout distributions.  Reason is that pip
-            # will try to find setuptools there as well, as this is needed as
-            # build-system for most packages.  And this fails.
-            # So we pass the index as *extra* url.
-            args.extend(["--extra-index-url", package_index_url])
     level = logger.getEffectiveLevel()
-    if level >= logging.INFO:
-        args.append('-q')
-    else:
-        args.append('-v')
-    if editable:
-        args.append('-e')
-    args.append(spec)
+    args = _pip_install_args(spec, dest, editable, index_url(), level)
 
     try:
         from pip._internal.cli.cmdoptions import no_python_version_warning
