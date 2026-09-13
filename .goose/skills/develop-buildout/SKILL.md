@@ -162,6 +162,30 @@ so CI also runs locally via `dagger call ci`. Rules for changing it:
 - Module (`dagger/src/`) and `news/` edits do not invalidate the job
   cells' engine cache by design — keep it that way.
 
+## Reproducing CI failures: match the CI surface
+
+CI jobs run inside `devenv shell`, and the shell is part of the
+environment under test: it exports variables (e.g. `NIX_PYTHONPATH`)
+and puts its profile's site-packages within reach of every spawned
+interpreter. A failure that depends on that environment cannot be
+reproduced — or verified fixed — outside it. The canonical case: a
+3.14 CI leg failed because the devenv profile carried an ambient
+`six` that leaked onto the test children's `sys.path` via
+`NIX_PYTHONPATH` and hijacked dependency resolution; the same
+scenario run outside `devenv shell` passed, and that "manual repro
+passes" was evidence about a different environment, not about the
+bug.
+
+- Reproduce and verify on the same surface CI uses:
+  `devenv shell --option languages.python.version:string 3.X -- <cmd>`,
+  with the failing leg's Python override and the same make target or
+  test selection.
+- A pass outside `devenv shell` is never evidence that a CI failure
+  is fixed or irreproducible. Treat an outside-pass / inside-fail
+  split as a clue on its own: the bug involves the devenv
+  environment, so diff the environments first (`env | grep -i nix`,
+  `sys.path` dumps) before suspecting the code under test.
+
 ## Static tier (ty)
 
 `make typecheck` gates on Astral's `ty` (provided by the devenv) at zero
