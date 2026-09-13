@@ -2,6 +2,16 @@
 PYTHON_VERSION ?= 3.12
 all: test
 
+# The devenv shell leaks its profile's site-packages onto every spawned
+# interpreter's sys.path via NIX_PYTHONPATH (nixpkgs sitecustomize).
+# Ambient distributions there (e.g. six, pulled in by radon's mando
+# dependency) hijack dependency resolution in the suites' spawned
+# buildout children: pkg_resources picks the ambient dist over the
+# pinned eggs/v5 copy on a location-string tie-break, and the install
+# then fails trying to pip-install the profile's site-packages
+# directory. Keep the suites hermetic by clearing NIX_PYTHONPATH.
+HERMETIC_ENV = NIX_PYTHONPATH=
+
 bin/buildout: setup.py prepare.sh dev.py
 	./prepare.sh
 
@@ -9,13 +19,13 @@ bin/test: bin/buildout buildout.cfg
 	bin/buildout || bin/buildout.exe
 
 test: bin/test
-	PYTHONWARNINGS=ignore bin/test -pvc
+	$(HERMETIC_ENV) PYTHONWARNINGS=ignore bin/test -pvc
 
 test-recipe: bin/test
-	PYTHONWARNINGS=ignore bin/test-recipe
+	$(HERMETIC_ENV) PYTHONWARNINGS=ignore bin/test-recipe
 
 test-small: bin/test
-	PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
+	$(HERMETIC_ENV) PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
 
 # Coverage variants of both suites. etc/coverage/sitecustomize.py on
 # PYTHONPATH starts coverage in the suite process itself and in every
@@ -33,14 +43,14 @@ COVERAGE_ENV = COVERAGE_PROCESS_START=$(CURDIR)/.coveragerc \
 
 coverage: bin/test
 	rm -f .coverage .coverage.*
-	$(COVERAGE_ENV) bin/test -pvc
+	$(COVERAGE_ENV) $(HERMETIC_ENV) bin/test -pvc
 	bin/coverage combine
 	bin/coverage report
 	bin/coverage html
 
 coverage-pytest: bin/test
 	rm -f .coverage .coverage.*
-	$(COVERAGE_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
+	$(COVERAGE_ENV) $(HERMETIC_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
 	bin/coverage combine
 	bin/coverage report
 	bin/coverage html
@@ -60,7 +70,7 @@ pytest: bin/test
 	# itself assemble the value: the PWD variable is empty when make is
 	# invoked from PowerShell (Windows CI), and the PYTHONPATH separator
 	# is ';' on Windows but ':' elsewhere.
-	PYTHONWARNINGS=ignore PYTHONPATH="$$(bin/py -c 'import glob, os; print(os.pathsep.join(glob.glob(os.path.join(os.getcwd(), "eggs", "v5", "*.egg"))))')" \
+	$(HERMETIC_ENV) PYTHONWARNINGS=ignore PYTHONPATH="$$(bin/py -c 'import glob, os; print(os.pathsep.join(glob.glob(os.path.join(os.getcwd(), "eggs", "v5", "*.egg"))))')" \
 		bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
 
 lint:
@@ -94,7 +104,7 @@ clean:
 # .monkeytype-trace/monkeytype.sqlite3 for monkeytype stub/apply.
 test-traced: bin/test
 	rm -rf .monkeytype-trace && mkdir -p .monkeytype-trace
-	PYTHONPATH=$(CURDIR)/etc/tracing \
+	$(HERMETIC_ENV) PYTHONPATH=$(CURDIR)/etc/tracing \
 	MT_DB_PATH=$(CURDIR)/.monkeytype-trace/monkeytype.sqlite3 \
 	MONKEYTYPE_TRACE_MODULES=zc,buildout \
 	PYTHONWARNINGS=ignore \
