@@ -5,6 +5,14 @@
 # install; the gate venv intentionally lacks it.
 exclude = ["src/zc/buildout/_vendor", "etc/tracing"]
 
+[tool.pytest.ini_options]
+# src/zc is a namespace package (no __init__.py). Without this, pytest's
+# default import mode walks up only to zc/buildout and imports the ported
+# test modules as buildout.tests.*: a second, alias copy of the package
+# next to the real zc.buildout.* one, which also defeats name-based
+# coverage matching (source = zc.buildout).
+consider_namespace_packages = true
+
 [tool.ruff]
 # The repo supports Python 3.9+ (setup.py python_requires).
 target-version = "py39"

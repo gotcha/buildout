@@ -48,16 +48,25 @@ output lines that broke `allowhosts`-style tests.
 ## What the numbers mean
 
 - `source = zc.buildout` is matched by module name, so only code
-  imported as `zc.buildout.*` is measured — the library, and under the
-  legacy suite the test modules too (testrunner imports them as
-  `zc.buildout.tests.*`).
-- Under pytest, test modules are imported as `buildout.tests.*`
-  (pytest walks up from `pytests/` and `src/zc/` has no `__init__.py`),
-  so pytest-side reports show the test files themselves at 0% — a
-  naming artifact, not missing coverage of the library. Compare
-  library modules across suites, not TOTAL lines.
-- The two suites exercise different amounts of the library; expect the
-  legacy report to be the higher, authoritative one.
+  imported as `zc.buildout.*` is measured.
+- `[run] omit = */tests/*` keeps test code out of both reports: the
+  legacy harness modules, the ported pytests suite, and the
+  `gen_pytest`/`inject_prose` helpers. The pattern also matches the
+  copies inside the fake-release eggs the update tests install.
+  Coverage measures the library, not the test code.
+- pytest imports the ported tests under their real
+  `zc.buildout.tests.pytests.*` name because pyproject sets
+  `consider_namespace_packages = true` (`src/zc/` is a namespace
+  package). Without it, pytest's default import mode walks up only to
+  `src/zc/buildout` and imports the tests as `buildout.tests.*`: a
+  second, alias copy of the package. The alias defeated the name match
+  (every `test_pytest_*` file reported 0%) and poisoned coverage's
+  per-file disposition cache, so `src/zc/buildout/__init__.py`
+  reported 0 lines under the pytest suite.
+- Both reports now contain library modules only, so TOTAL compares
+  across suites. The two suites still exercise different amounts of
+  the library; expect the legacy report to be the higher,
+  authoritative one.
 
 ## Sub-features
 

@@ -3,6 +3,12 @@ source = zc.buildout
 parallel = true
 # The debugging tests drop into pdb, which installs its own trace function.
 disable_warnings = trace-changed
+omit =
+    # Coverage measures the library, not the test code: skip the whole
+    # tests package (legacy harness modules, the ported pytests suite,
+    # gen_pytest/inject_prose) in both suites. The pattern also covers
+    # the fake-release egg copies the update tests install.
+    */tests/*
 
 [paths]
 # The update tests package the current source as fake-release eggs
