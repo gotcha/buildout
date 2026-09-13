@@ -54,6 +54,11 @@ output lines that broke `allowhosts`-style tests.
   `gen_pytest`/`inject_prose` helpers. The pattern also matches the
   copies inside the fake-release eggs the update tests install.
   Coverage measures the library, not the test code.
+- `*/_package_index.py` is omitted by decision: the module vendors
+  setuptools' package index client and is scheduled for removal once
+  package discovery and downloads move to uv. Both reports list the
+  11 remaining library modules and TOTAL describes the code that
+  survives the migration.
 - pytest imports the ported tests under their real
   `zc.buildout.tests.pytests.*` name because pyproject sets
   `consider_namespace_packages = true` (`src/zc/` is a namespace

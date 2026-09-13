@@ -9,6 +9,11 @@ omit =
     # gen_pytest/inject_prose) in both suites. The pattern also covers
     # the fake-release egg copies the update tests install.
     */tests/*
+    # _package_index.py vendors setuptools' package index client. The
+    # move to uv for package discovery and downloads makes it dead
+    # code, so both reports exclude it: measuring code scheduled for
+    # removal teaches nothing.
+    */_package_index.py
 
 [paths]
 # The update tests package the current source as fake-release eggs

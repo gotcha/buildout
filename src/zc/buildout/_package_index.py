@@ -3,6 +3,12 @@
 This file was copied from setuptools v80.2.0, the file `package_index.py`,
 with minor changes.
 
+This module is scheduled for removal. zc.buildout is moving package
+discovery and downloads to uv; once that lands, this vendored copy has
+no callers left. It is excluded from coverage measurement (see
+.coveragerc) so the coverage reports track the code that survives the
+migration.
+
 setuptools has the following license statement.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
