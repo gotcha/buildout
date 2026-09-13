@@ -119,8 +119,8 @@ the repo root, see repo-test-suites).
 - Never run the two coverage suites (or any suites) concurrently —
   same CPU-starvation flakiness as the plain suites.
 - `htmlcov/` and `.coverage*` are run artifacts; `.gitignore` covers
-  them, but clean them when switching branches if a stale report
-  confuses you: `rm -rf htmlcov .coverage .coverage.*`.
+  them. The coverage targets delete both before regenerating, so a
+  report always matches the run that produced it.
 - The sitecustomize hook is import-tolerant on purpose: a Python
   process that has the env vars but no coverage egg importable runs
   untraced instead of crashing the suite.

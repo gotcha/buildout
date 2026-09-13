@@ -33,6 +33,7 @@ COVERAGE_ENV = COVERAGE_PROCESS_START=$(CURDIR)/.coveragerc \
 
 coverage: bin/test
 	rm -f .coverage .coverage.*
+	rm -rf htmlcov
 	$(COVERAGE_ENV) bin/test -pvc
 	bin/coverage combine
 	bin/coverage report
@@ -40,6 +41,7 @@ coverage: bin/test
 
 coverage-pytest: bin/test
 	rm -f .coverage .coverage.*
+	rm -rf htmlcov
 	$(COVERAGE_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
 	bin/coverage combine
 	bin/coverage report
