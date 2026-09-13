@@ -215,7 +215,7 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
     section_condition = True
     context = None
     cursect = None                            # None, or a dictionary
-    blockmode = None
+    blockmode = False
     optname = None
     lineno = 0
     e = None                                  # None, or an exception
