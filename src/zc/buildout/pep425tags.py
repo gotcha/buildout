@@ -6,7 +6,7 @@ import warnings
 import sysconfig
 import distutils.util  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 
 def get_config_var(var: str) -> Optional[str]:
@@ -103,69 +103,3 @@ def get_platform() -> str:
         # pip pull request #3497
         result = "linux_i686"
     return result
-
-
-def get_supported(versions: Optional[List[str]]=None, supplied_platform: Optional[str]=None) -> List[Tuple[str, str, str]]:
-    """Return a list of supported tags for each version specified in
-    `versions`.
-
-    :param versions: a list of string versions, of the form ["33", "32"],
-        or None. The first version will be assumed to support our ABI.
-    """
-    supported = []
-
-    # Versions must be given with respect to the preference
-    if versions is None:
-        versions = []
-        version_info = get_impl_version_info()
-        major = version_info[:-1]
-        # Support all previous minor Python versions.
-        for minor in range(version_info[-1], -1, -1):
-            versions.append(''.join(map(str, major + (minor,))))
-
-    impl = get_abbr_impl()
-
-    abis = []
-
-    abi = get_abi_tag()
-    if abi:
-        abis[0:0] = [abi]
-
-    abi3s = set()
-    import imp  # ty: ignore[unresolved-import]  # removed in py3.12; this fallback only runs on older Pythons
-    for suffix in imp.get_suffixes():
-        if suffix[0].startswith('.abi'):
-            abi3s.add(suffix[0].split('.', 2)[1])
-
-    abis.extend(sorted(list(abi3s)))
-
-    abis.append('none')
-
-    platforms = []
-    if supplied_platform:
-        platforms.append(supplied_platform)
-    platforms.append(get_platform())
-
-    # Current version, current API (built specifically for our Python):
-    for abi in abis:
-        for arch in platforms:
-            supported.append(('%s%s' % (impl, versions[0]), abi, arch))
-
-    # No abi / arch, but requires our implementation:
-    for i, version in enumerate(versions):
-        supported.append(('%s%s' % (impl, version), 'none', 'any'))
-        if i == 0:
-            # Tagged specifically as being cross-version compatible
-            # (with just the major version specified)
-            supported.append(('%s%s' % (impl, versions[0][0]), 'none', 'any'))
-
-    # Major Python version + platform; e.g. binaries not using the Python API
-    supported.append(('py%s' % (versions[0][0]), 'none', arch))
-
-    # No abi / arch, generic Python
-    for i, version in enumerate(versions):
-        supported.append(('py%s' % (version,), 'none', 'any'))
-        if i == 0:
-            supported.append(('py%s' % (version[0]), 'none', 'any'))
-
-    return supported
