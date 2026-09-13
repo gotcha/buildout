@@ -203,3 +203,11 @@ that pin its behavior — the target layer is `tests/pytests/` with
 plain asserts, not new doctests. The `make complexity` gate must stay
 green, and an accepted simplification refreshes
 `etc/complexity-baseline.json` in the same change.
+
+## Type annotations for new code
+
+All new code carries type annotations. The checkout gates on
+`make typecheck` (ty at zero diagnostics over the tree), and
+unannotated additions erode that static tier. Annotate signatures
+when creating or extracting functions, and keep ty green before
+committing.
