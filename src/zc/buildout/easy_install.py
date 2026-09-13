@@ -1171,14 +1171,10 @@ def install(specs: Union[Tuple[str, ...], List[str]], dest: Optional[str],
             always_unzip: Optional[bool]=None, # Backward compat :/
             path: Optional[List[str]]=None, working_set: Optional[pkg_resources.WorkingSet]=None, newest: bool=True, versions: Optional[Mapping[str, str]]=None,
             use_dependency_links: Optional[bool]=None, allow_hosts: Tuple[str, ...]=('*',),
-            include_site_packages: None=None,
-            allowed_eggs_from_site_packages: None=None,
             check_picked: bool=True,
             allow_unknown_extras: bool=False,
             ) -> pkg_resources.WorkingSet:
     assert executable == sys.executable, (executable, sys.executable)
-    assert include_site_packages is None
-    assert allowed_eggs_from_site_packages is None
 
     installer = Installer(dest, links, index, sys.executable,
                           always_unzip, path,
@@ -1441,8 +1437,7 @@ def develop(setup: str, dest: str,
 
 
 def working_set(specs: Tuple[str, ...], executable: str, path: Optional[List[str]]=None,
-                include_site_packages: None=None,
-                allowed_eggs_from_site_packages: None=None) -> pkg_resources.WorkingSet:
+                ) -> pkg_resources.WorkingSet:
     # Backward compat:
     if path is None:
         # Legacy quirk: the executable string is passed where a list of
@@ -1450,8 +1445,6 @@ def working_set(specs: Tuple[str, ...], executable: str, path: Optional[List[str
         path = executable  # ty: ignore[invalid-assignment]
     else:
         assert executable == sys.executable, (executable, sys.executable)
-    assert include_site_packages is None
-    assert allowed_eggs_from_site_packages is None
 
     return install(specs, None, path=path)
 
