@@ -135,8 +135,11 @@ index, then follow the feature file. The tiers:
 
 Alongside the tiers, `make lint` (ruff, from the devenv) is a
 seconds-fast static hygiene gate — see
-[`features/lint.md`](./features/lint.md). It complements the suites
-and never substitutes for them.
+[`features/lint.md`](./features/lint.md). Next to it sits the
+complexity budget gate `make complexity` (radon, from the devenv;
+baseline `etc/complexity-baseline.json`) — see
+[`features/complexity.md`](./features/complexity.md). Both complement
+the suites and never substitute for them.
    - `make test` — legacy doctest/testrunner suite (`bin/test -pvc`).
      The official truth. Several minutes — long enough for the
      turn-budget rules in develop-buildout: announce the run and
