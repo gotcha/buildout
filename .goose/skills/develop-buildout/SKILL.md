@@ -172,3 +172,14 @@ over doctest sources (`.txt` files, `test_all.py` docstrings):
   line-level suppression cannot come from the source. Prefer truthful
   fixes in ported code; a suppression hand-added to a port is lost on
   the next regen.
+
+## Reducing complexity
+
+When a change reduces cyclomatic complexity, extract free functions
+rather than methods: methods invite quiet access to `self` state,
+while functions force inputs and outputs into the open. Every
+extracted function lands in the same commit paired with unit tests
+that pin its behavior — the target layer is `tests/pytests/` with
+plain asserts, not new doctests. The `make complexity` gate must stay
+green, and an accepted simplification refreshes
+`etc/complexity-baseline.json` in the same change.
