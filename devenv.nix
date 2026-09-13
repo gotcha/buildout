@@ -33,6 +33,8 @@
   #   develop-buildout skill (config: [tool.towncrier] in pyproject.toml)
   # - ruff: linting; driven by `make lint` (config: [tool.ruff] in
   #   pyproject.toml)
+  # - radon: cyclomatic-complexity measurements behind the budget gate
+  #   (`make complexity`; baseline etc/complexity-baseline.json)
   packages = with pkgs; [
     git
     gnumake
@@ -43,6 +45,7 @@
     # application ships the standalone `towncrier` CLI.
     python3Packages.towncrier
     ruff
+    python3Packages.radon
   ];
 
   # MonkeyType and autotyping are not in nixpkgs, and they must share
