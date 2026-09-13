@@ -120,6 +120,75 @@ option_start = re.compile(
 
 leading_blank_lines = re.compile(r"^(\s*\n)+")
 
+def _merge_option(cursect: Dict[str, str], optname: str, optval: str) -> None:
+    """Merge one option line into a section dict.
+
+    A ``name +``/``name -`` operator accumulates values across
+    conditional sections. A plain ``name =`` assignment overrides and
+    replaces preceding extends/removes of the same name.
+    """
+    optname = optname.rstrip()
+    optval = optval.strip()
+    opt_op = optname[-1]
+    if opt_op not in '+-':
+        opt_op = '='
+    if optname in cursect and opt_op in '+-':
+        # Strip any trailing \n, which happens when we have multiple
+        # +=/-= in one file
+        cursect[optname] = cursect[optname].rstrip()
+        if optval:
+            cursect[optname] = "%s\n%s" % (cursect[optname], optval)
+    else:
+        if opt_op == '=':
+            for suffix in '+-':
+                tempname = "%s %s" % (optname, suffix)
+                if tempname in cursect:
+                    del cursect[tempname]
+        cursect[optname] = optval
+
+
+def _evaluate_section_condition(head: str, expression: str, tail: str, context_getter: Callable) -> bool:
+    """Evaluate the condition expression of a section header.
+
+    New-style markers as used in pip constraints are tried first, e.g.:
+    'python_version < "3.11" and platform_system == "Windows"'.
+    On InvalidMarker, fall back to the old-style buildout expression:
+    rebuild a valid Python expression wrapped in a list and evaluate
+    its first element.
+    """
+    # normalize tail comments to Python style
+    tail = tail.replace(';', '#') if tail else ''
+    # un-escape literal # and ; . Do not use a string-escape decode
+    expr = expression.replace(r'\x23', '#').replace(r'\x3b', ';')
+    try:
+        return Marker(expr).evaluate()
+    except InvalidMarker:
+        # lazily populate context for old-style expressions only
+        # evaluated expression is in list: get first element
+        return eval(head + expr + tail, context_getter())[0]
+
+
+def _append_continuation(cursect: Dict[str, str], optname: str, line: str, blockmode: bool) -> None:
+    """Append a continuation line to the current option value."""
+    if blockmode:
+        line = line.rstrip()
+    else:
+        line = line.strip()
+    cursect[optname] = "%s\n%s" % (cursect[optname], line)
+
+
+def _finalize_sections(sections: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, str]]:
+    """Dedent and right-strip multi-line option values in place."""
+    for sectname in sections:
+        section = sections[sectname]
+        for name in section:
+            value = section[name]
+            if value[:1].isspace():
+                section[name] = leading_blank_lines.sub(
+                    '', textwrap.dedent(value.rstrip()))
+    return sections
+
+
 def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Type[dict], Callable]=dict) -> Dict[str, Dict[str, str]]:
     """Parse a sectioned setup file.
 
@@ -164,14 +233,10 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
             if not section_condition:
                 #skip section based on its expression condition
                 continue
+            if not blockmode and not line.strip():
+                continue
             # continuation line
-            if blockmode:
-                line = line.rstrip()
-            else:
-                line = line.strip()
-                if not line:
-                    continue
-            cursect[optname] = "%s\n%s" % (cursect[optname], line)
+            _append_continuation(cursect, optname, line, blockmode)
         else:
             header = section_header(line)
             if header:
@@ -179,29 +244,16 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
                 section_condition = True
                 sectname = header.group('name')
 
-                head = header.group('head') # the starting [
                 expression = header.group('expression')
-                tail = header.group('tail') # closing ]and comment
                 if expression:
-                    # normalize tail comments to Python style
-                    tail = tail.replace(';', '#') if tail else ''
-                    # un-escape literal # and ; . Do not use a
-                    # string-escape decode
-                    expr = expression.replace(r'\x23','#').replace(r'\x3b', ';')
-                    try:
-                        # new-style markers as used in pip constraints, e.g.:
-                        # 'python_version < "3.11" and platform_system == "Windows"'
-                        marker = Marker(expr)
-                        section_condition = marker.evaluate()
-                    except InvalidMarker:
-                        # old style buildout expression
-                        # rebuild a valid Python expression wrapped in a list
-                        expr = head + expr + tail
-                        # lazily populate context only expression
+                    def context_getter():
+                        nonlocal context
                         if not context:
                             context = exp_globals()
-                        # evaluated expression is in list: get first element
-                        section_condition = eval(expr, context)[0]
+                        return context
+                    section_condition = _evaluate_section_condition(
+                        header.group('head'), expression,
+                        header.group('tail'), context_getter)
                     # finally, ignore section when an expression
                     # evaluates to false
                     if not section_condition:
@@ -232,28 +284,7 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
                     # option start line
                     optname, optval = mo.group('name', 'value')
                     optname = optname.rstrip()
-                    optval = optval.strip()
-                    # Handle multiple extensions of the same value in the
-                    # same file. This happens with conditional sections.
-                    opt_op = optname[-1]
-                    if opt_op not in '+-':
-                        opt_op = '='
-                    if optname in cursect and opt_op in '+-':
-                        # Strip any trailing \n, which happens when we have multiple
-                        # +=/-= in one file
-                        cursect[optname] = cursect[optname].rstrip()
-                        if optval:
-                            cursect[optname] = "%s\n%s" % (cursect[optname], optval)
-                    else:
-                        # If an assignment (=) comes after an extend (+=) /
-                        # remove (-=), it overrides and replaces the preceding
-                        # extend / remove
-                        if opt_op == '=':
-                            for suffix in '+-':
-                                tempname = "%s %s" % (optname, suffix)
-                                if tempname in cursect:
-                                    del cursect[tempname]
-                        cursect[optname] = optval
+                    _merge_option(cursect, optname, optval)
                     blockmode = not optval
                 elif not (optname or line.strip()):
                     # blank line after section start
@@ -271,12 +302,4 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
     if e:
         raise e
 
-    for sectname in sections:
-        section = sections[sectname]
-        for name in section:
-            value = section[name]
-            if value[:1].isspace():
-                section[name] = leading_blank_lines.sub(
-                    '', textwrap.dedent(value.rstrip()))
-
-    return sections
+    return _finalize_sections(sections)
