@@ -11,7 +11,7 @@ on:
 # repo-owned composite action in .github/actions/devenv-setup). Every
 # development tool — Python 3.9-3.14 (selected per job with
 # `devenv shell --option languages.python.version:string`), uv, ruff,
-# ty, make — comes from devenv.nix, so CI runs the same toolchain a
+# ty, radon, make — comes from devenv.nix, so CI runs the same toolchain a
 # local developer shell provides, pinned by devenv.lock.
 # Exception: the Windows job keeps actions/setup-python because Nix
 # does not run on Windows runners.
@@ -75,6 +75,26 @@ jobs:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
     - name: Run ruff
       run: devenv shell -- make lint
+
+  complexity:
+    # Complexity budget gate, parallel to the test matrix like ruff:
+    # radon needs no bootstrap and comes from the devenv, so CI and a
+    # local `make complexity` agree by construction (baseline:
+    # etc/complexity-baseline.json; gate script: etc/complexity_gate.py).
+    name: radon
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: ./.github/actions/devenv-setup
+      with:
+        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
+        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
+        # means this step is skipped entirely.
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Run complexity gate
+      run: devenv shell -- make complexity
 
   typecheck:
     # Static tier, parallel to the test matrix. `make typecheck`

@@ -1,4 +1,4 @@
-.PHONY: all test pytest coverage coverage-pytest typecheck test-traced lint help
+.PHONY: all test pytest coverage coverage-pytest typecheck test-traced lint complexity complexity-baseline help
 PYTHON_VERSION ?= 3.12
 all: test
 
@@ -68,6 +68,19 @@ lint:
 	# Rule selection lives in [tool.ruff] in pyproject.toml — a pragmatic
 	# baseline for this legacy tree; tighten it there as code gets cleaned.
 	ruff check .
+
+complexity:
+	# Cyclomatic-complexity budget gate, a static tier of
+	# verify-buildout: no function or method may exceed its entry in
+	# etc/complexity-baseline.json, and code without an entry must be
+	# radon grade B or better. radon comes from the devenv; the gate
+	# script (etc/complexity_gate.py) is stdlib-only. After landing an
+	# accepted simplification, refresh and commit the baseline:
+	# make complexity-baseline
+	python3 etc/complexity_gate.py
+
+complexity-baseline:
+	python3 etc/complexity_gate.py --write-baseline
 
 help:
 	./prepare.sh --help
