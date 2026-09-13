@@ -1,5 +1,25 @@
 {
   "nodes": {
+    "dagger-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1787751959,
+        "narHash": "sha256-IY0FDSvjme7YH/UwQJNasYLEd9Ryw25urF3ZxsH3WJM=",
+        "owner": "dagger",
+        "repo": "nix",
+        "rev": "4a39fb35b724a8f85c254fa1513fa0ffc17162e7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dagger",
+        "repo": "nix",
+        "type": "github"
+      }
+    },
     "devenv": {
       "locked": {
         "dir": "src/modules",
@@ -14,6 +34,23 @@
         "dir": "src/modules",
         "owner": "cachix",
         "repo": "devenv",
+        "type": "github"
+      }
+    },
+    "devenv-dagger": {
+      "locked": {
+        "dir": "src/modules",
+        "lastModified": 1789342220,
+        "narHash": "sha256-UB/LxTYIo7c8bm3XkYTDmtacke56WoL8RCa/YraQ0mU=",
+        "owner": "jfroche",
+        "repo": "devenv-dagger",
+        "rev": "be90b17c07a8516dfd02c777b08cc08df68d20e7",
+        "type": "github"
+      },
+      "original": {
+        "dir": "src/modules",
+        "owner": "jfroche",
+        "repo": "devenv-dagger",
         "type": "github"
       }
     },
@@ -72,9 +109,30 @@
     },
     "root": {
       "inputs": {
+        "dagger-nix": "dagger-nix",
         "devenv": "devenv",
+        "devenv-dagger": "devenv-dagger",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-python": "nixpkgs-python"
+        "nixpkgs-python": "nixpkgs-python",
+        "upstream-devenv": "upstream-devenv"
+      }
+    },
+    "upstream-devenv": {
+      "locked": {
+        "dir": "src/modules",
+        "lastModified": 1788956372,
+        "narHash": "sha256-ACop98BNBAWic+KLXd5PBSwzxzMUfEWmefVXDBDFyHQ=",
+        "owner": "cachix",
+        "repo": "devenv",
+        "rev": "2a399e9ea5e981f225d75b25c8fa8d76f730131d",
+        "type": "github"
+      },
+      "original": {
+        "dir": "src/modules",
+        "owner": "cachix",
+        "repo": "devenv",
+        "rev": "2a399e9ea5e981f225d75b25c8fa8d76f730131d",
+        "type": "github"
       }
     }
   },

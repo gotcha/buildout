@@ -61,6 +61,14 @@
     echo "MonkeyType + autotyping installed into $VENV"
   '';
 
+  # Dagger engine on a Podman machine, from the devenv-dagger module
+  # (inputs declared in devenv.yaml). Enabling services.dagger
+  # auto-enables services.podman-machine. `devenv up` starts the
+  # machine and the engine container; the dagger CLI in this shell
+  # reaches the engine via _EXPERIMENTAL_DAGGER_RUNNER_HOST, which the
+  # module exports.
+  services.dagger.enable = true;
+
   # Feed the repo bootstrap the Python version selected above.
   env.PYTHON_VERSION = config.languages.python.version;
   # nixpkgs Pythons ship with ensurepip disabled, so `python -m venv`

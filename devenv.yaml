@@ -7,3 +7,21 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  # devenv-dagger's top-level.nix pulls upstream devenv modules via this
+  # input. It must be pinned to the SAME revision as the implicit
+  # `devenv` input (the CLI's own module set, see devenv.lock): a
+  # different revision declares options like `machines` a second time
+  # from another store path and evaluation fails. When a devenv CLI
+  # upgrade moves the implicit input, re-align this pin.
+  upstream-devenv:
+    url: github:cachix/devenv/2a399e9ea5e981f225d75b25c8fa8d76f730131d?dir=src/modules
+  # The dagger module reads the dagger CLI package from this input.
+  dagger-nix:
+    url: github:dagger/nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+  devenv-dagger:
+    url: github:jfroche/devenv-dagger?dir=src/modules
+imports:
+  - devenv-dagger
