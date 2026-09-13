@@ -24,6 +24,9 @@ pybin=$(ls -d "$REPO"/venvs/*/bin/python* 2>/dev/null | head -1)
 tyver=$(command -v ty >/dev/null 2>&1 && ty --version 2>/dev/null | head -1)
 [ -n "$tyver" ]; check "ty on PATH (devenv, static tier)" $? "$tyver"
 
+radonver=$(command -v radon >/dev/null 2>&1 && radon --version 2>/dev/null | head -1)
+[ -n "$radonver" ]; check "radon on PATH (devenv, complexity tier)" $? "$radonver"
+
 head_rev=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)
 [ -n "$head_rev" ]; check "git HEAD" $? "$head_rev"
 dirty=$(git -C "$REPO" status --short 2>/dev/null | head -5)
