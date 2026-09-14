@@ -13,8 +13,8 @@ on:
 # `devenv shell --option languages.python.version:string`), uv, ruff,
 # ty, radon, make — comes from devenv.nix, so CI runs the same toolchain a
 # local developer shell provides, pinned by devenv.lock.
-# Exception: the Windows job keeps actions/setup-python because Nix
-# does not run on Windows runners.
+# Exception: the Windows job (windows.yml) keeps actions/setup-python
+# because Nix does not run on Windows runners.
 # Second exception: the dagger job takes its dagger CLI from
 # dagger/dagger-for-github, pinned to dagger.json's engineVersion.
 # The devenv-provided CLI would need _EXPERIMENTAL_DAGGER_RUNNER_HOST
@@ -273,55 +273,12 @@ jobs:
         -- make pytest
 
   windows:
-    # Exception to the devenv rule: Nix does not run on Windows
-    # runners, so this job keeps actions/setup-python and the
-    # pip-cached bootstrap. It still drives the repo-owned entry
-    # points (`make`, `make pytest`).
     name: Windows
     # These tests are the slowest, so start them immediately after the first batch
     # of tests have finished, instead of after the both the Python and pip matrixes.
     needs: setuptools
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-        python-version: ["3.10"]
-        setuptools-version: ["75.8.2"]
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v6.0.2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip' # caching pip dependencies
-    - name: Run tests
-      env:
-        PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-        # Defining temporary directories is needed on Windows for
-        # test_all.TestEasyInstall.test_move_to_eggs_dir_and_compile
-        TMPDIR: C:\tmp
-        TMP: C:\tmp
-        TEMP: C:\tmp
-      run: make
-    - name: Run pytest suite
-      # bash, not the default pwsh: the Makefile pytest recipe is POSIX sh
-      # (command substitution). Under pwsh, make has to discover Git's
-      # sh.exe on PATH itself, and PWD is not exported.
-      shell: bash
-      env:
-        PYTHONWARNINGS: ignore
-        PYTHON_VERSION: ${{matrix.python-version}}
-        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-        # Defining temporary directories is needed on Windows for
-        # test_all.TestEasyInstall.test_move_to_eggs_dir_and_compile
-        TMPDIR: C:\tmp
-        TMP: C:\tmp
-        TEMP: C:\tmp
-      run: make pytest
+    uses: ./.github/workflows/windows.yml
 
   coverage:
     # Coverage variant of the legacy suite, in parallel with the windows
