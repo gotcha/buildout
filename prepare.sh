@@ -104,7 +104,10 @@ fi
 # which has a side effect we need: generate 'src/zc.buildout.egg-info'
 # This is needed so in Python we can do:
 # >>> pkg_resources.working_set.add_entry('src')
-PIP_ARGS="$PIP_ARGS packaging build"
+# Floor build at 1: if a package index momentarily hides pyproject_hooks,
+# an unfloored build requirement silently backtracks to build 0.9.0, which
+# lacks build.env.DefaultIsolatedEnv and fails the test suite much later.
+PIP_ARGS="$PIP_ARGS packaging build>=1"
 echo
 echo "Using arguments for pip install: $PIP_ARGS"
 # "$VENV_PYTHON" -m pip install -e .[test] -e zc.recipe.egg_[test] $PIP_ARGS
