@@ -2273,19 +2273,14 @@ def _installed_dist_name(full_distinfo_dir: str) -> Optional[str]:
     return distrib.metadata['Name']
 
 
-def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, List[str]]:
-    """
-    Call `pip install` from a subprocess to install a
-    distribution specified by `spec` into `dest`.
+def _maybe_add_no_python_version_warning(args: List[str]) -> None:
+    """Append pip's ``--no-python-version-warning`` flag when pip
+    supports it.
 
-    For normal (non-editable) installs, returns all the paths inside `dest`
-    created by the above.  For editable installs, it returns the package name.
-    These very different return values may seem strange, but it is because
-    what needs to happen afterwards is very different for the two cases.
+    Quirk preserved: the flag is only appended from the second call
+    on; the first call just records a one-shot ``displayed`` attribute
+    on ``call_pip_install``.
     """
-    level = logger.getEffectiveLevel()
-    args = _pip_install_args(spec, dest, editable, index_url(), level)
-
     try:
         from pip._internal.cli.cmdoptions import no_python_version_warning
         HAS_WARNING_OPTION = True
@@ -2299,6 +2294,57 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
         else:
             args.append('--no-python-version-warning')
 
+
+def _editable_scan_result(
+        split_entries: List[Tuple[str, str]], spec: str) -> Optional[str]:
+    """Handle an editable install's egg-link / -nspkg.pth scan results.
+
+    Return the package name when an egg-link file was created
+    (setuptools 79 and earlier); when a -nspkg.pth file accompanies
+    it, register the guessed old-style namespaces and warn.
+    """
+    # On setuptools 79 and earlier, the egg-link file is created.
+    package_name, namespaces = _scan_editable_install(split_entries)
+    if package_name:
+        logger.debug(
+            "Found .egg-link file after successful pip install of %s",
+            spec,
+        )
+    if namespaces is not None:
+        # We only need this if the name was found.  If name was not
+        # found, the namespaces will be checked in a different way
+        # further on.
+        logger.debug(
+            "Found -nspkg.pth file after successful pip install of %s",
+            spec,
+        )
+        logger.warning(
+            "WARNING: Package %s at %s is using old style namespace packages. "
+            "You should switch to native namespaces (PEP 420).",
+            package_name,
+            spec,
+        )
+        Installer._namespace_packages[package_name] = namespaces
+    if package_name:
+        return package_name
+    return None
+
+
+def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, List[str]]:
+    """
+    Call `pip install` from a subprocess to install a
+    distribution specified by `spec` into `dest`.
+
+    For normal (non-editable) installs, returns all the paths inside `dest`
+    created by the above.  For editable installs, it returns the package name.
+    These very different return values may seem strange, but it is because
+    what needs to happen afterwards is very different for the two cases.
+    """
+    level = logger.getEffectiveLevel()
+    args = _pip_install_args(spec, dest, editable, index_url(), level)
+
+    _maybe_add_no_python_version_warning(args)
+
     env = os.environ.copy()
     python_path = pip_path[:]
     python_path.append(env.get('PYTHONPATH', ''))
@@ -2308,28 +2354,7 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
 
     split_entries = [os.path.splitext(entry) for entry in os.listdir(dest)]
     if editable:
-        # On setuptools 79 and earlier, the egg-link file is created.
-        package_name, namespaces = _scan_editable_install(split_entries)
-        if package_name:
-            logger.debug(
-                "Found .egg-link file after successful pip install of %s",
-                spec,
-            )
-        if namespaces is not None:
-            # We only need this if the name was found.  If name was not
-            # found, the namespaces will be checked in a different way
-            # further on.
-            logger.debug(
-                "Found -nspkg.pth file after successful pip install of %s",
-                spec,
-            )
-            logger.warning(
-                "WARNING: Package %s at %s is using old style namespace packages. "
-                "You should switch to native namespaces (PEP 420).",
-                package_name,
-                spec,
-            )
-            Installer._namespace_packages[package_name] = namespaces
+        package_name = _editable_scan_result(split_entries, spec)
         if package_name:
             return package_name
 

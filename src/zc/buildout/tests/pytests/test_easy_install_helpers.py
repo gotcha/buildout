@@ -18,12 +18,14 @@ from zc.buildout.easy_install import (
     _dist_distutils_scripts,
     _dist_entry_points,
     _dist_info_dirname,
+    _editable_scan_result,
     _fetch_requested_dists,
     _final_dists,
     _find_req_dist,
     _installed_dist_name,
     _is_url,
     _matching_dists,
+    _maybe_add_no_python_version_warning,
     _move_record_leftovers,
     _move_top_levels,
     _parse_requirements,
@@ -187,6 +189,57 @@ def test_scan_editable_install_namespace_two_dots():
 def test_scan_editable_install_namespace_capped_at_two_dots():
     entries = [('a.b.c.d', '.egg-link'), ('a.b.c.d-nspkg', '.pth')]
     assert _scan_editable_install(entries) == ('a.b.c.d', 'a\na.b')
+
+
+def test_maybe_add_no_python_version_warning_appends_from_second_call(
+        monkeypatch):
+    monkeypatch.delattr(
+        easy_install.call_pip_install, 'displayed', raising=False)
+    args = ['install']
+    _maybe_add_no_python_version_warning(args)
+    assert args == ['install']
+    assert hasattr(easy_install.call_pip_install, 'displayed')
+    _maybe_add_no_python_version_warning(args)
+    assert args == ['install', '--no-python-version-warning']
+
+
+def test_maybe_add_no_python_version_warning_old_pip(monkeypatch):
+    monkeypatch.delattr(
+        easy_install.call_pip_install, 'displayed', raising=False)
+    # An entry of None in sys.modules makes the import raise ImportError.
+    monkeypatch.setitem(
+        sys.modules, 'pip._internal.cli.cmdoptions', None)
+    args = ['install']
+    _maybe_add_no_python_version_warning(args)
+    _maybe_add_no_python_version_warning(args)
+    assert args == ['install']
+    assert not hasattr(easy_install.call_pip_install, 'displayed')
+
+
+def test_editable_scan_result_without_egg_link_returns_none(caplog):
+    entries = [('demo', '.dist-info'), ('demo-nspkg', '.pth')]
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        assert _editable_scan_result(entries, 'demo') is None
+    assert caplog.text == ''
+
+
+def test_editable_scan_result_egg_link_returns_package_name(caplog):
+    entries = [('demo', '.egg-link'), ('demo-1.0', '.dist-info')]
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        assert _editable_scan_result(entries, 'demo') == 'demo'
+    assert 'Found .egg-link file' in caplog.text
+    assert 'old style namespace' not in caplog.text
+
+
+def test_editable_scan_result_registers_namespaces(monkeypatch, caplog):
+    monkeypatch.delitem(
+        easy_install.Installer._namespace_packages, 'a.b.c', raising=False)
+    entries = [('a.b.c', '.egg-link'), ('a.b.c-nspkg', '.pth')]
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        assert _editable_scan_result(entries, 'a.b.c') == 'a.b.c'
+    assert easy_install.Installer._namespace_packages['a.b.c'] == 'a\na.b'
+    assert 'Found -nspkg.pth file' in caplog.text
+    assert 'old style namespace' in caplog.text
 
 
 def test_dist_info_dirname_returns_first_match():
