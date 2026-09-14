@@ -407,8 +407,8 @@ jobs:
     # table, same make targets, with a devpi PyPI cache shared by all
     # jobs of the run. This is the job a developer reproduces locally
     # with `dagger call ci`. The matrix below runs one GH job per job
-    # family defined in the dagger module's Job table
-    # (dagger/src/buildout_ci/main.py); the two lists must stay in sync.
+    # family: the dagger module's FAMILIES plus the harness's own module
+    # family (dagger/src/buildout_ci/jobs.py); the two lists must stay in sync.
     name: dagger ${{ matrix.family }}
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
@@ -416,7 +416,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        family: [setuptools, python, pip, scripts, static, coverage]
+        family: [setuptools, python, pip, scripts, static, coverage, module]
     steps:
     - uses: actions/checkout@v6.0.2
     - name: Free runner disk
