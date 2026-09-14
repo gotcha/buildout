@@ -794,6 +794,158 @@ def _uninstall_stale_parts(
     return installed_parts
 
 
+def _update_recipe_callable(
+        recipe: Any,
+        part: str,
+        logger: logging.Logger,
+        ) -> Any:
+    """Return the recipe's update callable, falling back to its install
+    callable (with a warning) when it doesn't define one."""
+    try:
+        update = recipe.update
+    except AttributeError:
+        update = recipe.install
+        logger.warning(
+            "The recipe for %s doesn't define an update "
+            "method. Using its install method.",
+            part)
+    return update
+
+
+def _merged_updated_files(
+        installed_files: Optional[Union[Tuple[str, ...], str, List[str]]],
+        old_installed_files: str,
+        ) -> Tuple[List[str], List[str]]:
+    """Merge an update result with the previously installed files.
+
+    Return ``(installed_files, new_files)``: a ``None`` update result
+    keeps the previous files; otherwise the result is normalized to a
+    list and any new files are appended to the previous ones.
+    """
+    previous = old_installed_files.split('\n')
+    if installed_files is None:
+        return previous, []
+    if isinstance(installed_files, str):
+        files = [installed_files]
+    else:
+        files = list(installed_files)
+    new_files = [p for p in files if p not in previous]
+    if new_files:
+        files = previous + new_files
+    return files, new_files
+
+
+def _update_part(
+        part: str,
+        recipe: Any,
+        call: Callable[
+            [Callable], Optional[Union[Tuple[str, ...], str, List[str]]]],
+        installed_part_options: Dict[str, Union['Options', Dict[str, str]]],
+        installed_parts: List[str],
+        installed_exists: bool,
+        logger: logging.Logger,
+        uninstall: Callable[[str], None],
+        update_installed: Callable[..., None],
+        ) -> Tuple[List[str], List[str]]:
+    """Run a part's update recipe, rolling the part back on failure.
+
+    Return ``(installed_files, new_files)`` as merged by
+    ``_merged_updated_files``.
+    """
+    logger.info('Updating %s.', part)
+    old_options = installed_part_options[part]
+    old_installed_files = old_options['__buildout_installed__']
+    update = _update_recipe_callable(recipe, part, logger)
+    try:
+        installed_files = call(update)
+    except Exception:
+        installed_parts.remove(part)
+        uninstall(old_installed_files)
+        if installed_exists:
+            update_installed(parts=' '.join(installed_parts))
+        raise
+    return _merged_updated_files(installed_files, old_installed_files)
+
+
+def _normalize_installed_files(
+        installed_files: Optional[Union[Tuple[str, ...], str, List[str]]],
+        part: str,
+        logger: logging.Logger,
+        ) -> Union[List[str], Tuple[str, ...]]:
+    """Normalize a recipe install result to a list of paths.
+
+    A ``None`` result is a recipe bug: warn and use the empty tuple,
+    exactly as ``Buildout.install`` always has.
+    """
+    if installed_files is None:
+        logger.warning(
+            "The %s install returned None.  A path or "
+            "iterable os paths should be returned.",
+            part)
+        return ()
+    if isinstance(installed_files, str):
+        return [installed_files]
+    return list(installed_files)
+
+
+def _record_installed_part(
+        part: str,
+        signature: str,
+        saved_options: Dict[str, str],
+        installed_files: Union[List[str], Tuple[str, ...]],
+        installed_parts: List[str],
+        installed_part_options: Dict[str, Union['Options', Dict[str, str]]],
+        ) -> List[str]:
+    """Record the part's final options and move it to the end of the
+    installed parts list; return the updated list."""
+    installed_part_options[part] = saved_options
+    saved_options['__buildout_installed__'] = '\n'.join(installed_files)
+    saved_options['__buildout_signature__'] = signature
+
+    installed_parts = [p for p in installed_parts if p != part]
+    installed_parts.append(part)
+    return installed_parts
+
+
+def _save_or_update_installed(
+        need_to_save_installed: Union[bool, List[str]],
+        installed_exists: bool,
+        installed_parts: List[str],
+        installed_part_options: Dict[str, Union['Options', Dict[str, str]]],
+        save_installed_options: Callable[
+            [Mapping[str, Union['Options', Dict[str, str]]]], None],
+        update_installed: Callable[..., None],
+        ) -> bool:
+    """Persist the installed options after a part install/update;
+    return the new ``installed_exists`` flag."""
+    if need_to_save_installed:
+        installed_part_options['buildout']['parts'] = (
+            ' '.join(installed_parts))
+        save_installed_options(installed_part_options)
+        return True
+    assert installed_exists
+    update_installed(parts=' '.join(installed_parts))
+    return installed_exists
+
+
+def _finalize_installed_options(
+        installed_develop_eggs: str,
+        installed_exists: bool,
+        installed_parts: List[str],
+        installed_part_options: Dict[str, Union['Options', Dict[str, str]]],
+        buildout_options: Union['Options', Dict[str, str]],
+        save_installed_options: Callable[
+            [Mapping[str, Union['Options', Dict[str, str]]]], None],
+        ) -> None:
+    """Persist the installed options when only develop eggs changed, or
+    drop the installed file when no parts remain."""
+    if installed_develop_eggs:
+        if not installed_exists:
+            save_installed_options(installed_part_options)
+    elif (not installed_parts) and installed_exists:
+        os.remove(buildout_options['installed'])
+
+
 @commands
 class Buildout(DictMixin):
 
@@ -1119,87 +1271,34 @@ class Buildout(DictMixin):
             saved_options = self[part].copy()
             recipe = self[part].recipe
             if part in installed_parts: # update
-                need_to_save_installed = False
                 with _activity('Updating %s.', part):
-                    self._logger.info('Updating %s.', part)
-                    old_options = installed_part_options[part]
-                    old_installed_files = old_options['__buildout_installed__']
-
-                    try:
-                        update = recipe.update
-                    except AttributeError:
-                        update = recipe.install
-                        self._logger.warning(
-                            "The recipe for %s doesn't define an update "
-                            "method. Using its install method.",
-                            part)
-
-                    try:
-                        installed_files = self[part]._call(update)
-                    except Exception:
-                        installed_parts.remove(part)
-                        self._uninstall(old_installed_files)
-                        if installed_exists:
-                            self._update_installed(
-                                parts=' '.join(installed_parts))
-                        raise
-
-                    old_installed_files = old_installed_files.split('\n')
-                    if installed_files is None:
-                        installed_files = old_installed_files
-                    else:
-                        if isinstance(installed_files, str):
-                            installed_files = [installed_files]
-                        else:
-                            installed_files = list(installed_files)
-
-                        need_to_save_installed = [
-                            p for p in installed_files
-                            if p not in old_installed_files]
-
-                        if need_to_save_installed:
-                            installed_files = (old_installed_files
-                                               + need_to_save_installed)
+                    (installed_files, need_to_save_installed
+                     ) = _update_part(
+                        part, recipe, self[part]._call,
+                        installed_part_options, installed_parts,
+                        installed_exists, self._logger,
+                        self._uninstall, self._update_installed)
 
             else: # install
                 need_to_save_installed = True
                 with _activity('Installing %s.', part):
                     self._logger.info('Installing %s.', part)
-                    installed_files = self[part]._call(recipe.install)
-                    if installed_files is None:
-                        self._logger.warning(
-                            "The %s install returned None.  A path or "
-                            "iterable os paths should be returned.",
-                            part)
-                        installed_files = ()
-                    elif isinstance(installed_files, str):
-                        installed_files = [installed_files]
-                    else:
-                        installed_files = list(installed_files)
+                    installed_files = _normalize_installed_files(
+                        self[part]._call(recipe.install), part, self._logger)
 
-            installed_part_options[part] = saved_options
-            saved_options['__buildout_installed__'
-                          ] = '\n'.join(installed_files)
-            saved_options['__buildout_signature__'] = signature
-
-            installed_parts = [p for p in installed_parts if p != part]
-            installed_parts.append(part)
+            installed_parts = _record_installed_part(
+                part, signature, saved_options, installed_files,
+                installed_parts, installed_part_options)
             _check_for_unused_options_in_section(self, part)
+            installed_exists = _save_or_update_installed(
+                need_to_save_installed, installed_exists,
+                installed_parts, installed_part_options,
+                self._save_installed_options, self._update_installed)
 
-            if need_to_save_installed:
-                installed_part_options['buildout']['parts'] = (
-                    ' '.join(installed_parts))
-                self._save_installed_options(installed_part_options)
-                installed_exists = True
-            else:
-                assert installed_exists
-                self._update_installed(parts=' '.join(installed_parts))
-
-        if installed_develop_eggs:
-            if not installed_exists:
-                self._save_installed_options(installed_part_options)
-        elif (not installed_parts) and installed_exists:
-            os.remove(self['buildout']['installed'])
+        _finalize_installed_options(
+            installed_develop_eggs, installed_exists, installed_parts,
+            installed_part_options, self['buildout'],
+            self._save_installed_options)
 
         if self.show_picked_versions or self.update_versions_file:
             self._print_picked_versions()

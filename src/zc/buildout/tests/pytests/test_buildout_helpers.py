@@ -21,21 +21,28 @@ from zc.buildout.buildout import (
     _default_versions,
     _develop_source_dir,
     _filename_for_logging,
+    _finalize_installed_options,
     _links_and_hosts,
     _load_config,
     _load_user_defaults,
     _log_part_option_changes,
     _merge_config_data,
+    _merged_updated_files,
     _new_develop_eggs,
+    _normalize_installed_files,
     _part_is_up_to_date,
     _pin_buildout_version,
     _previous_develop_links,
     _print_configuration_data,
+    _record_installed_part,
     _resolve_config_file,
     _resolve_config_location,
+    _save_or_update_installed,
     _setup_download_cache,
     _split_parts,
     _uninstall_stale_parts,
+    _update_part,
+    _update_recipe_callable,
     _use_default_options,
     _validated_extends_cache,
     _version_eggs_directory,
@@ -867,3 +874,238 @@ def test_uninstall_stale_parts_logs_option_changes_at_debug(caplog):
             uninstall_part=_uninstall_spy([]),
             update_installed=lambda **kw: None)
     assert "Part a, option mode changed:\n'2' != '1'" in caplog.text
+
+
+def test_update_recipe_callable_prefers_update():
+    class Recipe:
+        def install(self):
+            return ['install']
+
+        def update(self):
+            return ['update']
+
+    recipe = Recipe()
+    assert _update_recipe_callable(
+        recipe, 'p', logging.getLogger('test.updcall')) == recipe.update
+
+
+def test_update_recipe_callable_falls_back_to_install_with_warning(caplog):
+    class Recipe:
+        def install(self):
+            return ['install']
+
+    recipe = Recipe()
+    logger = logging.getLogger('test.updcall')
+    with caplog.at_level(logging.WARNING, logger='test.updcall'):
+        result = _update_recipe_callable(recipe, 'p', logger)
+    assert result == recipe.install
+    assert ("The recipe for p doesn't define an update method. "
+            "Using its install method.") in caplog.text
+
+
+def test_merged_updated_files_none_keeps_previous():
+    assert _merged_updated_files(None, 'a\nb') == (['a', 'b'], [])
+
+
+def test_merged_updated_files_string_result_is_merged():
+    assert _merged_updated_files('c', 'a\nb') == (['a', 'b', 'c'], ['c'])
+
+
+def test_merged_updated_files_result_without_new_files():
+    assert _merged_updated_files(['a', 'b'], 'a\nb') == (['a', 'b'], [])
+
+
+def test_merged_updated_files_merges_only_new_files():
+    assert _merged_updated_files(['b', 'c'], 'a\nb') == (['a', 'b', 'c'], ['c'])
+
+
+def test_normalize_installed_files_none_warns(caplog):
+    logger = logging.getLogger('test.norm')
+    with caplog.at_level(logging.WARNING, logger='test.norm'):
+        result = _normalize_installed_files(None, 'p', logger)
+    assert result == ()
+    assert 'The p install returned None.' in caplog.text
+
+
+def test_normalize_installed_files_string():
+    assert _normalize_installed_files(
+        'f', 'p', logging.getLogger('test.norm')) == ['f']
+
+
+def test_normalize_installed_files_iterable():
+    assert _normalize_installed_files(
+        ('a', 'b'), 'p', logging.getLogger('test.norm')) == ['a', 'b']
+
+
+def test_update_part_success_merges_files():
+    class Recipe:
+        def update(self):
+            return ['old2', 'new1']
+
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'buildout': {'parts': 'p'},
+        'p': {'__buildout_installed__': 'old1\nold2'},
+    }
+    installed_files, new_files = _update_part(
+        'p', Recipe(), lambda f: f(),
+        installed_part_options, ['p'], True,
+        logging.getLogger('test.updatepart'),
+        lambda installed: None, lambda **kw: None)
+    assert installed_files == ['old1', 'old2', 'new1']
+    assert new_files == ['new1']
+
+
+def test_update_part_none_result_keeps_previous_files():
+    class Recipe:
+        def update(self):
+            return None
+
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'p': {'__buildout_installed__': 'old1'},
+    }
+    installed_files, new_files = _update_part(
+        'p', Recipe(), lambda f: f(),
+        installed_part_options, ['p'], True,
+        logging.getLogger('test.updatepart'),
+        lambda installed: None, lambda **kw: None)
+    assert installed_files == ['old1']
+    assert new_files == []
+
+
+def test_update_part_failure_rolls_back():
+    class Recipe:
+        def update(self):
+            raise RuntimeError('boom')
+
+    uninstalled = []
+    updates = []
+    installed_parts = ['p', 'q']
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'p': {'__buildout_installed__': 'old1'},
+    }
+    with pytest.raises(RuntimeError):
+        _update_part(
+            'p', Recipe(), lambda f: f(),
+            installed_part_options, installed_parts, True,
+            logging.getLogger('test.updatepart'),
+            uninstalled.append, lambda **kw: updates.append(kw))
+    assert installed_parts == ['q']
+    assert uninstalled == ['old1']
+    assert updates == [{'parts': 'q'}]
+
+
+def test_update_part_failure_without_installed_file_skips_update():
+    class Recipe:
+        def update(self):
+            raise RuntimeError('boom')
+
+    updates = []
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'p': {'__buildout_installed__': 'old1'},
+    }
+    with pytest.raises(RuntimeError):
+        _update_part(
+            'p', Recipe(), lambda f: f(),
+            installed_part_options, ['p'], False,
+            logging.getLogger('test.updatepart'),
+            lambda installed: None, lambda **kw: updates.append(kw))
+    assert updates == []
+
+
+def test_update_part_without_update_method_warns_and_uses_install(caplog):
+    class Recipe:
+        def install(self):
+            return ['f']
+
+    logger = logging.getLogger('test.updatepart.fallback')
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'p': {'__buildout_installed__': ''},
+    }
+    with caplog.at_level(logging.WARNING, logger='test.updatepart.fallback'):
+        installed_files, new_files = _update_part(
+            'p', Recipe(), lambda f: f(),
+            installed_part_options, ['p'], False,
+            logger, lambda installed: None, lambda **kw: None)
+    assert installed_files == ['', 'f']
+    assert new_files == ['f']
+    assert "The recipe for p doesn't define an update method." in caplog.text
+
+
+def test_record_installed_part_moves_part_to_end():
+    saved = {'recipe': 'x'}
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'buildout': {'parts': 'a b'},
+    }
+    result = _record_installed_part(
+        'a', 'sig', saved, ['f1', 'f2'], ['a', 'b'], installed_part_options)
+    assert result == ['b', 'a']
+    assert saved['__buildout_installed__'] == 'f1\nf2'
+    assert saved['__buildout_signature__'] == 'sig'
+    assert installed_part_options['a'] is saved
+
+
+def test_record_installed_part_empty_files_list():
+    saved: Dict[str, str] = {}
+    result = _record_installed_part('p', 'sig', saved, [], [], {})
+    assert result == ['p']
+    assert saved['__buildout_installed__'] == ''
+
+
+def test_save_or_update_installed_saves_when_needed():
+    saved = []
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'buildout': {'parts': ''},
+    }
+    exists = _save_or_update_installed(
+        True, False, ['a', 'b'], installed_part_options,
+        saved.append, lambda **kw: None)
+    assert exists is True
+    assert installed_part_options['buildout']['parts'] == 'a b'
+    assert saved == [installed_part_options]
+
+
+def test_save_or_update_installed_updates_when_not_needed():
+    updates = []
+    exists = _save_or_update_installed(
+        [], True, ['a'], {'buildout': {'parts': 'a'}},
+        lambda options: None, lambda **kw: updates.append(kw))
+    assert exists is True
+    assert updates == [{'parts': 'a'}]
+
+
+def test_save_or_update_installed_asserts_without_installed_file():
+    with pytest.raises(AssertionError):
+        _save_or_update_installed(
+            False, False, [], {'buildout': {'parts': ''}},
+            lambda options: None, lambda **kw: None)
+
+
+def test_finalize_installed_options_saves_develop_eggs_state():
+    saved = []
+    _finalize_installed_options(
+        'egg1', False, [], {'buildout': {'parts': ''}}, {'installed': 'x'},
+        saved.append)
+    assert saved == [{'buildout': {'parts': ''}}]
+
+
+def test_finalize_installed_options_keeps_existing_state():
+    saved = []
+    _finalize_installed_options(
+        'egg1', True, [], {}, {'installed': 'x'}, saved.append)
+    assert saved == []
+
+
+def test_finalize_installed_options_removes_installed_file(tmp_path):
+    installed = tmp_path / 'installed.cfg'
+    installed.write_text('x')
+    _finalize_installed_options(
+        '', True, [], {}, {'installed': str(installed)}, lambda o: None)
+    assert not installed.exists()
+
+
+def test_finalize_installed_options_keeps_file_while_parts_remain(tmp_path):
+    installed = tmp_path / 'installed.cfg'
+    installed.write_text('x')
+    _finalize_installed_options(
+        '', True, ['a'], {}, {'installed': str(installed)}, lambda o: None)
+    assert installed.exists()
