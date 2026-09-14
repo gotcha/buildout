@@ -40,11 +40,11 @@
     "devenv-dagger": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1789342220,
-        "narHash": "sha256-UB/LxTYIo7c8bm3XkYTDmtacke56WoL8RCa/YraQ0mU=",
+        "lastModified": 1789397145,
+        "narHash": "sha256-F73lAMM56kVwTS7G23pYfwlLJwst4jFrYAG3lvBkQKU=",
         "owner": "jfroche",
         "repo": "devenv-dagger",
-        "rev": "be90b17c07a8516dfd02c777b08cc08df68d20e7",
+        "rev": "1643af94afa863502c4c33f14985e06fdd7ed96a",
         "type": "github"
       },
       "original": {

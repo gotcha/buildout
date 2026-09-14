@@ -69,6 +69,13 @@
   # module exports.
   services.dagger.enable = true;
 
+  # Machine resources are coded, not hand-set: the podman default of
+  # 2048 MiB OOM-killed the devpi cache under load. The values apply
+  # when the machine is created; `podman machine set` changes an
+  # existing machine.
+  services.podman-machine.memoryMiB = 8192;
+  services.podman-machine.cpus = 6;
+
   # Feed the repo bootstrap the Python version selected above.
   env.PYTHON_VERSION = config.languages.python.version;
   # nixpkgs Pythons ship with ensurepip disabled, so `python -m venv`
