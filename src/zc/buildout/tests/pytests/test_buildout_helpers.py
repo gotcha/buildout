@@ -1,18 +1,25 @@
 """Unit tests for the pure helpers extracted from zc.buildout.buildout."""
+import logging
 import os
 
 import pkg_resources
 import pytest
 
 import zc.buildout
+import zc.buildout.easy_install
 from zc.buildout.buildout import (
     SectionKey,
     _absolutize_cache_dirs,
+    _absolutize_standard_dirs,
     _apply_cl_extends,
+    _buildout_default_options,
+    _check_install_from_cache,
     _cloptions_dict,
+    _create_cache_dirs,
     _default_versions,
     _develop_source_dir,
     _filename_for_logging,
+    _links_and_hosts,
     _load_config,
     _load_user_defaults,
     _merge_config_data,
@@ -21,7 +28,10 @@ from zc.buildout.buildout import (
     _previous_develop_links,
     _resolve_config_file,
     _resolve_config_location,
+    _setup_download_cache,
+    _use_default_options,
     _validated_extends_cache,
+    _version_eggs_directory,
 )
 
 
@@ -512,3 +522,158 @@ def test_absolutize_cache_dirs_remote_relative_is_ambiguous():
         'rel', 'http://example.com/buildout.cfg')}}
     with pytest.raises(zc.buildout.UserError, match='is ambiguous'):
         _absolutize_cache_dirs(data, '/cwd')
+
+
+def test_links_and_hosts_empty_links_becomes_empty_tuple():
+    links, hosts = _links_and_hosts('', '*')
+    assert links == ()
+    assert hosts == ('*',)
+
+
+def test_links_and_hosts_splits_links_on_whitespace():
+    links, hosts = _links_and_hosts('http://a  http://b', '*')
+    assert links == ['http://a', 'http://b']
+    assert hosts == ('*',)
+
+
+def test_links_and_hosts_strips_hosts_and_drops_blanks():
+    links, hosts = _links_and_hosts('', 'a\n\n b \n\t\n')
+    assert links == ()
+    assert hosts == ('a', 'b')
+
+
+def test_absolutize_standard_dirs_rewrites_all_four():
+    section = {
+        'bin-directory': 'bin',
+        'parts-directory': 'parts',
+        'eggs-directory': 'eggs',
+        'develop-eggs-directory': 'develop-eggs',
+    }
+    _absolutize_standard_dirs(section, lambda n: os.path.join('/base', n))
+    assert section == {
+        'bin-directory': '/base/bin',
+        'parts-directory': '/base/parts',
+        'eggs-directory': '/base/eggs',
+        'develop-eggs-directory': '/base/develop-eggs',
+    }
+
+
+def test_absolutize_standard_dirs_feeds_values_through_buildout_path():
+    seen = []
+    section = {
+        'bin-directory': 'bin',
+        'parts-directory': 'parts',
+        'eggs-directory': 'eggs',
+        'develop-eggs-directory': 'develop-eggs',
+    }
+    _absolutize_standard_dirs(section, lambda n: seen.append(n) or n)
+    assert seen == ['bin', 'parts', 'eggs', 'develop-eggs']
+
+
+def test_version_eggs_directory_appends_version():
+    options = {'eggs-directory': '/eggs', 'eggs-directory-version': 'v5'}
+    _version_eggs_directory(options)
+    assert options['eggs-directory'] == os.path.join('/eggs', 'v5')
+
+
+def test_version_eggs_directory_empty_version_keeps_directory():
+    options = {'eggs-directory': '/eggs', 'eggs-directory-version': ''}
+    _version_eggs_directory(options)
+    assert options['eggs-directory'] == '/eggs'
+
+
+def test_version_eggs_directory_appends_abi_tag(monkeypatch):
+    monkeypatch.setattr(
+        'zc.buildout.pep425tags.get_abi_tag', lambda: 'cp312')
+    options = {'eggs-directory': '/eggs', 'eggs-directory-version': '',
+               'abi-tag-eggs': 'true'}
+    _version_eggs_directory(options)
+    assert options['eggs-directory'] == os.path.join('/eggs', 'cp312')
+
+
+def test_version_eggs_directory_appends_version_then_abi_tag(monkeypatch):
+    monkeypatch.setattr(
+        'zc.buildout.pep425tags.get_abi_tag', lambda: 'cp312')
+    options = {'eggs-directory': '/eggs', 'eggs-directory-version': 'v5',
+               'abi-tag-eggs': 'true'}
+    _version_eggs_directory(options)
+    assert options['eggs-directory'] == os.path.join('/eggs', 'v5', 'cp312')
+
+
+def test_create_cache_dirs_creates_missing_and_skips_empty(
+        tmp_path, caplog):
+    logger = logging.getLogger('zc.buildout')
+    with caplog.at_level(logging.INFO, logger='zc.buildout'):
+        _create_cache_dirs(str(tmp_path), ['dl', None, ''], logger)
+    assert (tmp_path / 'dl').is_dir()
+    assert "Creating directory %r." % str(tmp_path / 'dl') in caplog.text
+
+
+def test_create_cache_dirs_existing_is_quiet(tmp_path, caplog):
+    (tmp_path / 'dl').mkdir()
+    logger = logging.getLogger('zc.buildout')
+    with caplog.at_level(logging.INFO, logger='zc.buildout'):
+        _create_cache_dirs(str(tmp_path), ['dl'], logger)
+    assert caplog.records == []
+
+
+def test_setup_download_cache_none_is_noop(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        zc.buildout.easy_install, 'download_cache', calls.append)
+    _setup_download_cache(None)
+    assert calls == []
+
+
+def test_setup_download_cache_creates_dist_subdir(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        zc.buildout.easy_install, 'download_cache', calls.append)
+    _setup_download_cache(str(tmp_path))
+    assert (tmp_path / 'dist').is_dir()
+    assert calls == [os.path.join(str(tmp_path), 'dist')]
+
+
+def test_setup_download_cache_existing_dist_is_not_recreated(
+        tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        zc.buildout.easy_install, 'download_cache', calls.append)
+    (tmp_path / 'dist').mkdir()
+    _setup_download_cache(str(tmp_path))
+    assert calls == [os.path.join(str(tmp_path), 'dist')]
+
+
+def test_check_install_from_cache_off_is_noop(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        zc.buildout.easy_install, 'install_from_cache', calls.append)
+    _check_install_from_cache({'install-from-cache': 'false'}, False)
+    assert calls == []
+
+
+def test_check_install_from_cache_enables(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        zc.buildout.easy_install, 'install_from_cache', calls.append)
+    _check_install_from_cache({'install-from-cache': 'true'}, False)
+    assert calls == [True]
+
+
+def test_check_install_from_cache_offline_raises():
+    with pytest.raises(
+            zc.buildout.UserError, match="can't be used with offline mode"):
+        _check_install_from_cache({'install-from-cache': 'true'}, True)
+
+
+def test_use_default_options_reads_every_default():
+    reads = []
+
+    class _CountingDict(dict):
+        def __getitem__(self, key):
+            reads.append(key)
+            return super().__getitem__(key)
+
+    options = _CountingDict((name, '') for name in _buildout_default_options)
+    _use_default_options(options)
+    assert sorted(reads) == sorted(_buildout_default_options)

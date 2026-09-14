@@ -14,7 +14,7 @@
 """Buildout main script
 """
 
-from collections.abc import Mapping, MutableMapping as DictMixin
+from collections.abc import Mapping, MutableMapping, MutableMapping as DictMixin
 from functools import partial
 from hashlib import md5 as md5_original
 from packaging import utils as packaging_utils
@@ -590,6 +590,104 @@ def _absolutize_cache_dirs(data: ConfigData, buildout_dir: str) -> None:
                 sectionkey.setDirectory(absdir)
 
 
+def _links_and_hosts(
+        links: str,
+        allow_hosts: str,
+        ) -> Tuple[Union[List[str], Tuple[str, ...]], Tuple[str, ...]]:
+    """Compute the legacy ``_links`` and ``_allow_hosts`` attribute
+    values from the ``find-links`` and ``allow-hosts`` settings."""
+    # ty over-widens the and/or idiom with an impossible falsy-str case.
+    return (links and links.split() or (),  # ty: ignore[invalid-return-type]
+            tuple([host.strip() for host in allow_hosts.split('\n')
+                   if host.strip() != ''])
+            )
+
+
+def _absolutize_standard_dirs(
+        section: MutableMapping[str, str],
+        buildout_path: Callable[[str], str],
+        ) -> None:
+    """Absolutize the bin/parts/eggs/develop-eggs directory settings
+    of ``section`` through ``buildout_path``, in place."""
+    for name in ('bin', 'parts', 'eggs', 'develop-eggs'):
+        d = buildout_path(section[name+'-directory'])
+        section[name+'-directory'] = d
+
+
+def _version_eggs_directory(options: Union['Options', Dict[str, str]]) -> None:
+    """Join the eggs-directory version and ABI tag into
+    ``options['eggs-directory']``, in place."""
+    # Since zc.buildout version 5 we maintain separate directories for each
+    # buildout eggs format version.  Current idea: we use v5 from zc.buildout
+    # 5.x onwards.  Later versions will likely also use v5, as the current
+    # expectation is that they will be compatible, just like zc.buildout
+    # 1.x through 4.x are compatible.
+    # If you know what you are doing, you can set eggs-directory-version to
+    # an empty string.  This can be fine if you don't have any previous eggs
+    # and only use zc.buildout 5 or later.  It should also be fine in case
+    # you don't use any namespace packages; but you would be wrong, because
+    # you are using zc.buildout and probably zc.recipe.egg, so you use the
+    # zc namespace.  Still, if those are the only two packages, it might
+    # possibly work.
+    if options['eggs-directory-version']:
+        options['eggs-directory'] = os.path.join(
+            options['eggs-directory'], options['eggs-directory-version'])
+
+    if bool_option(options, 'abi-tag-eggs', 'false'):
+        from zc.buildout.pep425tags import get_abi_tag
+        abi_tag = get_abi_tag()
+        # get_abi_tag() only returns None on platforms without a known
+        # ABI tag, where joining it into a path would fail anyway.
+        assert abi_tag is not None
+        options['eggs-directory'] = os.path.join(
+            options['eggs-directory'], abi_tag)
+
+
+def _create_cache_dirs(
+        directory: str,
+        caches: List[Optional[str]],
+        logger: logging.Logger,
+        ) -> None:
+    """Create each cache directory (relative to ``directory``) if missing."""
+    for cache in caches:
+        if cache:
+            cache = os.path.join(directory, cache)
+            if not os.path.exists(cache):
+                logger.info('Creating directory %r.', cache)
+                os.makedirs(cache)
+
+
+def _setup_download_cache(download_cache: Optional[str]) -> None:
+    """Create the download cache and point easy_install at it."""
+    if download_cache:
+        # Actually, we want to use a subdirectory in there called 'dist'.
+        download_cache = os.path.join(download_cache, 'dist')
+        if not os.path.exists(download_cache):
+            os.mkdir(download_cache)
+        zc.buildout.easy_install.download_cache(download_cache)
+
+
+def _check_install_from_cache(
+        options: Union['Options', Dict[str, str]],
+        offline: bool,
+        ) -> None:
+    """Enable install-from-cache, refusing the offline-mode combination."""
+    if bool_option(options, 'install-from-cache'):
+        if offline:
+            raise zc.buildout.UserError(
+                "install-from-cache can't be used with offline mode.\n"
+                "Nothing is installed, even from cache, in offline\n"
+                "mode, which might better be called 'no-install mode'.\n"
+                )
+        zc.buildout.easy_install.install_from_cache(True)
+
+
+def _use_default_options(options: Mapping[str, str]) -> None:
+    """"Use" each of the defaults so they aren't reported as unused options."""
+    for name in _buildout_default_options:
+        options[name]
+
+
 @commands
 class Buildout(DictMixin):
 
@@ -657,9 +755,7 @@ class Buildout(DictMixin):
             # _buildout_path.
             if 'directory' in buildout_section:
                 self._buildout_dir = buildout_section['directory']
-                for name in ('bin', 'parts', 'eggs', 'develop-eggs'):
-                    d = self._buildout_path(buildout_section[name+'-directory'])
-                    buildout_section[name+'-directory'] = d
+                _absolutize_standard_dirs(buildout_section, self._buildout_path)
 
             # Attributes on this buildout object shouldn't be used by
             # recipes in their __init__.  It can cause bugs, because the
@@ -668,11 +764,8 @@ class Buildout(DictMixin):
             # left behind for legacy support but recipe authors should
             # beware of using them.  A better practice is for a recipe to
             # use the buildout['buildout'] options.
-            links = buildout_section['find-links']
-            self._links = links and links.split() or ()
-            allow_hosts = buildout_section['allow-hosts'].split('\n')
-            self._allow_hosts = tuple([host.strip() for host in allow_hosts
-                                       if host.strip() != ''])
+            self._links, self._allow_hosts = _links_and_hosts(
+                buildout_section['find-links'], buildout_section['allow-hosts'])
             self._logger = logging.getLogger('zc.buildout')
             self.offline = bool_option(buildout_section, 'offline')
             self.newest = ((not self.offline) and
@@ -690,20 +783,14 @@ class Buildout(DictMixin):
             options = self['buildout']
 
             # now reinitialize
-            links = options.get('find-links', '')
-            self._links = links and links.split() or ()
-
-            allow_hosts = options['allow-hosts'].split('\n')
-            self._allow_hosts = tuple([host.strip() for host in allow_hosts
-                                       if host.strip() != ''])
+            self._links, self._allow_hosts = _links_and_hosts(
+                options.get('find-links', ''), options['allow-hosts'])
 
             self._buildout_dir = options['directory']
 
             # Make sure we have absolute paths for standard directories.  We do this
             # a second time here in case someone overrode these in their configs.
-            for name in ('bin', 'parts', 'eggs', 'develop-eggs'):
-                d = self._buildout_path(options[name+'-directory'])
-                options[name+'-directory'] = d
+            _absolutize_standard_dirs(options, self._buildout_path)
 
             if options['installed']:
                 options['installed'] = os.path.join(options['directory'],
@@ -739,59 +826,20 @@ class Buildout(DictMixin):
             download_cache = options.get('download-cache')
             extends_cache = options.get('extends-cache')
 
-            # Since zc.buildout version 5 we maintain separate directories for each
-            # buildout eggs format version.  Current idea: we use v5 from zc.buildout
-            # 5.x onwards.  Later versions will likely also use v5, as the current
-            # expectation is that they will be compatible, just like zc.buildout
-            # 1.x through 4.x are compatible.
-            # If you know what you are doing, you can set eggs-directory-version to
-            # an empty string.  This can be fine if you don't have any previous eggs
-            # and only use zc.buildout 5 or later.  It should also be fine in case
-            # you don't use any namespace packages; but you would be wrong, because
-            # you are using zc.buildout and probably zc.recipe.egg, so you use the
-            # zc namespace.  Still, if those are the only two packages, it might
-            # possibly work.
-            if options['eggs-directory-version']:
-                options['eggs-directory'] = os.path.join(
-                    options['eggs-directory'], options['eggs-directory-version'])
-
-            if bool_option(options, 'abi-tag-eggs', 'false'):
-                from zc.buildout.pep425tags import get_abi_tag
-                abi_tag = get_abi_tag()
-                # get_abi_tag() only returns None on platforms without a known
-                # ABI tag, where joining it into a path would fail anyway.
-                assert abi_tag is not None
-                options['eggs-directory'] = os.path.join(
-                    options['eggs-directory'], abi_tag)
+            _version_eggs_directory(options)
 
             eggs_cache = options.get('eggs-directory')
 
-            for cache in [download_cache, extends_cache, eggs_cache]:
-                if cache:
-                    cache = os.path.join(options['directory'], cache)
-                    if not os.path.exists(cache):
-                        self._logger.info('Creating directory %r.', cache)
-                        os.makedirs(cache)
+            _create_cache_dirs(
+                options['directory'],
+                [download_cache, extends_cache, eggs_cache],
+                self._logger)
 
-            if download_cache:
-                # Actually, we want to use a subdirectory in there called 'dist'.
-                download_cache = os.path.join(download_cache, 'dist')
-                if not os.path.exists(download_cache):
-                    os.mkdir(download_cache)
-                zc.buildout.easy_install.download_cache(download_cache)
+            _setup_download_cache(download_cache)
 
-            if bool_option(options, 'install-from-cache'):
-                if self.offline:
-                    raise zc.buildout.UserError(
-                        "install-from-cache can't be used with offline mode.\n"
-                        "Nothing is installed, even from cache, in offline\n"
-                        "mode, which might better be called 'no-install mode'.\n"
-                        )
-                zc.buildout.easy_install.install_from_cache(True)
+            _check_install_from_cache(options, self.offline)
 
-            # "Use" each of the defaults so they aren't reported as unused options.
-            for name in _buildout_default_options:
-                options[name]
+            _use_default_options(options)
 
             os.chdir(options['directory'])
 
