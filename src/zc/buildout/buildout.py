@@ -367,6 +367,229 @@ def _new_develop_eggs(dest: str, old_files: List[str]) -> str:
          ])
 
 
+def _resolve_config_file(
+        config_file: Optional[str],
+        command: Optional[str],
+        args: Union[Tuple[str, ...], List[str]],
+        init_config: Callable[[str, Union[Tuple[str, ...], List[str]]], None],
+        ) -> Tuple[Optional[str], Optional[SectionKey]]:
+    """Resolve a local ``config_file`` path for opening.
+
+    Return the possibly rewritten ``config_file`` along with the
+    computed ``directory`` setting; ``None`` for the latter means the
+    default directory stays.  A missing file is created by
+    ``init_config`` for the ``init`` command, and turns a ``setup``
+    command into a directory-less run rooted at the current directory.
+    """
+    directory = None
+    if config_file and not _isurl(config_file):
+        config_file = os.path.abspath(config_file)
+        if not os.path.exists(config_file):
+            if command == 'init':
+                init_config(config_file, args)
+            elif command == 'setup':
+                # Sigh. This model of a buildout instance
+                # with methods is breaking down. :(
+                config_file = None
+                directory = SectionKey('.', 'COMPUTED_VALUE')
+            else:
+                raise zc.buildout.UserError(
+                    "Couldn't open %s" % config_file)
+        elif command == 'init':
+            raise zc.buildout.UserError(
+                "%r already exists." % config_file)
+
+        if config_file:
+            directory = SectionKey(
+                os.path.dirname(config_file), 'COMPUTED_VALUE')
+    return config_file, directory
+
+
+def _cloptions_dict(cloptions: List[Tuple[str, str, str]]) -> ConfigData:
+    """Group command-line options into config data, keyed by section."""
+    return dict(
+        (section, dict((option, SectionKey(value, 'COMMAND_LINE_VALUE'))
+                       for (_, option, value) in v))
+        for (section, v) in itertools.groupby(sorted(cloptions),
+                                              lambda v: v[0])
+        )
+
+
+def _load_user_defaults(
+        use_user_defaults: bool,
+        data: ConfigData,
+        override: Dict[str, SectionKey],
+        ) -> Tuple[ConfigData, ConfigData]:
+    """Load the user defaults, which override defaults.
+
+    Return ``(user_defaults, for_download_options)``: both empty resp.
+    a deep copy of ``data`` when the user config is absent or disabled.
+    """
+    user_config = _get_user_config()
+    if use_user_defaults and os.path.exists(user_config):
+        download_options = data['buildout']
+        user_defaults, _ = _open(
+            os.path.dirname(user_config),
+            user_config, [], download_options,
+            override, set(), {}
+        )
+        # A top-level _open call returns the dict form.
+        assert isinstance(user_defaults, dict)
+        return user_defaults, _update(data, user_defaults)
+    return {}, copy.deepcopy(data)
+
+
+def _load_config(
+        data: ConfigData,
+        base: str,
+        filename: str,
+        for_download_options: ConfigData,
+        override: Dict[str, SectionKey],
+        user_defaults: ConfigData,
+        ) -> ConfigData:
+    """Open the config file ``filename`` (relative to ``base``) and
+    update ``data`` with it."""
+    download_options = for_download_options['buildout']
+    cfg_data, _ = _open(
+        base, filename, [], download_options,
+        override, set(), user_defaults
+    )
+    # A top-level _open call returns the dict form.
+    assert isinstance(cfg_data, dict)
+    return _update(data, cfg_data)
+
+
+def _apply_cl_extends(
+        data: ConfigData,
+        cloptions_dict: ConfigData,
+        for_download_options: ConfigData,
+        override: Dict[str, SectionKey],
+        user_defaults: ConfigData,
+        ) -> ConfigData:
+    """Apply command-line ``buildout:extends`` files to ``data``.
+
+    Pops ``extends`` from the command-line buildout section, so it is
+    not applied again later as a plain option.
+    """
+    if 'buildout' in cloptions_dict:
+        cl_extends = cloptions_dict['buildout'].pop('extends', None)
+        if cl_extends:
+            for extends in cl_extends.value.split():
+                data = _load_config(
+                    data,
+                    os.path.dirname(extends),
+                    os.path.basename(extends),
+                    for_download_options, override, user_defaults
+                )
+    return data
+
+
+def _pin_buildout_version(versions: Dict[str, SectionKey]) -> None:
+    """Pin ``zc.buildout`` to at least the running version."""
+    # Prevent downgrading of zc.buildout itself due to prefer-final.
+    ws = pkg_resources.working_set
+    dist = ws.find(
+        pkg_resources.Requirement.parse('zc-buildout')
+    )
+    if dist is None:
+        # older setuptools
+        dist = ws.find(
+            pkg_resources.Requirement.parse('zc.buildout')
+        )
+        if dist is None:
+            # This would be really strange, but I prefer an explicit
+            # failure here over an unclear error later.
+            raise ValueError(
+                "Could not find distribution for zc.buildout in working set."
+            )
+    minimum = dist.version
+    versions['zc.buildout'] = SectionKey(f'>={minimum}', 'DEFAULT_VALUE')
+
+
+def _default_versions(
+        data: ConfigData,
+        ) -> Tuple[str, Union[Dict[str, SectionKey], Dict[Any, Any]]]:
+    """Ensure ``data`` has a versions section with default pins.
+
+    Return the versions section name and the versions mapping.
+    """
+    # Set up versions section, if necessary
+    if 'versions' not in data['buildout']:
+        data['buildout']['versions'] = SectionKey(
+            'versions', 'DEFAULT_VALUE')
+        if 'versions' not in data:
+            data['versions'] = {}
+
+    # Default versions:
+    versions_section_name = data['buildout']['versions'].value
+    versions: Union[Dict[str, SectionKey], Dict[Any, Any]]
+    if versions_section_name:
+        versions = data[versions_section_name]
+    else:
+        versions = {}
+    if 'zc.buildout' not in versions:
+        _pin_buildout_version(versions)
+    if 'zc.recipe.egg' not in versions:
+        # zc.buildout and zc.recipe egg are closely linked, but zc.buildout
+        # does NOT depend on it: we do not want to add it to our
+        # install_requires.  (One could debate why, although one answer
+        # would be to avoid a circular dependency.  Maybe we could merge them,
+        # as I see no use case for Buildout without recipes.  But we would
+        # need to update the zc.recipe.egg test setup first.)
+        #
+        # Anyway: we use a different way to set a minimum version.
+        # Originally (in 2013, zc.buildout 2.0.0b1) we made sure
+        # zc.recipe.egg>=2.0.0a3 was pinned, mostly to avoid problems
+        # when prefer-final is true.
+        # Later (in 2018, zc.buildout 2.12.1) we updated the minimum version
+        # to 2.0.6, to avoid a KeyError: 'allow-unknown-extras'.
+        # See https://github.com/buildout/buildout/pull/461
+        # I wonder if we really need a minimum version, as older versions
+        # are unlikely to even be installable by supported Python versions.
+        # But if we ever really need a more recent minimum version,
+        # it is easy to update a version here.
+        versions['zc.recipe.egg'] = SectionKey('>=2.0.6', 'DEFAULT_VALUE')
+    return versions_section_name, versions
+
+
+def _absolutize_cache_dirs(data: ConfigData, buildout_dir: str) -> None:
+    """Absolutize the download-cache, eggs-directory and extends-cache
+    settings in place.
+
+    Handles also the ~/foo form, and considers the location of the
+    configuration file that generated the setting as the base path,
+    falling back to the main configuration file location.
+    """
+    for name in ('download-cache', 'eggs-directory', 'extends-cache'):
+        if name in data['buildout']:
+            sectionkey = data['buildout'][name]
+            origdir = sectionkey.value
+            src = sectionkey.source
+            if '${' in origdir:
+                continue
+            if not os.path.isabs(origdir):
+                if src in ('DEFAULT_VALUE',
+                           'COMPUTED_VALUE',
+                           'COMMAND_LINE_VALUE'):
+                    if 'directory' in data['buildout']:
+                        basedir = data['buildout']['directory'].value
+                    else:
+                        basedir = buildout_dir
+                else:
+                    if _isurl(src):
+                        raise zc.buildout.UserError(
+                            'Setting "%s" to a non absolute location ("%s") '
+                            'within a\n'
+                            'remote configuration file ("%s") is ambiguous.' % (
+                                name, origdir, src))
+                    basedir = os.path.dirname(src)
+                absdir = os.path.expanduser(origdir)
+                if not os.path.isabs(absdir):
+                    absdir = os.path.join(basedir, absdir)
+                absdir = os.path.abspath(absdir)
+                sectionkey.setDirectory(absdir)
+
+
 @commands
 class Buildout(DictMixin):
 
@@ -387,168 +610,35 @@ class Buildout(DictMixin):
             data: ConfigData = dict(buildout=_buildout_default_options_copy)
             self._buildout_dir = os.getcwd()
 
-            if config_file and not _isurl(config_file):
-                config_file = os.path.abspath(config_file)
-                if not os.path.exists(config_file):
-                    if command == 'init':
-                        self._init_config(config_file, args)
-                    elif command == 'setup':
-                        # Sigh. This model of a buildout instance
-                        # with methods is breaking down. :(
-                        config_file = None
-                        data['buildout']['directory'] = SectionKey(
-                            '.', 'COMPUTED_VALUE')
-                    else:
-                        raise zc.buildout.UserError(
-                            "Couldn't open %s" % config_file)
-                elif command == 'init':
-                    raise zc.buildout.UserError(
-                        "%r already exists." % config_file)
+            config_file, directory = _resolve_config_file(
+                config_file, command, args, self._init_config)
+            if directory is not None:
+                data['buildout']['directory'] = directory
 
-                if config_file:
-                    data['buildout']['directory'] = SectionKey(
-                        os.path.dirname(config_file), 'COMPUTED_VALUE')
-
-            cloptions_dict: ConfigData = dict(
-                (section, dict((option, SectionKey(value, 'COMMAND_LINE_VALUE'))
-                               for (_, option, value) in v))
-                for (section, v) in itertools.groupby(sorted(cloptions),
-                                                      lambda v: v[0])
-                )
+            cloptions_dict: ConfigData = _cloptions_dict(cloptions)
             override = copy.deepcopy(cloptions_dict.get('buildout', {}))
 
             # load user defaults, which override defaults
-            user_config = _get_user_config()
-            if use_user_defaults and os.path.exists(user_config):
-                download_options = data['buildout']
-                user_defaults, _ = _open(
-                    os.path.dirname(user_config),
-                    user_config, [], download_options,
-                    override, set(), {}
-                )
-                # A top-level _open call returns the dict form.
-                assert isinstance(user_defaults, dict)
-                for_download_options = _update(data, user_defaults)
-            else:
-                user_defaults = {}
-                for_download_options = copy.deepcopy(data)
+            user_defaults, for_download_options = _load_user_defaults(
+                use_user_defaults, data, override)
 
             # load configuration files
             if config_file:
-                download_options = for_download_options['buildout']
-                cfg_data, _ = _open(
-                    os.path.dirname(config_file),
-                    config_file, [], download_options,
-                    override, set(), user_defaults
-                )
-                # A top-level _open call returns the dict form.
-                assert isinstance(cfg_data, dict)
-                data = _update(data, cfg_data)
+                data = _load_config(
+                    data, os.path.dirname(config_file), config_file,
+                    for_download_options, override, user_defaults)
 
             # extends from command-line
-            if 'buildout' in cloptions_dict:
-                cl_extends = cloptions_dict['buildout'].pop('extends', None)
-                if cl_extends:
-                    for extends in cl_extends.value.split():
-                        download_options = for_download_options['buildout']
-                        cfg_data, _ = _open(
-                            os.path.dirname(extends),
-                            os.path.basename(extends),
-                            [], download_options,
-                            override, set(), user_defaults
-                        )
-                        # A top-level _open call returns the dict form.
-                        assert isinstance(cfg_data, dict)
-                        data = _update(data, cfg_data)
+            data = _apply_cl_extends(
+                data, cloptions_dict, for_download_options,
+                override, user_defaults)
 
             # apply command-line options
             data = _update(data, cloptions_dict)
 
-            # Set up versions section, if necessary
-            if 'versions' not in data['buildout']:
-                data['buildout']['versions'] = SectionKey(
-                    'versions', 'DEFAULT_VALUE')
-                if 'versions' not in data:
-                    data['versions'] = {}
+            versions_section_name, versions = _default_versions(data)
 
-            # Default versions:
-            versions_section_name = data['buildout']['versions'].value
-            if versions_section_name:
-                versions = data[versions_section_name]
-            else:
-                versions = {}
-            if 'zc.buildout' not in versions:
-                # Prevent downgrading of zc.buildout itself due to prefer-final.
-                ws = pkg_resources.working_set
-                dist = ws.find(
-                    pkg_resources.Requirement.parse('zc-buildout')
-                )
-                if dist is None:
-                    # older setuptools
-                    dist = ws.find(
-                        pkg_resources.Requirement.parse('zc.buildout')
-                    )
-                    if dist is None:
-                        # This would be really strange, but I prefer an explicit
-                        # failure here over an unclear error later.
-                        raise ValueError(
-                            "Could not find distribution for zc.buildout in working set."
-                        )
-                minimum = dist.version
-                versions['zc.buildout'] = SectionKey(f'>={minimum}', 'DEFAULT_VALUE')
-            if 'zc.recipe.egg' not in versions:
-                # zc.buildout and zc.recipe egg are closely linked, but zc.buildout
-                # does NOT depend on it: we do not want to add it to our
-                # install_requires.  (One could debate why, although one answer
-                # would be to avoid a circular dependency.  Maybe we could merge them,
-                # as I see no use case for Buildout without recipes.  But we would
-                # need to update the zc.recipe.egg test setup first.)
-                #
-                # Anyway: we use a different way to set a minimum version.
-                # Originally (in 2013, zc.buildout 2.0.0b1) we made sure
-                # zc.recipe.egg>=2.0.0a3 was pinned, mostly to avoid problems
-                # when prefer-final is true.
-                # Later (in 2018, zc.buildout 2.12.1) we updated the minimum version
-                # to 2.0.6, to avoid a KeyError: 'allow-unknown-extras'.
-                # See https://github.com/buildout/buildout/pull/461
-                # I wonder if we really need a minimum version, as older versions
-                # are unlikely to even be installable by supported Python versions.
-                # But if we ever really need a more recent minimum version,
-                # it is easy to update a version here.
-                versions['zc.recipe.egg'] = SectionKey('>=2.0.6', 'DEFAULT_VALUE')
-
-            # Absolutize some particular directory, handling also the ~/foo form,
-            # and considering the location of the configuration file that generated
-            # the setting as the base path, falling back to the main configuration
-            # file location
-            for name in ('download-cache', 'eggs-directory', 'extends-cache'):
-                if name in data['buildout']:
-                    sectionkey = data['buildout'][name]
-                    origdir = sectionkey.value
-                    src = sectionkey.source
-                    if '${' in origdir:
-                        continue
-                    if not os.path.isabs(origdir):
-                        if src in ('DEFAULT_VALUE',
-                                   'COMPUTED_VALUE',
-                                   'COMMAND_LINE_VALUE'):
-                            if 'directory' in data['buildout']:
-                                basedir = data['buildout']['directory'].value
-                            else:
-                                basedir = self._buildout_dir
-                        else:
-                            if _isurl(src):
-                                raise zc.buildout.UserError(
-                                    'Setting "%s" to a non absolute location ("%s") '
-                                    'within a\n'
-                                    'remote configuration file ("%s") is ambiguous.' % (
-                                        name, origdir, src))
-                            basedir = os.path.dirname(src)
-                        absdir = os.path.expanduser(origdir)
-                        if not os.path.isabs(absdir):
-                            absdir = os.path.join(basedir, absdir)
-                        absdir = os.path.abspath(absdir)
-                        sectionkey.setDirectory(absdir)
+            _absolutize_cache_dirs(data, self._buildout_dir)
 
             self._annotated = copy.deepcopy(data)
             self._raw = _unannotate(data)
