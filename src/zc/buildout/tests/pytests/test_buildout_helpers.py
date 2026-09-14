@@ -2,6 +2,7 @@
 import logging
 import os
 import pdb
+from io import StringIO
 from typing import Dict, Union
 
 import pkg_resources
@@ -23,6 +24,7 @@ from zc.buildout.buildout import (
     _create_cache_dirs,
     _default_versions,
     _develop_source_dir,
+    _extends_results,
     _filename_for_logging,
     _finalize_installed_options,
     _handle_buildout_error,
@@ -35,7 +37,10 @@ from zc.buildout.buildout import (
     _merged_updated_files,
     _new_develop_eggs,
     _normalize_installed_files,
+    _open_config_file,
     _option_assignment,
+    _optional_extends_results,
+    _parse_config_file,
     _part_is_up_to_date,
     _pin_buildout_version,
     _pop_command,
@@ -55,6 +60,7 @@ from zc.buildout.buildout import (
     _valued_option,
     _version_eggs_directory,
 )
+from zc.buildout.download import Download
 
 
 def test_extends_cache_absent():
@@ -1311,3 +1317,140 @@ def test_consume_letter_flags_help_exits(capsys):
         _consume_letter_flags('h', 0, True, False, [])
     assert exc.value.code == 0
     assert 'Usage:' in capsys.readouterr().out
+
+
+def test_open_config_file_local_file(tmp_path):
+    cfg = tmp_path / 'buildout.cfg'
+    cfg.write_text('[buildout]\nparts =\n')
+    downloaded = set()
+    (filename, base, fp, is_temp,
+     downloaded_filename) = _open_config_file(
+        str(tmp_path), 'buildout.cfg', [], Download({}), downloaded)
+    try:
+        assert filename == str(cfg)
+        assert base == str(tmp_path)
+        assert fp.read() == '[buildout]\nparts =\n'
+    finally:
+        fp.close()
+    assert not is_temp
+    assert downloaded_filename is None
+    assert downloaded == {str(cfg)}
+
+
+def test_open_config_file_rejects_recursive_include(tmp_path):
+    cfg = tmp_path / 'buildout.cfg'
+    cfg.write_text('[buildout]\nparts =\n')
+    with pytest.raises(zc.buildout.UserError) as exc:
+        _open_config_file(
+            str(tmp_path), 'buildout.cfg', [str(cfg)], Download({}), set())
+    assert exc.value.args[0] == 'Recursive file include'
+    assert cfg.exists()
+
+
+def test_open_config_file_removes_temp_download_on_recursion(
+        tmp_path, monkeypatch):
+    downloaded_copy = tmp_path / 'downloaded.cfg'
+    downloaded_copy.write_text('[buildout]\nparts =\n')
+    download = Download({})
+    monkeypatch.setattr(
+        download, 'download',
+        lambda url, md5sum=None, path=None: (str(downloaded_copy), True))
+    url = 'http://example.com/buildout.cfg'
+    with pytest.raises(zc.buildout.UserError) as exc:
+        _open_config_file('ignored', url, [url], download, set())
+    assert exc.value.args[0] == 'Recursive file include'
+    assert not downloaded_copy.exists()
+
+
+def test_parse_config_file_parses_and_closes(tmp_path):
+    cfg = tmp_path / 'buildout.cfg'
+    cfg.write_text('[buildout]\nparts =\n')
+    fp = open(str(cfg))
+    result = _parse_config_file(fp, str(cfg), None, False)
+    assert result == {'buildout': {'parts': ''}}
+    assert fp.closed
+    assert cfg.exists()
+
+
+def test_parse_config_file_removes_temp_download(tmp_path):
+    cfg = tmp_path / 'tmp123.cfg'
+    cfg.write_text('[buildout]\nparts =\n')
+    fp = open(str(cfg))
+    result = _parse_config_file(
+        fp, 'http://example.com/b.cfg', str(cfg), True)
+    assert result == {'buildout': {'parts': ''}}
+    assert fp.closed
+    assert not cfg.exists()
+
+
+def test_parse_config_file_accepts_stringio():
+    result = _parse_config_file(
+        StringIO('[buildout]\nparts =\n'), 'in-memory.cfg', None, False)
+    assert result == {'buildout': {'parts': ''}}
+
+
+def test_extends_results_without_extends_keeps_result():
+    result = {'buildout': {'a': SectionKey('1', 'base.cfg')}}
+    eresults, out, user_defaults = _extends_results(
+        'base', None, ['base.cfg'], {}, {}, set(), {}, result)
+    assert eresults == []
+    assert out == result
+    assert user_defaults == {}
+
+
+def test_extends_results_without_extends_merges_user_defaults():
+    user_defaults = {'buildout': {'a': SectionKey('user', 'home.cfg')}}
+    result = {'buildout': {'b': SectionKey('file', 'base.cfg')}}
+    eresults, out, user_defaults = _extends_results(
+        'base', '', ['base.cfg'], {}, {}, set(), user_defaults, result)
+    assert eresults == []
+    assert out['buildout']['a'].value == 'user'
+    assert out['buildout']['a'].source == 'home.cfg'
+    assert out['buildout']['b'].value == 'file'
+    assert user_defaults == {}
+
+
+def test_extends_results_collects_extended_configs(tmp_path):
+    (tmp_path / 'extended.cfg').write_text('[buildout]\nparts =\n')
+    seen = ['root.cfg']
+    result = {'buildout': {'a': SectionKey('1', 'root.cfg')}}
+    eresults, out, user_defaults = _extends_results(
+        str(tmp_path), 'extended.cfg', seen, {}, {}, set(), {}, result)
+    assert len(eresults) == 1
+    assert eresults[0]['buildout']['parts'].value == ''
+    assert out == result
+    assert user_defaults == {}
+    assert seen == ['root.cfg']
+
+
+def test_optional_extends_results_without_option_is_noop():
+    eresults = []
+    user_defaults = {'buildout': {'a': SectionKey('u', 'home.cfg')}}
+    out = _optional_extends_results(
+        'base', None, ['root.cfg'], {}, {}, set(), user_defaults, eresults)
+    assert out == user_defaults
+    assert eresults == []
+
+
+def test_optional_extends_results_skips_missing_file(capsys):
+    missing = os.path.join(os.sep, 'nonexistent', 'missing.cfg')
+    eresults = []
+    out = _optional_extends_results(
+        'base', SectionKey(missing, 'root.cfg'), ['root.cfg'], {}, {},
+        set(), {}, eresults)
+    assert eresults == []
+    assert out == {}
+    assert ('optional-extends file not found: %s' % missing
+            ) in capsys.readouterr().out
+
+
+def test_optional_extends_results_collects_existing_file(tmp_path):
+    extended = tmp_path / 'optional.cfg'
+    extended.write_text('[buildout]\nparts =\n')
+    eresults = []
+    out = _optional_extends_results(
+        'base', SectionKey(str(extended), 'root.cfg'), ['root.cfg'],
+        {}, {}, set(), {}, eresults)
+    assert len(eresults) == 1
+    assert eresults[0]['buildout']['parts'].value == ''
+    assert out == {}

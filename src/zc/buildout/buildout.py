@@ -17,6 +17,7 @@
 from collections.abc import Mapping, MutableMapping, MutableMapping as DictMixin
 from functools import partial
 from hashlib import md5 as md5_original
+from io import StringIO, TextIOWrapper
 from packaging import utils as packaging_utils
 from zc.buildout.rmtree import rmtree
 
@@ -2420,6 +2421,117 @@ def _merge_config_data(eresults: List[ConfigData]) -> ConfigData:
         final_result = _update(final_result, eresult)
     return final_result
 
+def _open_config_file(
+        base: str,
+        filename: str,
+        seen: List[str],
+        download: zc.buildout.download.Download,
+        downloaded: Set[str],
+        ) -> Tuple[str, str, TextIOWrapper, bool, Optional[str]]:
+    """Resolve ``filename`` against ``base`` and open it, downloading
+    first when it is a URL.
+
+    Record the resolved filename in ``downloaded`` and reject recursive
+    includes, removing any temporary download before raising.  Return
+    ``(filename, base, fp, is_temp, downloaded_filename)``.
+    """
+    is_temp = False
+    downloaded_filename = None
+    filename, base, needs_download = _resolve_config_location(base, filename)
+    if needs_download:
+        downloaded_filename, is_temp = download(filename)
+        fp = open(downloaded_filename)
+    else:
+        fp = open(filename)
+    downloaded.add(filename)
+
+    if filename in seen:
+        if is_temp:
+            fp.close()
+            # downloaded_filename is always set when is_temp is true.
+            assert downloaded_filename is not None
+            os.remove(downloaded_filename)
+        raise zc.buildout.UserError("Recursive file include", seen, filename)
+    return filename, base, fp, is_temp, downloaded_filename
+
+def _parse_config_file(
+        fp: Union[StringIO, TextIOWrapper],
+        filename: str,
+        downloaded_filename: Optional[str],
+        is_temp: bool,
+        ) -> Dict[str, Dict[str, str]]:
+    """Parse the open config file ``fp``, close it, and remove any
+    temporary download."""
+    result = zc.buildout.configparser.parse(
+        fp, _filename_for_logging(filename, downloaded_filename),
+        _default_globals)
+    fp.close()
+    if is_temp:
+        # downloaded_filename is always set when is_temp is true.
+        assert downloaded_filename is not None
+        os.remove(downloaded_filename)
+    return result
+
+def _extends_results(
+        base: str,
+        extends: Optional[str],
+        seen: List[str],
+        download_options: Dict[str, SectionKey],
+        override: Dict[str, SectionKey],
+        downloaded: Set[str],
+        user_defaults: Dict[str, Dict[str, SectionKey]],
+        result: ConfigData,
+        ) -> Tuple[List[ConfigData], ConfigData, Dict[str, Dict[str, SectionKey]]]:
+    """Process the ``extends`` option, recursively opening each file.
+
+    Return ``(eresults, result, user_defaults)``: the configs of the
+    extended files, and — when nothing is extended — ``result`` merged
+    over ``user_defaults`` (which are then consumed).
+    """
+    # Process extends to handle nested += and -=
+    eresults: List[ConfigData] = []
+    if extends:
+        for fname in extends.split():
+            next_extend, user_defaults = _open(
+                base, fname, seen, download_options, override,
+                downloaded, user_defaults)
+            # A recursive _open call returns the list form.
+            assert isinstance(next_extend, list)
+            eresults.extend(next_extend)
+    else:
+        if user_defaults:
+            result = _update(user_defaults, result)
+            user_defaults = {}
+    return eresults, result, user_defaults
+
+def _optional_extends_results(
+        base: str,
+        optional_extends: Optional[SectionKey],
+        seen: List[str],
+        download_options: Dict[str, SectionKey],
+        override: Dict[str, SectionKey],
+        downloaded: Set[str],
+        user_defaults: Dict[str, Dict[str, SectionKey]],
+        eresults: List[ConfigData],
+        ) -> Dict[str, Dict[str, SectionKey]]:
+    """Process the ``optional-extends`` option, recursively opening each
+    existing file and skipping the missing ones with a notice.
+
+    Extend ``eresults`` in place; return the updated ``user_defaults``.
+    """
+    if optional_extends:
+        for fname in optional_extends.value.split():
+            if not os.path.exists(fname):
+                print("optional-extends file not found: %s" % fname)
+                continue
+            next_extend, user_defaults = _open(
+                base, fname, seen, download_options, override,
+                downloaded, user_defaults)
+            # A recursive _open call returns the list form.
+            assert isinstance(next_extend, list)
+            eresults.extend(next_extend)
+    return user_defaults
+
 def _open(
         base: str, filename: str, seen: List[str], download_options: Dict[str, SectionKey],
         override: Dict[str, SectionKey], downloaded: Set[str], user_defaults: Dict[str, Dict[str, SectionKey]]
@@ -2440,36 +2552,14 @@ def _open(
     download = zc.buildout.download.Download(
         raw_download_options, cache=extends_cache,
         fallback=fallback, hash_name=True)
-    is_temp = False
-    downloaded_filename = None
-    filename, base, needs_download = _resolve_config_location(base, filename)
-    if needs_download:
-        downloaded_filename, is_temp = download(filename)
-        fp = open(downloaded_filename)
-    else:
-        fp = open(filename)
-    downloaded.add(filename)
-
-    if filename in seen:
-        if is_temp:
-            fp.close()
-            # downloaded_filename is always set when is_temp is true.
-            assert downloaded_filename is not None
-            os.remove(downloaded_filename)
-        raise zc.buildout.UserError("Recursive file include", seen, filename)
+    (filename, base, fp, is_temp,
+     downloaded_filename) = _open_config_file(
+        base, filename, seen, download, downloaded)
 
     root_config_file = not seen
     seen.append(filename)
 
-    result = zc.buildout.configparser.parse(
-        fp, _filename_for_logging(filename, downloaded_filename),
-        _default_globals)
-
-    fp.close()
-    if is_temp:
-        # downloaded_filename is always set when is_temp is true.
-        assert downloaded_filename is not None
-        os.remove(downloaded_filename)
+    result = _parse_config_file(fp, filename, downloaded_filename, is_temp)
 
     # Values are plain strings for now; _annotate below mutates them into
     # SectionKey objects in place.
@@ -2488,34 +2578,14 @@ def _open(
         )
 
     # Process extends to handle nested += and -=
-    eresults: List[ConfigData] = []
-    if extends:
-        extends = extends.split()
-        for fname in extends:
-            next_extend, user_defaults = _open(
-                base, fname, seen, download_options, override,
-                downloaded, user_defaults)
-            # A recursive _open call returns the list form.
-            assert isinstance(next_extend, list)
-            eresults.extend(next_extend)
-    else:
-        if user_defaults:
-            result = _update(user_defaults, result)
-            user_defaults = {}
+    eresults, result, user_defaults = _extends_results(
+        base, extends, seen, download_options, override, downloaded,
+        user_defaults, result)
 
     optional_extends = options.pop('optional-extends', None)
-    if optional_extends:
-        optional_extends = optional_extends.value.split()
-        for fname in optional_extends:
-            if not os.path.exists(fname):
-                print("optional-extends file not found: %s" % fname)
-                continue
-            next_extend, user_defaults = _open(
-                base, fname, seen, download_options, override,
-                downloaded, user_defaults)
-            # A recursive _open call returns the list form.
-            assert isinstance(next_extend, list)
-            eresults.extend(next_extend)
+    user_defaults = _optional_extends_results(
+        base, optional_extends, seen, download_options, override,
+        downloaded, user_defaults, eresults)
 
     eresults.append(result)
     seen.pop()
