@@ -406,11 +406,17 @@ jobs:
     # the repo's own dagger module (dagger.json, dagger/): same job
     # table, same make targets, with a devpi PyPI cache shared by all
     # jobs of the run. This is the job a developer reproduces locally
-    # with `dagger call ci`.
-    name: dagger call ci
+    # with `dagger call ci`. The matrix below runs one GH job per job
+    # family defined in the dagger module's Job table
+    # (dagger/src/buildout_ci/main.py); the two lists must stay in sync.
+    name: dagger ${{ matrix.family }}
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [setuptools, python, pip, scripts, static, coverage]
     steps:
     - uses: actions/checkout@v6.0.2
     - name: Free runner disk
@@ -429,5 +435,5 @@ jobs:
         version: "0.21.9"
     - name: Run daggerized CI
       # plain progress: the default TTY rendering floods the log of a
-      # 54-job run.
-      run: dagger --progress=plain call ci --concurrency 4
+      # multi-job family run.
+      run: dagger --progress=plain call ci --family "${{ matrix.family }}" --concurrency 4
