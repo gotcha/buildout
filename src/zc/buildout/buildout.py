@@ -947,6 +947,99 @@ def _finalize_installed_options(
         os.remove(buildout_options['installed'])
 
 
+def _find_upgraded_dists(
+        projects: Tuple[str, ...],
+        ws: pkg_resources.WorkingSet,
+        logger: logging.Logger,
+        ) -> List[pkg_resources.Distribution]:
+    """Return the dists in ``ws`` for ``projects`` whose loaded module
+    lives outside the dist location (i.e. the dist upgrades the active
+    version)."""
+    upgraded = []
+    for project in projects:
+        canonicalized_name = packaging_utils.canonicalize_name(project)
+        req = pkg_resources.Requirement.parse(canonicalized_name)
+        dist = ws.find(req)
+        if dist is None and canonicalized_name != project:
+            # Try with the original project name.  Depending on which setuptools
+            # version is used, this is either useless or a life saver.
+            req = pkg_resources.Requirement.parse(project)
+            dist = ws.find(req)
+        importlib.import_module(project)
+        if dist is None:
+            # This is unexpected.  This must be some problem with how we use
+            # setuptools/pkg_resources.  But since the import worked, it feels
+            # safe to ignore.
+            logger.warning(
+                "Could not find %s in working set during upgrade check. Ignoring.",
+                project,
+            )
+            continue
+        if not inspect.getfile(sys.modules[project]).startswith(
+                zc.buildout.easy_install._dist_location(dist)):
+            upgraded.append(dist)
+    return upgraded
+
+
+def _upgrade_and_restart(
+        options: Union['Options', Dict[str, str]],
+        ws: pkg_resources.WorkingSet,
+        upgraded: List[pkg_resources.Distribution],
+        logger: logging.Logger,
+        ) -> None:
+    """Regenerate the buildout scripts for the ``upgraded`` dists and
+    restart the buildout process; skip with a warning when not running
+    a local buildout command."""
+    should_run = realpath(
+        os.path.join(os.path.abspath(options['bin-directory']),
+                     'buildout')
+        )
+    if sys.platform == 'win32':
+        should_run += '-script.py'
+
+    if (realpath(os.path.abspath(sys.argv[0])) != should_run):
+        logger.debug("Running %r.", realpath(sys.argv[0]))
+        logger.debug("Local buildout is %r.", should_run)
+        logger.warning("Not upgrading because not running a local "
+                       "buildout command.")
+        return
+
+    logger.info("Upgraded:\n  %s;\nRestarting.",
+                ",\n  ".join([("%s version %s"
+                               % (dist.project_name, dist.version)
+                               )
+                              for dist in upgraded
+                              ]
+                             ),
+                )
+
+    # the new dist is different, so we've upgraded.
+    # Update the scripts and return True
+    eggs_dir = options['eggs-directory']
+    develop_eggs_dir = options['develop-eggs-directory']
+    ws = zc.buildout.easy_install.sort_working_set(
+            ws,
+            eggs_dir=eggs_dir,
+            develop_eggs_dir=develop_eggs_dir
+            )
+    zc.buildout.easy_install.scripts(
+        ['zc.buildout'], ws, sys.executable,
+        options['bin-directory'],
+        relative_paths = (
+            bool_option(options, 'relative-paths', False)
+            and options['directory']
+            or ''),
+        )
+
+    # Restart
+    args = sys.argv[:]
+    if not __debug__:
+        args.insert(0, '-O')
+    args.insert(0, sys.executable)
+    env=dict(os.environ, BUILDOUT_RESTART_AFTER_UPGRADE='1')
+    sys.exit(subprocess.call(args, env=env))
+
+
 @commands
 class Buildout(DictMixin):
 
@@ -1632,85 +1725,14 @@ class Buildout(DictMixin):
                 allow_hosts = self._allow_hosts
                 )
 
-            upgraded = []
-
-            for project in projects:
-                canonicalized_name = packaging_utils.canonicalize_name(project)
-                req = pkg_resources.Requirement.parse(canonicalized_name)
-                dist = ws.find(req)
-                if dist is None and canonicalized_name != project:
-                    # Try with the original project name.  Depending on which setuptools
-                    # version is used, this is either useless or a life saver.
-                    req = pkg_resources.Requirement.parse(project)
-                    dist = ws.find(req)
-                importlib.import_module(project)
-                if dist is None:
-                    # This is unexpected.  This must be some problem with how we use
-                    # setuptools/pkg_resources.  But since the import worked, it feels
-                    # safe to ignore.
-                    self._logger.warning(
-                        "Could not find %s in working set during upgrade check. Ignoring.",
-                        project,
-                    )
-                    continue
-                if not inspect.getfile(sys.modules[project]).startswith(
-                        zc.buildout.easy_install._dist_location(dist)):
-                    upgraded.append(dist)
+            upgraded = _find_upgraded_dists(projects, ws, self._logger)
 
             if not upgraded:
                 return
 
             with _activity('Upgrading.'):
-
-                should_run = realpath(
-                    os.path.join(os.path.abspath(self['buildout']['bin-directory']),
-                                 'buildout')
-                    )
-                if sys.platform == 'win32':
-                    should_run += '-script.py'
-
-                if (realpath(os.path.abspath(sys.argv[0])) != should_run):
-                    self._logger.debug("Running %r.", realpath(sys.argv[0]))
-                    self._logger.debug("Local buildout is %r.", should_run)
-                    self._logger.warning("Not upgrading because not running a local "
-                                         "buildout command.")
-                    return
-
-                self._logger.info("Upgraded:\n  %s;\nRestarting.",
-                                  ",\n  ".join([("%s version %s"
-                                               % (dist.project_name, dist.version)
-                                               )
-                                              for dist in upgraded
-                                              ]
-                                             ),
-                                  )
-
-                # the new dist is different, so we've upgraded.
-                # Update the scripts and return True
-                options = self['buildout']
-                eggs_dir = options['eggs-directory']
-                develop_eggs_dir = options['develop-eggs-directory']
-                ws = zc.buildout.easy_install.sort_working_set(
-                        ws,
-                        eggs_dir=eggs_dir,
-                        develop_eggs_dir=develop_eggs_dir
-                        )
-                zc.buildout.easy_install.scripts(
-                    ['zc.buildout'], ws, sys.executable,
-                    options['bin-directory'],
-                    relative_paths = (
-                        bool_option(options, 'relative-paths', False)
-                        and options['directory']
-                        or ''),
-                    )
-
-                # Restart
-                args = sys.argv[:]
-                if not __debug__:
-                    args.insert(0, '-O')
-                args.insert(0, sys.executable)
-                env=dict(os.environ, BUILDOUT_RESTART_AFTER_UPGRADE='1')
-                sys.exit(subprocess.call(args, env=env))
+                _upgrade_and_restart(
+                    self['buildout'], ws, upgraded, self._logger)
 
     def _load_extensions(self) -> None:
         with _activity('Loading extensions.'):

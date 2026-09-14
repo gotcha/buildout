@@ -2,6 +2,7 @@
 import logging
 import os
 import pdb
+import sys
 from io import StringIO
 from typing import Dict, Union
 
@@ -26,6 +27,7 @@ from zc.buildout.buildout import (
     _develop_source_dir,
     _extends_results,
     _filename_for_logging,
+    _find_upgraded_dists,
     _finalize_installed_options,
     _handle_buildout_error,
     _links_and_hosts,
@@ -53,6 +55,7 @@ from zc.buildout.buildout import (
     _setup_download_cache,
     _split_parts,
     _uninstall_stale_parts,
+    _upgrade_and_restart,
     _update_part,
     _update_recipe_callable,
     _use_default_options,
@@ -1454,3 +1457,91 @@ def test_optional_extends_results_collects_existing_file(tmp_path):
     assert len(eresults) == 1
     assert eresults[0]['buildout']['parts'].value == ''
     assert out == {}
+
+
+def test_find_upgraded_dists_missing_dist_is_ignored(caplog):
+    logger = logging.getLogger('zc.buildout')
+    with caplog.at_level(logging.WARNING, logger='zc.buildout'):
+        upgraded = _find_upgraded_dists(
+            ('zc.buildout',), pkg_resources.WorkingSet([]), logger)
+    assert upgraded == []
+    assert ('Could not find zc.buildout in working set during upgrade '
+            'check. Ignoring.') in caplog.text
+
+
+def test_find_upgraded_dists_active_module_inside_dist_location():
+    dist = pkg_resources.Distribution(
+        location=os.path.dirname(zc.buildout.__file__),
+        project_name='zc.buildout', version='0.0')
+    ws = pkg_resources.WorkingSet([])
+    ws.add(dist)
+    upgraded = _find_upgraded_dists(
+        ('zc.buildout',), ws, logging.getLogger('zc.buildout'))
+    assert upgraded == []
+
+
+def test_find_upgraded_dists_module_outside_dist_location_is_upgraded(
+        tmp_path):
+    dist = pkg_resources.Distribution(
+        location=str(tmp_path), project_name='zc.buildout', version='9.9')
+    ws = pkg_resources.WorkingSet([])
+    ws.add(dist)
+    upgraded = _find_upgraded_dists(
+        ('zc.buildout',), ws, logging.getLogger('zc.buildout'))
+    assert upgraded == [dist]
+
+
+def test_upgrade_and_restart_warns_when_not_local_buildout(
+        tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(sys, 'argv', ['/usr/bin/buildout'])
+    options = {'bin-directory': str(tmp_path)}
+    logger = logging.getLogger('zc.buildout')
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout'):
+        _upgrade_and_restart(options, pkg_resources.WorkingSet([]), [], logger)
+    assert ('Not upgrading because not running a local buildout command.'
+            in caplog.text)
+
+
+def test_upgrade_and_restart_regenerates_scripts_and_restarts(
+        tmp_path, monkeypatch, caplog):
+    bin_dir = tmp_path / 'bin'
+    monkeypatch.setattr(sys, 'argv', [str(bin_dir / 'buildout')])
+    dist = pkg_resources.Distribution(
+        location=str(tmp_path), project_name='zc.buildout', version='9.9')
+    ws = pkg_resources.WorkingSet([])
+    calls = []
+
+    def fake_sort_working_set(ws, eggs_dir, develop_eggs_dir):
+        calls.append(('sort', eggs_dir, develop_eggs_dir))
+        return ws
+
+    def fake_scripts(reqs, ws, executable, dest, relative_paths=False):
+        calls.append(('scripts', reqs, executable, dest, relative_paths))
+
+    def fake_call(args, env=None):
+        calls.append(('call', args, env))
+        return 0
+
+    monkeypatch.setattr(
+        'zc.buildout.easy_install.sort_working_set', fake_sort_working_set)
+    monkeypatch.setattr('zc.buildout.easy_install.scripts', fake_scripts)
+    monkeypatch.setattr('subprocess.call', fake_call)
+    options = {
+        'bin-directory': str(bin_dir),
+        'eggs-directory': '/eggs',
+        'develop-eggs-directory': '/develop-eggs',
+        'directory': '/buildout-dir',
+    }
+    logger = logging.getLogger('zc.buildout')
+    with caplog.at_level(logging.INFO, logger='zc.buildout'):
+        with pytest.raises(SystemExit) as exc:
+            _upgrade_and_restart(options, ws, [dist], logger)
+    assert exc.value.code == 0
+    assert calls == [
+        ('sort', '/eggs', '/develop-eggs'),
+        ('scripts', ['zc.buildout'], sys.executable, str(bin_dir), ''),
+        ('call', [sys.executable, str(bin_dir / 'buildout')],
+         dict(os.environ, BUILDOUT_RESTART_AFTER_UPGRADE='1')),
+    ]
+    assert ('Upgraded:\n  zc.buildout version 9.9;\nRestarting.'
+            in caplog.text)
