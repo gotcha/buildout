@@ -2311,11 +2311,7 @@ def find_namespace_init_files(directory: Union[str, Path]) -> List[str]:
     return found_files
 
 
-def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
-    """build properly named egg directory"""
-    logger.debug('Making egg in %s from pip installation in %s', dest, distinfo_dir)
-
-
+def _remove_namespace_init_files(dest: str) -> None:
     # `pip install` does not build the namespace aware __init__.py files.
     # In the new situation we are happy with that.  But actually, for some
     # packages, pip *does* include these files, so we need to remove them.
@@ -2328,6 +2324,8 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
         os.remove(ns_file)
         logger.debug("Removed namespace __init__.py file: %s", ns_file)
 
+
+def _remove_pip_bin_dir(dest: str, distinfo_dir: str) -> None:
     # Remove `bin` directory if needed
     # as there is no way to avoid script installation
     # when running `pip install`
@@ -2340,6 +2338,8 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
                 if os.path.exists(bin_dir):
                     shutil.rmtree(bin_dir)
 
+
+def _read_project_name(dest: str, distinfo_dir: str) -> Optional[str]:
     # Get actual project name from dist-info directory.
     metadata_path = posixpath.join(dest, distinfo_dir, "METADATA")
     # The encoding and errors arguments can be needed on Windows.
@@ -2347,7 +2347,83 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
     with open(metadata_path, encoding='utf-8', errors="replace") as fp:
         value = fp.read()
     metadata = email.parser.Parser().parsestr(value)
-    project_name = metadata.get("Name")
+    return metadata.get("Name")
+
+
+def _read_top_levels(
+        egg_dir: str,
+        new_distinfo_dir: str,
+        ) -> Iterable[str]:
+    top_level_file = os.path.join(egg_dir, new_distinfo_dir, 'top_level.txt')
+    if os.path.isfile(top_level_file):
+        with open(top_level_file, encoding='utf-8', errors="replace") as f:
+            top_levels: Iterable[str] = filter(
+                (lambda x: len(x) != 0),
+                [line.strip() for line in f.readlines()]
+                )
+    else:
+        top_levels = ()
+    return top_levels
+
+
+def _move_top_levels(
+        dest: str,
+        egg_dir: str,
+        top_levels: Iterable[str],
+        ) -> None:
+    # Move all top_level modules or packages
+    for top_level in top_levels:
+        # as package
+        top_level_dir = os.path.join(dest, top_level)
+        if os.path.exists(top_level_dir):
+            shutil.move(top_level_dir, egg_dir)
+            continue
+        # as module
+        top_level_py = top_level_dir + '.py'
+        if os.path.exists(top_level_py):
+            shutil.move(top_level_py, egg_dir)
+            top_level_pyc = top_level_dir + '.pyc'
+            if os.path.exists(top_level_pyc):
+                shutil.move(top_level_pyc, egg_dir)
+            continue
+
+
+def _read_record_entries(record_file: str) -> List[str]:
+    with open(record_file, newline='', encoding='utf-8', errors="replace") as f:
+        return [row[0] for row in csv.reader(f)]
+
+
+def _move_record_leftovers(
+        dest: str,
+        egg_dir: str,
+        all_files: Iterable[str],
+        ) -> None:
+    # There might be some c extensions left over
+    for entry in all_files:
+        if entry.endswith(('.pyc', '.pyo')):
+            continue
+        dest_entry = os.path.join(dest, entry)
+        # work around pip install -t bug that leaves entries in RECORD
+        # that starts with '../../'
+        if not os.path.abspath(dest_entry).startswith(dest):
+            continue
+        egg_entry = os.path.join(egg_dir, entry)
+        if os.path.exists(dest_entry) and not os.path.exists(egg_entry):
+            egg_entry_dir = os.path.dirname(egg_entry)
+            if not os.path.exists(egg_entry_dir):
+                os.makedirs(egg_entry_dir)
+            os.rename(dest_entry, egg_entry)
+
+
+def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
+    """build properly named egg directory"""
+    logger.debug('Making egg in %s from pip installation in %s', dest, distinfo_dir)
+
+    _remove_namespace_init_files(dest)
+
+    _remove_pip_bin_dir(dest, distinfo_dir)
+
+    project_name = _read_project_name(dest, distinfo_dir)
 
     # Make properly named new egg dir
     distro = list(pkg_resources.find_distributions(dest))[0]
@@ -2367,52 +2443,15 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
         os.path.join(egg_dir, new_distinfo_dir)
     )
 
-    top_level_file = os.path.join(egg_dir, new_distinfo_dir, 'top_level.txt')
-    if os.path.isfile(top_level_file):
-        with open(top_level_file, encoding='utf-8', errors="replace") as f:
-            top_levels = filter(
-                (lambda x: len(x) != 0),
-                [line.strip() for line in f.readlines()]
-                )
-    else:
-        top_levels = ()
+    top_levels = _read_top_levels(egg_dir, new_distinfo_dir)
 
-    # Move all top_level modules or packages
-    for top_level in top_levels:
-        # as package
-        top_level_dir = os.path.join(dest, top_level)
-        if os.path.exists(top_level_dir):
-            shutil.move(top_level_dir, egg_dir)
-            continue
-        # as module
-        top_level_py = top_level_dir + '.py'
-        if os.path.exists(top_level_py):
-            shutil.move(top_level_py, egg_dir)
-            top_level_pyc = top_level_dir + '.pyc'
-            if os.path.exists(top_level_pyc):
-                shutil.move(top_level_pyc, egg_dir)
-            continue
+    _move_top_levels(dest, egg_dir, top_levels)
 
     record_file = os.path.join(egg_dir, new_distinfo_dir, 'RECORD')
     if os.path.isfile(record_file):
-        with open(record_file, newline='', encoding='utf-8', errors="replace") as f:
-            all_files = [row[0] for row in csv.reader(f)]
+        all_files = _read_record_entries(record_file)
 
-    # There might be some c extensions left over
-    for entry in all_files:
-        if entry.endswith(('.pyc', '.pyo')):
-            continue
-        dest_entry = os.path.join(dest, entry)
-        # work around pip install -t bug that leaves entries in RECORD
-        # that starts with '../../'
-        if not os.path.abspath(dest_entry).startswith(dest):
-            continue
-        egg_entry = os.path.join(egg_dir, entry)
-        if os.path.exists(dest_entry) and not os.path.exists(egg_entry):
-            egg_entry_dir = os.path.dirname(egg_entry)
-            if not os.path.exists(egg_entry_dir):
-                os.makedirs(egg_entry_dir)
-            os.rename(dest_entry, egg_entry)
+    _move_record_leftovers(dest, egg_dir, all_files)
 
     return [egg_dir]
 

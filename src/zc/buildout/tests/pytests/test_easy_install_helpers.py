@@ -8,14 +8,22 @@ import pytest
 import zc.buildout
 from zc.buildout import easy_install
 from zc.buildout.easy_install import (
+    BIN_SCRIPTS,
     _develop_dist,
     _dist_info_dirname,
     _final_dists,
     _installed_dist_name,
     _is_url,
     _matching_dists,
+    _move_record_leftovers,
+    _move_top_levels,
     _parse_requirements,
     _pip_install_args,
+    _read_project_name,
+    _read_record_entries,
+    _read_top_levels,
+    _remove_namespace_init_files,
+    _remove_pip_bin_dir,
     _resolve_extra_requirements,
     _run_pip,
     _scan_editable_install,
@@ -433,3 +441,215 @@ def test_select_newer_dist_prefer_final_both_prerelease_older_available():
     have = _env_dist('1.0a2')
     assert _select_newer_dist(
         have, _env_dist('1.0a1'), True, _is_final) is None
+
+
+def test_remove_namespace_init_files_removes_found_files(tmp_path, caplog):
+    ns_file = tmp_path / 'ns' / '__init__.py'
+    ns_file.parent.mkdir()
+    ns_file.write_text('__import__("pkg_resources").declare_namespace(__name__)')
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        _remove_namespace_init_files(str(tmp_path))
+    assert not ns_file.exists()
+    assert 'Removed namespace __init__.py file: %s' % ns_file in caplog.text
+
+
+def test_remove_namespace_init_files_without_files_is_noop(
+        tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(
+        easy_install, 'find_namespace_init_files', lambda directory: [])
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        _remove_namespace_init_files(str(tmp_path))
+    assert 'Removed namespace __init__.py file' not in caplog.text
+
+
+def _make_distinfo_with_entry_points(dest, content):
+    distinfo = dest / 'demo-1.0.dist-info'
+    distinfo.mkdir()
+    (distinfo / 'entry_points.txt').write_text(content)
+
+
+def _make_bin_dir(dest):
+    bin_dir = dest / BIN_SCRIPTS
+    bin_dir.mkdir()
+    (bin_dir / 'demo-script').write_text('#!python')
+    return bin_dir
+
+
+def test_remove_pip_bin_dir_without_entry_points_keeps_bin(tmp_path):
+    bin_dir = _make_bin_dir(tmp_path)
+    _remove_pip_bin_dir(str(tmp_path), 'demo-1.0.dist-info')
+    assert bin_dir.exists()
+
+
+def test_remove_pip_bin_dir_without_scripts_keeps_bin(tmp_path):
+    _make_distinfo_with_entry_points(tmp_path, '[metadata]\n')
+    bin_dir = _make_bin_dir(tmp_path)
+    _remove_pip_bin_dir(str(tmp_path), 'demo-1.0.dist-info')
+    assert bin_dir.exists()
+
+
+def test_remove_pip_bin_dir_with_console_scripts_removes_bin(tmp_path):
+    _make_distinfo_with_entry_points(tmp_path, '[console_scripts]\ndemo = x\n')
+    bin_dir = _make_bin_dir(tmp_path)
+    _remove_pip_bin_dir(str(tmp_path), 'demo-1.0.dist-info')
+    assert not bin_dir.exists()
+
+
+def test_remove_pip_bin_dir_with_gui_scripts_removes_bin(tmp_path):
+    _make_distinfo_with_entry_points(tmp_path, '[gui_scripts]\ndemo = x\n')
+    bin_dir = _make_bin_dir(tmp_path)
+    _remove_pip_bin_dir(str(tmp_path), 'demo-1.0.dist-info')
+    assert not bin_dir.exists()
+
+
+def test_remove_pip_bin_dir_without_bin_dir_is_noop(tmp_path):
+    _make_distinfo_with_entry_points(tmp_path, '[console_scripts]\ndemo = x\n')
+    _remove_pip_bin_dir(str(tmp_path), 'demo-1.0.dist-info')
+    assert not (tmp_path / BIN_SCRIPTS).exists()
+
+
+def test_read_project_name_returns_metadata_name(tmp_path):
+    distinfo = tmp_path / 'demo-1.0.dist-info'
+    distinfo.mkdir()
+    (distinfo / 'METADATA').write_text(
+        'Metadata-Version: 2.1\nName: Demo.Real\nVersion: 1.0\n')
+    assert _read_project_name(str(tmp_path), 'demo-1.0.dist-info') == 'Demo.Real'
+
+
+def test_read_project_name_without_name_returns_none(tmp_path):
+    distinfo = tmp_path / 'demo-1.0.dist-info'
+    distinfo.mkdir()
+    (distinfo / 'METADATA').write_text('Metadata-Version: 2.1\nVersion: 1.0\n')
+    assert _read_project_name(str(tmp_path), 'demo-1.0.dist-info') is None
+
+
+def test_read_top_levels_without_file_returns_empty(tmp_path):
+    assert list(_read_top_levels(str(tmp_path), 'demo-1.0.dist-info')) == []
+
+
+def test_read_top_levels_strips_lines_and_drops_empty(tmp_path):
+    distinfo = tmp_path / 'demo-1.0.dist-info'
+    distinfo.mkdir()
+    (distinfo / 'top_level.txt').write_text('demo\n\n  other  \n\n')
+    assert list(_read_top_levels(str(tmp_path), 'demo-1.0.dist-info')) == [
+        'demo', 'other']
+
+
+def test_move_top_levels_moves_package_directory(tmp_path):
+    dest = tmp_path / 'dest'
+    egg_dir = tmp_path / 'egg'
+    (dest / 'demo').mkdir(parents=True)
+    (dest / 'demo' / '__init__.py').write_text('')
+    (dest / 'demo.py').write_text('# shadowed module is ignored')
+    egg_dir.mkdir()
+    _move_top_levels(str(dest), str(egg_dir), ['demo'])
+    assert (egg_dir / 'demo' / '__init__.py').exists()
+    assert not (dest / 'demo').exists()
+    # the package branch won, the module file stays behind
+    assert (dest / 'demo.py').exists()
+
+
+def test_move_top_levels_moves_module_and_pyc(tmp_path):
+    dest = tmp_path / 'dest'
+    egg_dir = tmp_path / 'egg'
+    dest.mkdir()
+    egg_dir.mkdir()
+    (dest / 'demo.py').write_text('')
+    (dest / 'demo.pyc').write_text('')
+    _move_top_levels(str(dest), str(egg_dir), ['demo'])
+    assert (egg_dir / 'demo.py').exists()
+    assert (egg_dir / 'demo.pyc').exists()
+
+
+def test_move_top_levels_moves_module_without_pyc(tmp_path):
+    dest = tmp_path / 'dest'
+    egg_dir = tmp_path / 'egg'
+    dest.mkdir()
+    egg_dir.mkdir()
+    (dest / 'demo.py').write_text('')
+    _move_top_levels(str(dest), str(egg_dir), ['demo'])
+    assert (egg_dir / 'demo.py').exists()
+    assert not (egg_dir / 'demo.pyc').exists()
+
+
+def test_move_top_levels_missing_top_level_is_noop(tmp_path):
+    dest = tmp_path / 'dest'
+    egg_dir = tmp_path / 'egg'
+    dest.mkdir()
+    egg_dir.mkdir()
+    _move_top_levels(str(dest), str(egg_dir), ['missing'])
+    assert list(egg_dir.iterdir()) == []
+
+
+def test_read_record_entries_returns_first_column(tmp_path):
+    record = tmp_path / 'RECORD'
+    record.write_text('demo/__init__.py,sha256=abc,12\ndemo.py,sha256=def,34\n')
+    assert _read_record_entries(str(record)) == [
+        'demo/__init__.py', 'demo.py']
+
+
+def test_read_record_entries_empty_file_returns_empty(tmp_path):
+    record = tmp_path / 'RECORD'
+    record.write_text('')
+    assert _read_record_entries(str(record)) == []
+
+
+def _make_dest_and_egg(tmp_path):
+    dest = tmp_path / 'dest'
+    egg_dir = tmp_path / 'egg'
+    dest.mkdir()
+    egg_dir.mkdir()
+    return dest, egg_dir
+
+
+def test_move_record_leftovers_skips_compiled_files(tmp_path):
+    dest, egg_dir = _make_dest_and_egg(tmp_path)
+    (dest / 'demo.pyc').write_text('')
+    (dest / 'demo.pyo').write_text('')
+    _move_record_leftovers(str(dest), str(egg_dir), ['demo.pyc', 'demo.pyo'])
+    assert (dest / 'demo.pyc').exists()
+    assert (dest / 'demo.pyo').exists()
+    assert list(egg_dir.iterdir()) == []
+
+
+def test_move_record_leftovers_skips_entries_outside_dest(tmp_path):
+    dest, egg_dir = _make_dest_and_egg(tmp_path)
+    _move_record_leftovers(str(dest), str(egg_dir), ['../../evil.py'])
+    assert list(egg_dir.iterdir()) == []
+
+
+def test_move_record_leftovers_skips_missing_dest_entry(tmp_path):
+    dest, egg_dir = _make_dest_and_egg(tmp_path)
+    _move_record_leftovers(str(dest), str(egg_dir), ['missing.py'])
+    assert list(egg_dir.iterdir()) == []
+
+
+def test_move_record_leftovers_skips_entry_already_in_egg(tmp_path):
+    dest, egg_dir = _make_dest_and_egg(tmp_path)
+    (dest / 'demo.so').write_text('dest')
+    (egg_dir / 'demo.so').write_text('egg')
+    _move_record_leftovers(str(dest), str(egg_dir), ['demo.so'])
+    assert (dest / 'demo.so').read_text() == 'dest'
+    assert (egg_dir / 'demo.so').read_text() == 'egg'
+
+
+def test_move_record_leftovers_moves_entry_creating_parent_dirs(tmp_path):
+    dest, egg_dir = _make_dest_and_egg(tmp_path)
+    nested = dest / 'demo' / 'sub'
+    nested.mkdir(parents=True)
+    (nested / 'mod.so').write_text('binary')
+    _move_record_leftovers(str(dest), str(egg_dir), ['demo/sub/mod.so'])
+    assert (egg_dir / 'demo' / 'sub' / 'mod.so').read_text() == 'binary'
+    assert not (nested / 'mod.so').exists()
+
+
+def test_move_record_leftovers_reuses_existing_egg_dirs(tmp_path):
+    dest, egg_dir = _make_dest_and_egg(tmp_path)
+    (dest / 'demo').mkdir()
+    (dest / 'demo' / 'a.so').write_text('a')
+    (dest / 'demo' / 'b.so').write_text('b')
+    (egg_dir / 'demo').mkdir()
+    _move_record_leftovers(
+        str(dest), str(egg_dir), ['demo/a.so', 'demo/b.so'])
+    assert (egg_dir / 'demo' / 'a.so').read_text() == 'a'
+    assert (egg_dir / 'demo' / 'b.so').read_text() == 'b'
