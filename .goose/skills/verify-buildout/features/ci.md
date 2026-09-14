@@ -32,9 +32,45 @@ variables (`SETUPTOOLS_VERSION`, `PIP_VERSION`), exactly as the
 verify-buildout launch does locally. `PYTHON_VERSION` is NOT passed by
 the workflow: the devenv exports it from the `--option` override.
 
-The single sanctioned exception is the Windows job: Nix does not run on
-Windows runners, so it keeps `actions/setup-python` — but it still
-drives the same repo-owned entry points (`make`, `make pytest`).
+Two sanctioned exceptions exist. The Windows job keeps
+`actions/setup-python` (no Nix on Windows runners) but still drives
+the same repo-owned entry points (`make`, `make pytest`). And the
+`dagger` job takes its CLI from `dagger/dagger-for-github` pinned to
+`dagger.json`'s `engineVersion`: the devenv-provided CLI points at the
+developer's local podman machine, which does not exist on a runner,
+and a full Nix bootstrap would deliver only that one binary. The
+dagger engine self-provisions on the runner's docker daemon.
+
+## The daggerized mirror
+
+`dagger/src/buildout_ci/` is a Dagger module whose Job table
+(`jobs.py`, pure data) transcribes this workflow's matrix, so
+`dagger call ci` replays the whole CI in containers with a devpi PyPI
+cache in front. The workflow's `dagger` job runs one GH job per module
+family (`setuptools`, `python`, `pip`, `scripts`, `static`,
+`coverage`) plus `module` (the module's own test harness in
+`dagger/tests/`). The two lists — workflow matrix and Job table — must
+stay in sync; the harness test `dagger/tests/test_jobs.py` fails when
+they drift.
+
+Verifying a change to the dagger module itself:
+
+1. Fast loop, no engine:
+   `uvx --with pytest --with pyyaml python -m pytest dagger/tests -q`.
+2. Dogfooded: `dagger call ci --family module` runs the same harness
+   inside a container, then `dagger call ci --family static` proves
+   the module still loads and lints clean.
+3. Behavioral spot check: `dagger call job --name <cell>` for one
+   representative cell; an unchanged repo reruns a finished cell in
+   seconds (engine layer cache).
+
+Reading a failed dagger job on GitHub: the job summary prints one
+`PASS`/`FAIL` line per cell; for the failing cell's detail fetch the
+job log (`gh api repos/<owner>/<repo>/actions/jobs/<id>/logs`) and
+search backwards from the `FAIL <name>` line. Transient devpi/PyPI
+fetch errors ("Can't download http://devpi:...") are retried by the
+module; persistent ones mean the devpi proxy or the pin set needs a
+look.
 
 ## Proof ladder for a CI change
 

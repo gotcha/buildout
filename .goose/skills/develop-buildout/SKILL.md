@@ -137,10 +137,30 @@ actions are `actions/checkout` and the repo's own composite action
 plain env vars (`SETUPTOOLS_VERSION`, `PIP_VERSION`) for the rest, so
 CI exercises the same toolchain as a local developer shell. Never
 reintroduce per-tool actions (`actions/setup-python`, `pip install
-ruff`/`ty`) outside the sanctioned Windows exception (no Nix on
-Windows runners). The proof ladder for a CI change lives in the
-verify-buildout skill (`features/ci.md`); a CI change still carries a
-towncrier entry like any other.
+ruff`/`ty`) outside the two sanctioned exceptions: the Windows job (no Nix on
+Windows runners) and the `dagger` job, which takes its CLI from
+`dagger/dagger-for-github` pinned to `dagger.json`'s `engineVersion`
+(the devenv CLI points at the developer's local podman machine;
+runners have docker only). The proof ladder for a CI change lives in
+the verify-buildout skill (`features/ci.md`); a CI change still
+carries a towncrier entry like any other.
+
+## Dagger CI module
+
+The workflow matrix is mirrored by a Dagger module in `dagger/`
+(`dagger.json` pins the engine; code in `dagger/src/buildout_ci/`),
+so CI also runs locally via `dagger call ci`. Rules for changing it:
+
+- The Job table lives in `dagger/src/buildout_ci/jobs.py` as pure
+  data (no dagger import). Every matrix edit in `run-tests.yml` must
+  keep that table — and the workflow's dagger family matrix — in
+  sync; `dagger/tests/test_jobs.py` fails on drift.
+- The module's own harness runs via `dagger call ci --family module`
+  (or plain pytest over `dagger/tests/` for the fast loop). Run it
+  before committing module changes; it is also a family in the
+  workflow's dagger matrix, so CI runs it too.
+- Module (`dagger/src/`) and `news/` edits do not invalidate the job
+  cells' engine cache by design — keep it that way.
 
 ## Static tier (ty)
 

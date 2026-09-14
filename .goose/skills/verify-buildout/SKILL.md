@@ -169,6 +169,26 @@ and never substitutes for them.
    (easy_install.py and buildout.py stay lenient longest); until
    then the gate is the trend.
 
+## Daggerized CI axis
+
+The repo's CI matrix is mirrored by a Dagger module in `dagger/`, so
+any cell runs locally in a container with a warm devpi cache:
+`dagger call jobs` lists the cells, `dagger call job --name <cell>`
+runs one, `dagger call ci [--family <name>]` runs a family or all.
+This axis complements the suites above for environment-shaped
+questions (does this pin set install? does the suite pass on 3.14?)
+without touching your checkout's `venvs/`/`eggs/`. An unchanged repo
+reruns a finished cell in seconds; edits to project files (`src/`,
+`Makefile`, `pyproject.toml`, …) invalidate, while module
+(`dagger/src/`) and `news/` edits do not.
+
+For changes to the dagger module itself, the proof ladder is its own
+harness: `uvx --with pytest --with pyyaml python -m pytest
+dagger/tests -q` for the fast loop, `dagger call ci --family module`
+for the dogfooded run, then a `static` family run. Details and the
+failure-reading recipe live in
+[`features/ci.md`](./features/ci.md) ("The daggerized mirror").
+
 ## Evidence
 
 Capture per drive, into a named artifacts dir that survives cleanup —
