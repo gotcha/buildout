@@ -15,6 +15,13 @@ on:
 # local developer shell provides, pinned by devenv.lock.
 # Exception: the Windows job keeps actions/setup-python because Nix
 # does not run on Windows runners.
+# Second exception: the dagger job takes its dagger CLI from
+# dagger/dagger-for-github, pinned to dagger.json's engineVersion.
+# The devenv-provided CLI would need _EXPERIMENTAL_DAGGER_RUNNER_HOST
+# unset (it points at the local podman machine; runners only have
+# docker), and a full Nix bootstrap would only deliver that one Go
+# binary. The engine self-provisions as a container on the runner's
+# docker daemon.
 
 jobs:
   setuptools:
@@ -393,3 +400,34 @@ jobs:
       run: |
         ls -al sandbox/eggs
         ls -al sandbox/downloads/dist
+
+  dagger:
+    # The whole matrix above, run a second time inside containers via
+    # the repo's own dagger module (dagger.json, dagger/): same job
+    # table, same make targets, with a devpi PyPI cache shared by all
+    # jobs of the run. This is the job a developer reproduces locally
+    # with `dagger call ci`.
+    name: dagger call ci
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Free runner disk
+      # A full run keeps ~13 GB in the devpi cache plus the engine and
+      # base images; runners ship ~14 GB free. Drop preinstalled SDKs
+      # this job never uses (plain rm, no extra action).
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet \
+          /usr/share/swift /opt/ghc /usr/local/.ghcup \
+          /opt/hostedtoolcache /usr/local/julia* \
+          /usr/local/share/powershell || true
+        df -h /
+    - uses: dagger/dagger-for-github@v8.4.1
+      with:
+        # Keep in sync with engineVersion in dagger.json.
+        version: "0.21.9"
+    - name: Run daggerized CI
+      # plain progress: the default TTY rendering floods the log of a
+      # 54-job run.
+      run: dagger --progress=plain call ci --concurrency 4
