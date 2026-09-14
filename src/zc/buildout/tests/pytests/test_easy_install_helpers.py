@@ -10,6 +10,8 @@ import zc.buildout
 from zc.buildout import easy_install
 from zc.buildout.easy_install import (
     BIN_SCRIPTS,
+    _available_dists,
+    _best_version_dists,
     _collect_req_scripts,
     _develop_dist,
     _dist_distutils_scripts,
@@ -34,6 +36,7 @@ from zc.buildout.easy_install import (
     _scan_editable_install,
     _script_paths,
     _script_target,
+    _select_from_best,
     _select_newer_dist,
     _warn_missing_scripts,
     _working_set_or_default,
@@ -334,6 +337,130 @@ def _env_with(*dists):
 
 def _is_final(parsed_version):
     return not parsed_version.is_prerelease
+
+
+def _index_with(monkeypatch, dists, obtain_result):
+    """A dist-holding environment with ``obtain`` stubbed like an index."""
+    env = easy_install.Environment([])
+    for dist in dists:
+        env.add(dist)
+    monkeypatch.setattr(env, 'obtain', lambda requirement: obtain_result)
+    return env
+
+
+def test_available_dists_returns_none_when_index_has_nothing(monkeypatch):
+    index = _index_with(monkeypatch, [], None)
+    req = pkg_resources.Requirement.parse('demo')
+    assert _available_dists(index, req, None) is None
+
+
+def test_available_dists_keeps_only_dists_satisfying_req(monkeypatch):
+    old = _env_dist('1.0')
+    new = _env_dist('2.0')
+    index = _index_with(monkeypatch, [old, new], old)
+    req = pkg_resources.Requirement.parse('demo <2')
+    assert _available_dists(index, req, None) == [old]
+
+
+def test_available_dists_ignores_other_projects(monkeypatch):
+    demo = _env_dist('1.0')
+    other = _env_dist('1.0', project_name='other')
+    index = _index_with(monkeypatch, [demo, other], demo)
+    req = pkg_resources.Requirement.parse('demo')
+    assert _available_dists(index, req, None) == [demo]
+
+
+def test_available_dists_without_source_keeps_all_precedences(monkeypatch):
+    egg = _env_dist('1.0')
+    sdist = _env_dist('1.0', precedence=pkg_resources.SOURCE_DIST)
+    index = _index_with(monkeypatch, [egg, sdist], egg)
+    req = pkg_resources.Requirement.parse('demo')
+    assert _available_dists(index, req, None) == [egg, sdist]
+
+
+def test_available_dists_with_source_keeps_only_source_dists(monkeypatch):
+    egg = _env_dist('1.0')
+    sdist = _env_dist('1.0', precedence=pkg_resources.SOURCE_DIST)
+    index = _index_with(monkeypatch, [egg, sdist], egg)
+    req = pkg_resources.Requirement.parse('demo')
+    assert _available_dists(index, req, 1) == [sdist]
+
+
+def test_available_dists_source_without_source_dist_returns_empty(
+        monkeypatch):
+    egg = _env_dist('1.0')
+    index = _index_with(monkeypatch, [egg], egg)
+    req = pkg_resources.Requirement.parse('demo')
+    assert _available_dists(index, req, 1) == []
+
+
+def test_best_version_dists_empty_returns_empty():
+    assert _best_version_dists([]) == []
+
+
+def test_best_version_dists_single_dist_returns_it():
+    dist = _env_dist('1.0')
+    assert _best_version_dists([dist]) == [dist]
+
+
+def test_best_version_dists_returns_highest_version():
+    old = _env_dist('1.0')
+    new = _env_dist('2.0')
+    assert _best_version_dists([old, new]) == [new]
+
+
+def test_best_version_dists_version_tie_keeps_all_in_order():
+    egg = _env_dist('2.0')
+    older = _env_dist('1.0')
+    sdist = _env_dist('2.0', precedence=pkg_resources.SOURCE_DIST)
+    assert _best_version_dists([egg, older, sdist]) == [egg, sdist]
+
+
+def test_select_from_best_without_cache_prefers_egg_over_sdist():
+    egg = _env_dist('2.0')
+    sdist = _env_dist('2.0', precedence=pkg_resources.SOURCE_DIST)
+    assert _select_from_best([sdist, egg], None) is egg
+    assert _select_from_best([egg, sdist], None) is egg
+
+
+def test_select_from_best_prefers_dist_in_download_cache(tmp_path):
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    cached = pkg_resources.Distribution(
+        location=str(cache / 'demo-2.0.zip'),
+        project_name='demo',
+        version='2.0',
+        precedence=pkg_resources.SOURCE_DIST,
+    )
+    egg = _env_dist('2.0')
+    download_cache = easy_install.realpath(str(cache))
+    assert _select_from_best([egg, cached], download_cache) is cached
+
+
+def test_select_from_best_cache_miss_returns_sort_last(tmp_path):
+    egg = _env_dist('2.0')
+    sdist = _env_dist('2.0', precedence=pkg_resources.SOURCE_DIST)
+    download_cache = easy_install.realpath(str(tmp_path))
+    assert _select_from_best([egg, sdist], download_cache) is egg
+
+
+def test_select_from_best_first_cached_dist_wins(tmp_path):
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    first = pkg_resources.Distribution(
+        location=str(cache / 'demo-2.0.zip'),
+        project_name='demo',
+        version='2.0',
+        precedence=pkg_resources.SOURCE_DIST,
+    )
+    second = pkg_resources.Distribution(
+        location=str(cache / 'demo-2.0.egg'),
+        project_name='demo',
+        version='2.0',
+        precedence=pkg_resources.EGG_DIST,
+    )
+    download_cache = easy_install.realpath(str(cache))
+    assert _select_from_best([first, second], download_cache) is first
 
 
 def test_matching_dists_returns_only_dists_satisfying_req():

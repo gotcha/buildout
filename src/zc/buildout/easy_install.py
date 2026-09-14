@@ -552,6 +552,68 @@ def _select_newer_dist(
     return None
 
 
+def _available_dists(
+        index: AllowHostsPackageIndex,
+        requirement: pkg_resources.Requirement,
+        source: Optional[int],
+        ) -> Optional[List[pkg_resources.Distribution]]:
+    """Return the dists in ``index`` matching ``requirement`` and ``source``.
+
+    ``None`` means the index has nothing available for the requirement.
+    When ``source`` is set, only source dists are kept.
+    """
+    if index.obtain(requirement) is None:
+        # Nothing is available.
+        return None
+
+    # Filter the available dists for the requirement and source flag
+    return [dist for dist in index[requirement.project_name]
+            if ((dist in requirement)
+                and
+                ((not source) or
+                 (dist.precedence == pkg_resources.SOURCE_DIST)
+                 )
+                )
+            ]
+
+
+def _best_version_dists(
+        dists: List[pkg_resources.Distribution],
+        ) -> List[pkg_resources.Distribution]:
+    """Return the dists in ``dists`` tied for the highest parsed version."""
+    best = []
+    bestv = None
+    for dist in dists:
+        distv = dist.parsed_version
+        if bestv is None or distv > bestv:
+            best = [dist]
+            bestv = distv
+        elif distv == bestv:
+            best.append(dist)
+    return best
+
+
+def _select_from_best(
+        best: List[pkg_resources.Distribution],
+        download_cache: Optional[str],
+        ) -> pkg_resources.Distribution:
+    """Return one of the ``best`` dists, all tied for the highest version.
+
+    A dist already in ``download_cache`` wins; otherwise the last dist
+    after sorting.
+    """
+    if download_cache:
+        for dist in best:
+            if (realpath(os.path.dirname(_dist_location(dist)))
+                ==
+                download_cache
+                ):
+                return dist
+
+    best.sort()
+    return best[-1]
+
+
 class Installer(object):
 
     _versions = {}
@@ -767,43 +829,14 @@ class Installer(object):
             zc.buildout.rmtree.rmtree(tmp)
 
     def _obtain(self, requirement: pkg_resources.Requirement, source: Optional[int]=None) -> Optional[pkg_resources.Distribution]:
-        # initialize out index for this project:
-        index = self._index
-
-        if index.obtain(requirement) is None:
+        dists = _available_dists(self._index, requirement, source)
+        if dists is None:
             # Nothing is available.
             return None
 
-        # Filter the available dists for the requirement and source flag
-        dists = [dist for dist in index[requirement.project_name]
-                 if ((dist in requirement)
-                     and
-                     ((not source) or
-                      (dist.precedence == pkg_resources.SOURCE_DIST)
-                      )
-                     )
-                 ]
+        dists = _final_dists(dists, self._prefer_final, self._final_version)
 
-        # If we prefer final dists, filter for final and use the
-        # result if it is non empty.
-        if self._prefer_final:
-            fdists = [dist for dist in dists
-                      if self._final_version(dist.parsed_version)
-                      ]
-            if fdists:
-                # There are final dists, so only use those
-                dists = fdists
-
-        # Now find the best one:
-        best = []
-        bestv = None
-        for dist in dists:
-            distv = dist.parsed_version
-            if bestv is None or distv > bestv:
-                best = [dist]
-                bestv = distv
-            elif distv == bestv:
-                best.append(dist)
+        best = _best_version_dists(dists)
 
         if not best:
             return None
@@ -811,16 +844,7 @@ class Installer(object):
         if len(best) == 1:
             return best[0]
 
-        if self._download_cache:
-            for dist in best:
-                if (realpath(os.path.dirname(_dist_location(dist)))
-                    ==
-                    self._download_cache
-                    ):
-                    return dist
-
-        best.sort()
-        return best[-1]
+        return _select_from_best(best, self._download_cache)
 
     def _fetch(self, dist: pkg_resources.Distribution, tmp: str, download_cache: Optional[str]) -> pkg_resources.Distribution:
         if (download_cache
