@@ -51,6 +51,17 @@ ModuleSource = Annotated[
 ]
 
 
+# Failure output signatures that mean "transient fetch/index failure,
+# safe to retry once" — observed against a cold devpi on GitHub runners.
+TRANSIENT_SIGNATURES = (
+    "Can't download http",
+    "No matching distribution found",
+    "Connection reset",
+    "Connection refused",
+    "Read timed out",
+)
+
+
 @object_type
 class BuildoutCi:
     @function
@@ -176,4 +187,14 @@ class BuildoutCi:
             ctr = ctr.with_directory("/src/dagger", module_source)
         for command in job.commands:
             ctr = ctr.with_exec(list(command))
-        await ctr.stdout()
+            try:
+                await ctr.stdout()
+            except dagger.ExecError as exc:
+                # engine v0.21.9: str(exc) is only "exit code: N"; the
+                # failed command's output lives on .stdout/.stderr
+                output = f"{exc}\n{exc.stdout}\n{exc.stderr}"
+                if not any(sig in output for sig in TRANSIENT_SIGNATURES):
+                    raise
+                # execs are atomic layers: re-awaiting re-runs from the
+                # last good layer, against a now-warmer devpi
+                await ctr.stdout()
