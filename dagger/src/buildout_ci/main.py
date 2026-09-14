@@ -43,10 +43,14 @@ class Job:
     name: str
     python: str
     commands: tuple[tuple[str, ...], ...]
+    family: str
     setuptools: str = "75.8.2"
     pip: str = ""
     package: str = ""
     pip_install: tuple[str, ...] = ()
+
+
+FAMILIES = ("setuptools", "python", "pip", "scripts", "static", "coverage")
 
 
 def _scripts_commands(makefile: str) -> tuple[tuple[str, ...], ...]:
@@ -68,6 +72,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 python="3.10",
                 # the workflow skips the pytest step on setuptools 63.0.0
                 commands=(("make",),) if st == "63.0.0" else make_and_pytest,
+                family="setuptools",
                 setuptools=st,
             )
             for st in (
@@ -86,6 +91,7 @@ def _build_jobs() -> tuple[Job, ...]:
             name="ruff",
             python="3.12",
             commands=(("make", "lint"),),
+            family="static",
             # pin to the devenv-provided ruff (devenv.lock nixpkgs rev),
             # so the local gate matches CI exactly
             pip_install=("ruff==0.16.6",),
@@ -94,6 +100,7 @@ def _build_jobs() -> tuple[Job, ...]:
             name="ty",
             python="3.12",
             commands=(("make", "typecheck"),),
+            family="static",
             # pin to the devenv-provided ty: newer ty emits diagnostics
             # inside third-party eggs on the search path
             pip_install=("ty==0.0.78",),
@@ -102,6 +109,7 @@ def _build_jobs() -> tuple[Job, ...]:
             name="setuptools-61-test-small",
             python="3.10",
             commands=(("make", "test-small"),),
+            family="setuptools",
             setuptools="61.0.0",
         ),
         *(
@@ -109,6 +117,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 name=f"python-{py}",
                 python=py,
                 commands=make_and_pytest,
+                family="python",
                 setuptools="75.6.0",
             )
             for py in ("3.9", "3.11", "3.12", "3.13", "3.14")
@@ -118,6 +127,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 name=f"pip-{pip}-st-{st}",
                 python="3.10",
                 commands=make_and_pytest,
+                family="pip",
                 setuptools=st,
                 pip=pip,
             )
@@ -125,14 +135,15 @@ def _build_jobs() -> tuple[Job, ...]:
             for st in ("65.7.0", "75.8.2")
         ),
         # named after the macos workflow job: same make targets, but in a Linux container
-        Job(name="mac", python="3.10", commands=make_and_pytest),
-        Job(name="coverage-legacy", python="3.12", commands=(("make", "coverage"),)),
-        Job(name="coverage-pytest", python="3.12", commands=(("make", "coverage-pytest"),)),
+        Job(name="mac", python="3.10", commands=make_and_pytest, family="python"),
+        Job(name="coverage-legacy", python="3.12", commands=(("make", "coverage"),), family="coverage"),
+        Job(name="coverage-pytest", python="3.12", commands=(("make", "coverage-pytest"),), family="coverage"),
         *(
             Job(
                 name=f"scripts-{pkg}-py{py}",
                 python=py,
                 commands=_scripts_commands(".github/workflows/Makefile-scripts"),
+                family="scripts",
                 package=pkg,
             )
             for py in ("3.9", "3.10", "3.11", "3.12", "3.13", "3.14")
@@ -143,6 +154,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 name=f"scripts-head-{pkg}-py{py}",
                 python=py,
                 commands=_scripts_commands(".github/workflows/Makefile-scripts-setuptools-head"),
+                family="scripts",
                 package=pkg,
             )
             for py in ("3.10", "3.11", "3.12", "3.13", "3.14")
@@ -162,12 +174,29 @@ def _find_job(name: str) -> Job:
     raise ValueError(f"unknown job {name!r}; valid jobs:\n{valid}")
 
 
+def _check_family(family: str) -> None:
+    if not family or family in FAMILIES:
+        return
+    valid = "\n".join(FAMILIES)
+    raise ValueError(f"unknown family {family!r}; valid families:\n{valid}")
+
+
+def _select_jobs(family: str) -> list[Job]:
+    _check_family(family)
+    return [job for job in JOBS if not family or job.family == family]
+
+
 @object_type
 class BuildoutCi:
     @function
-    def jobs(self) -> str:
-        """List the CI job names, one per line, in registry order."""
-        return "\n".join(job.name for job in JOBS)
+    def jobs(self, family: str = "") -> str:
+        """List the CI job names, one per line, in registry order; pass family to list only that family's."""
+        return "\n".join(job.name for job in _select_jobs(family))
+
+    @function
+    def families(self) -> str:
+        """List the job family names, one per line."""
+        return "\n".join(FAMILIES)
 
     @function
     async def job(self, source: Source, name: str) -> str:
@@ -177,8 +206,12 @@ class BuildoutCi:
         return f"{name}: ok"
 
     @function
-    async def ci(self, source: Source, concurrency: int = 4) -> str:
-        """Run all CI jobs with bounded concurrency against one shared devpi cache."""
+    async def ci(self, source: Source, concurrency: int = 4, family: str = "") -> str:
+        """Run all CI jobs with bounded concurrency against one shared devpi cache.
+
+        Pass family to run only that family's jobs (see families).
+        """
+        selected = _select_jobs(family)
         semaphore = asyncio.Semaphore(concurrency)
         devpi = self.devpi_service()
 
@@ -191,7 +224,7 @@ class BuildoutCi:
                     return f"FAIL {job.name}: {lines[-1] if lines else exc!r}"
                 return f"PASS {job.name}"
 
-        results = await asyncio.gather(*(run(job) for job in JOBS))
+        results = await asyncio.gather(*(run(job) for job in selected))
         summary = "\n".join(results)
         if any(result.startswith("FAIL") for result in results):
             raise Exception(summary)
