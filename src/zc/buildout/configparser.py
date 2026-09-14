@@ -23,7 +23,7 @@ import logging
 
 from packaging import markers
 from io import StringIO, TextIOWrapper
-from typing import Callable, Dict, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 
 Marker = markers.Marker
@@ -189,6 +189,120 @@ def _finalize_sections(sections: Dict[str, Dict[str, str]]) -> Dict[str, Dict[st
     return sections
 
 
+def _handle_continuation(
+        line: str, cursect: Optional[Dict[str, str]], optname: Optional[str],
+        section_condition: bool, blockmode: bool) -> bool:
+    """Handle a continuation line of the current option value.
+
+    Return True when the line was consumed, appended or skipped; return
+    False when it is not a continuation line and must be dispatched as
+    a section header, option, or preamble line.
+    """
+    if not line[0].isspace() or cursect is None or not optname:
+        return False
+    if not section_condition:
+        #skip section based on its expression condition
+        return True
+    if not blockmode and not line.strip():
+        return True
+    # continuation line
+    _append_continuation(cursect, optname, line, blockmode)
+    return True
+
+
+def _expression_context(context: List[Any], exp_globals: Callable) -> Any:
+    """Return the evaluation context for old-style section expressions,
+    lazily populated from ``exp_globals``.
+
+    Quirk preserved: a falsy context (e.g. an empty dict) is re-fetched
+    from ``exp_globals`` on every old-style expression.
+    """
+    if context and context[0]:
+        return context[0]
+    value = exp_globals()
+    context[:] = [value]
+    return value
+
+
+def _start_section(
+        header: re.Match, sections: Dict[str, Dict[str, str]],
+        context: List[Any], exp_globals: Callable,
+        ) -> Tuple[Optional[Dict[str, str]], bool]:
+    """Start the section named by a section header match.
+
+    Return ``(cursect, section_condition)``; the condition is reset to
+    True unless the header carries an expression evaluating to false.
+    A false condition ignores the section: cursect is None and the
+    caller must leave its current section and option untouched, so
+    that following continuation and option lines get filtered out.
+    """
+    # reset to True when starting a new section
+    section_condition = True
+    sectname = header.group('name')
+
+    expression = header.group('expression')
+    if expression:
+        section_condition = _evaluate_section_condition(
+            header.group('head'), expression, header.group('tail'),
+            lambda: _expression_context(context, exp_globals))
+        # finally, ignore section when an expression
+        # evaluates to false
+        if not section_condition:
+            logger.debug(
+                'Ignoring section %(sectname)r with [expression]:'
+                ' %(expression)r' % locals())
+            return None, section_condition
+
+    if sectname in sections:
+        cursect = sections[sectname]
+    else:
+        sections[sectname] = cursect = {}
+    return cursect, section_condition
+
+
+def _handle_preamble_line(line: str, fpname: str, lineno: int) -> None:
+    """Only blank lines are allowed before the first section header."""
+    if line.strip():
+        # no section header in the file?
+        raise MissingSectionHeaderError(fpname, lineno, line)
+
+
+def _handle_option_line(
+        line: str, cursect: Dict[str, str], optname: Optional[str],
+        blockmode: bool, section_condition: bool, fpname: str,
+        lineno: int, error: Optional[ParsingError],
+        ) -> Optional[Tuple[Optional[str], bool, Optional[ParsingError]]]:
+    """Process an option or bogus line within a section.
+
+    Return None when the line must be skipped: an option filtered out
+    of a conditionally ignored section.  Otherwise return the possibly
+    updated ``(optname, blockmode, error)``; a non-fatal parsing error
+    is collected into ``error``, to be raised at the end of the file
+    with a list of all bogus lines.
+    """
+    if line[:2] == '=>':
+        line = '<part-dependencies> = ' + line[2:]
+    mo = option_start(line)
+    if mo:
+        if not section_condition:
+            # filter out options of conditionally ignored section
+            return None
+        # option start line
+        optname, optval = mo.group('name', 'value')
+        optname = optname.rstrip()
+        _merge_option(cursect, optname, optval)
+        blockmode = not optval
+    elif optname or line.strip():
+        # a non-fatal parsing error occurred.  set up the
+        # exception but keep going. the exception will be
+        # raised at the end of the file and will contain a
+        # list of all bogus lines
+        if not error:
+            error = ParsingError(fpname)
+        error.append(lineno, repr(line))
+    return optname, blockmode, error
+
+
 def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Type[dict], Callable]=dict) -> Dict[str, Dict[str, str]]:
     """Parse a sectioned setup file.
 
@@ -213,7 +327,7 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
     sections = {}
     # the current section condition, possibly updated from a section expression
     section_condition = True
-    context = None
+    context: List[Any] = []  # lazy expression context, see _expression_context
     cursect = None                            # None, or a dictionary
     blockmode = False
     optname = None
@@ -229,74 +343,28 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
         if line[0] in '#;':
             continue # comment
 
-        if line[0].isspace() and cursect is not None and optname:
-            if not section_condition:
-                #skip section based on its expression condition
+        if _handle_continuation(
+                line, cursect, optname, section_condition, blockmode):
+            continue
+
+        header = section_header(line)
+        if header:
+            new_cursect, section_condition = _start_section(
+                header, sections, context, exp_globals)
+            if new_cursect is None:
                 continue
-            if not blockmode and not line.strip():
-                continue
-            # continuation line
-            _append_continuation(cursect, optname, line, blockmode)
+            cursect = new_cursect
+            # So sections can't start with a continuation line
+            optname = None
+        elif cursect is None:
+            _handle_preamble_line(line, fpname, lineno)
         else:
-            header = section_header(line)
-            if header:
-                # reset to True when starting a new section
-                section_condition = True
-                sectname = header.group('name')
-
-                expression = header.group('expression')
-                if expression:
-                    def context_getter():
-                        nonlocal context
-                        if not context:
-                            context = exp_globals()
-                        return context
-                    section_condition = _evaluate_section_condition(
-                        header.group('head'), expression,
-                        header.group('tail'), context_getter)
-                    # finally, ignore section when an expression
-                    # evaluates to false
-                    if not section_condition:
-                        logger.debug(
-                            'Ignoring section %(sectname)r with [expression]:'
-                            ' %(expression)r' % locals())
-                        continue
-
-                if sectname in sections:
-                    cursect = sections[sectname]
-                else:
-                    sections[sectname] = cursect = {}
-                # So sections can't start with a continuation line
-                optname = None
-            elif cursect is None:
-                if not line.strip():
-                    continue
-                # no section header in the file?
-                raise MissingSectionHeaderError(fpname, lineno, line)
-            else:
-                if line[:2] == '=>':
-                    line = '<part-dependencies> = ' + line[2:]
-                mo = option_start(line)
-                if mo:
-                    if not section_condition:
-                        # filter out options of conditionally ignored section
-                        continue
-                    # option start line
-                    optname, optval = mo.group('name', 'value')
-                    optname = optname.rstrip()
-                    _merge_option(cursect, optname, optval)
-                    blockmode = not optval
-                elif not (optname or line.strip()):
-                    # blank line after section start
-                    continue
-                else:
-                    # a non-fatal parsing error occurred.  set up the
-                    # exception but keep going. the exception will be
-                    # raised at the end of the file and will contain a
-                    # list of all bogus lines
-                    if not e:
-                        e = ParsingError(fpname)
-                    e.append(lineno, repr(line))
+            handled = _handle_option_line(
+                line, cursect, optname, blockmode, section_condition,
+                fpname, lineno, e)
+            if handled is None:
+                continue
+            optname, blockmode, e = handled
 
     # if any parsing errors occurred, raise an exception
     if e:
