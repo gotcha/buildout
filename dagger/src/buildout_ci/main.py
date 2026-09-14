@@ -266,6 +266,11 @@ class BuildoutCi:
             .with_env_variable("PYTHON_VERSION", job.python)
             .with_mounted_directory("/src", source)
             .with_workdir("/src")
+            # pip and uv caches persist across cells and runs; both tools write
+            # caches atomically, so concurrent cells on the same python version
+            # can share the volume.
+            .with_mounted_cache("/root/.cache/uv", dag.cache_volume(f"buildout-ci-uv-py{job.python}"))
+            .with_mounted_cache("/root/.cache/pip", dag.cache_volume(f"buildout-ci-pip-py{job.python}"))
             # A cold devpi answers 200 on / while its index is not serving
             # yet: demand real index content, and retry the first install.
             .with_exec(
