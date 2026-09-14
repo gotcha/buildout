@@ -2819,78 +2819,171 @@ def _version() -> NoReturn:
     print_("buildout version %s" % dist.version)
     sys.exit(0)
 
+
+def _apply_letter_flag(
+        flag: str,
+        verbosity: int,
+        use_user_defaults: bool,
+        debug: bool,
+        options: List[Tuple[str, str, str]],
+        ) -> Tuple[int, bool, bool]:
+    """Apply a bundled single-letter flag; return the updated
+    ``(verbosity, use_user_defaults, debug)``."""
+    if flag == 'v':
+        verbosity += 10
+    elif flag == 'q':
+        verbosity -= 10
+    elif flag == 'U':
+        use_user_defaults = False
+    elif flag == 'o':
+        options.append(('buildout', 'offline', 'true'))
+    elif flag == 'O':
+        options.append(('buildout', 'offline', 'false'))
+    elif flag == 'n':
+        options.append(('buildout', 'newest', 'true'))
+    elif flag == 'N':
+        options.append(('buildout', 'newest', 'false'))
+    elif flag == 'D':
+        debug = True
+    else:
+        _help()
+    return verbosity, use_user_defaults, debug
+
+
+def _valued_option(
+        op: str,
+        orig_op: str,
+        config_file: str,
+        args: List[str],
+        options: List[Tuple[str, str, str]],
+        ) -> str:
+    """Handle the ``-c``/``-t`` options; return the (possibly new)
+    config file."""
+    op_ = op[:1]
+    op = op[1:]
+
+    if op_ == 'c':
+        if op:
+            config_file = op
+        elif args:
+            config_file = args.pop(0)
+        else:
+            _error("No file name specified for option", orig_op)
+    elif op_ == 't':
+        try:
+            timeout_string = args.pop(0)
+            # Quirk preserved: the value is only validated, never used.
+            timeout = int(timeout_string)
+            options.append(
+                ('buildout', 'socket-timeout', timeout_string))
+        except IndexError:
+            _error("No timeout value specified for option", orig_op)
+        except ValueError:
+            _error("Timeout value must be numeric", orig_op)
+    return config_file
+
+
+def _long_option(orig_op: str, op: str) -> None:
+    """Handle ``--help``/``--version``, rejecting any other option."""
+    if orig_op == '--help':
+        _help()
+    elif orig_op == '--version':
+        _version()
+    else:
+        _error("Invalid option", '-'+op[0])
+
+
+def _option_assignment(arg: str) -> Tuple[str, str, str]:
+    """Parse a ``section:option=value`` command-line assignment into a
+    stripped ``(section, option, value)`` tuple."""
+    option, value = arg.split('=', 1)
+    parts = option.split(':')
+    if len(parts) == 1:
+        section, name = 'buildout', parts[0]
+    elif len(parts) != 2:
+        # Quirk preserved: _error space-joins its arguments, so passing
+        # the list raises TypeError instead of a clean error exit.
+        _error('Invalid option:', parts)
+    else:
+        section, name = parts
+    return section.strip(), name.strip(), value.strip()
+
+
+def _pop_command(args: List[str]) -> str:
+    """Pop the command from ``args``, defaulting to ``install``."""
+    if args:
+        command = args.pop(0)
+        if command not in Buildout.COMMANDS:
+            _error('invalid command:', command)
+    else:
+        command = 'install'
+    return command
+
+
+def _handle_buildout_error(debug: bool) -> NoReturn:
+    """Report a buildout failure (a pdb post-mortem under ``-D``) and
+    exit 1."""
+    v = sys.exc_info()[1]
+    _doing()
+    exc_info = sys.exc_info()
+    import pdb
+    import traceback
+    if debug:
+        traceback.print_exception(*exc_info)
+        sys.stderr.write('\nStarting pdb:\n')
+        pdb.post_mortem(exc_info[2])
+    else:
+        if isinstance(v, (zc.buildout.UserError,
+                          distutils.errors.DistutilsError
+                          )
+                      ):
+            _error(str(v))
+        else:
+            sys.stderr.write(_internal_error_template)
+            traceback.print_exception(*exc_info)
+    sys.exit(1)
+
+
+def _consume_letter_flags(
+        op: str,
+        verbosity: int,
+        use_user_defaults: bool,
+        debug: bool,
+        options: List[Tuple[str, str, str]],
+        ) -> Tuple[str, int, bool, bool]:
+    """Consume the bundled single-letter flags of ``op``; return the
+    remaining ``op`` and the updated ``(verbosity, use_user_defaults,
+    debug)``."""
+    while op and op[0] in 'vqhWUoOnNDA':
+        verbosity, use_user_defaults, debug = _apply_letter_flag(
+            op[0], verbosity, use_user_defaults, debug, options)
+        op = op[1:]
+    return op, verbosity, use_user_defaults, debug
+
+
 def main(args: Optional[List[str]]=None) -> None:
     if args is None:
         args = sys.argv[1:]
 
     config_file = 'buildout.cfg'
     verbosity = 0
-    options = []
+    options: List[Tuple[str, str, str]] = []
     use_user_defaults = True
     debug = False
     while args:
         if args[0][0] == '-':
             op = orig_op = args.pop(0)
-            op = op[1:]
-            while op and op[0] in 'vqhWUoOnNDA':
-                if op[0] == 'v':
-                    verbosity += 10
-                elif op[0] == 'q':
-                    verbosity -= 10
-                elif op[0] == 'U':
-                    use_user_defaults = False
-                elif op[0] == 'o':
-                    options.append(('buildout', 'offline', 'true'))
-                elif op[0] == 'O':
-                    options.append(('buildout', 'offline', 'false'))
-                elif op[0] == 'n':
-                    options.append(('buildout', 'newest', 'true'))
-                elif op[0] == 'N':
-                    options.append(('buildout', 'newest', 'false'))
-                elif op[0] == 'D':
-                    debug = True
-                else:
-                    _help()
-                op = op[1:]
+            (op, verbosity, use_user_defaults, debug
+             ) = _consume_letter_flags(
+                op[1:], verbosity, use_user_defaults, debug, options)
 
             if op[:1] in  ('c', 't'):
-                op_ = op[:1]
-                op = op[1:]
-
-                if op_ == 'c':
-                    if op:
-                        config_file = op
-                    else:
-                        if args:
-                            config_file = args.pop(0)
-                        else:
-                            _error("No file name specified for option", orig_op)
-                elif op_ == 't':
-                    try:
-                        timeout_string = args.pop(0)
-                        timeout = int(timeout_string)
-                        options.append(
-                            ('buildout', 'socket-timeout', timeout_string))
-                    except IndexError:
-                        _error("No timeout value specified for option", orig_op)
-                    except ValueError:
-                        _error("Timeout value must be numeric", orig_op)
+                config_file = _valued_option(
+                    op, orig_op, config_file, args, options)
             elif op:
-                if orig_op == '--help':
-                    _help()
-                elif orig_op == '--version':
-                    _version()
-                else:
-                    _error("Invalid option", '-'+op[0])
+                _long_option(orig_op, op)
         elif '=' in args[0]:
-            option, value = args.pop(0).split('=', 1)
-            option = option.split(':')
-            if len(option) == 1:
-                option = 'buildout', option[0]
-            elif len(option) != 2:
-                _error('Invalid option:', option)
-            section, option = option
-            options.append((section.strip(), option.strip(), value.strip()))
+            options.append(_option_assignment(args.pop(0)))
         else:
             # We've run out of command-line options and option assignments
             # The rest should be commands, so we'll stop here
@@ -2899,12 +2992,7 @@ def main(args: Optional[List[str]]=None) -> None:
     if verbosity:
         options.append(('buildout', 'verbosity', str(verbosity)))
 
-    if args:
-        command = args.pop(0)
-        if command not in Buildout.COMMANDS:
-            _error('invalid command:', command)
-    else:
-        command = 'install'
+    command = _pop_command(args)
 
     try:
         try:
@@ -2917,25 +3005,7 @@ def main(args: Optional[List[str]]=None) -> None:
             # buildout process.
             raise
         except Exception:
-            v = sys.exc_info()[1]
-            _doing()
-            exc_info = sys.exc_info()
-            import pdb
-            import traceback
-            if debug:
-                traceback.print_exception(*exc_info)
-                sys.stderr.write('\nStarting pdb:\n')
-                pdb.post_mortem(exc_info[2])
-            else:
-                if isinstance(v, (zc.buildout.UserError,
-                                  distutils.errors.DistutilsError
-                                  )
-                              ):
-                    _error(str(v))
-                else:
-                    sys.stderr.write(_internal_error_template)
-                    traceback.print_exception(*exc_info)
-            sys.exit(1)
+            _handle_buildout_error(debug)
 
     finally:
         logging.shutdown()

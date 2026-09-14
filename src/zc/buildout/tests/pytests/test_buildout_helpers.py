@@ -1,6 +1,7 @@
 """Unit tests for the pure helpers extracted from zc.buildout.buildout."""
 import logging
 import os
+import pdb
 from typing import Dict, Union
 
 import pkg_resources
@@ -14,24 +15,30 @@ from zc.buildout.buildout import (
     _absolutize_cache_dirs,
     _absolutize_standard_dirs,
     _apply_cl_extends,
+    _apply_letter_flag,
     _buildout_default_options,
     _check_install_from_cache,
     _cloptions_dict,
+    _consume_letter_flags,
     _create_cache_dirs,
     _default_versions,
     _develop_source_dir,
     _filename_for_logging,
     _finalize_installed_options,
+    _handle_buildout_error,
     _links_and_hosts,
     _load_config,
     _load_user_defaults,
     _log_part_option_changes,
+    _long_option,
     _merge_config_data,
     _merged_updated_files,
     _new_develop_eggs,
     _normalize_installed_files,
+    _option_assignment,
     _part_is_up_to_date,
     _pin_buildout_version,
+    _pop_command,
     _previous_develop_links,
     _print_configuration_data,
     _record_installed_part,
@@ -45,6 +52,7 @@ from zc.buildout.buildout import (
     _update_recipe_callable,
     _use_default_options,
     _validated_extends_cache,
+    _valued_option,
     _version_eggs_directory,
 )
 
@@ -1109,3 +1117,197 @@ def test_finalize_installed_options_keeps_file_while_parts_remain(tmp_path):
     _finalize_installed_options(
         '', True, ['a'], {}, {'installed': str(installed)}, lambda o: None)
     assert installed.exists()
+
+
+def test_apply_letter_flag_verbosity():
+    assert _apply_letter_flag('v', 0, True, False, []) == (10, True, False)
+    assert _apply_letter_flag('q', 20, True, False, []) == (10, True, False)
+
+
+def test_apply_letter_flag_user_defaults():
+    assert _apply_letter_flag('U', 0, True, False, []) == (0, False, False)
+
+
+def test_apply_letter_flag_options():
+    options = []
+    _apply_letter_flag('o', 0, True, False, options)
+    _apply_letter_flag('O', 0, True, False, options)
+    _apply_letter_flag('n', 0, True, False, options)
+    _apply_letter_flag('N', 0, True, False, options)
+    assert options == [
+        ('buildout', 'offline', 'true'),
+        ('buildout', 'offline', 'false'),
+        ('buildout', 'newest', 'true'),
+        ('buildout', 'newest', 'false'),
+    ]
+
+
+def test_apply_letter_flag_debug():
+    assert _apply_letter_flag('D', 0, True, False, []) == (0, True, True)
+
+
+def test_apply_letter_flag_help_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _apply_letter_flag('h', 0, True, False, [])
+    assert exc.value.code == 0
+    assert 'Usage:' in capsys.readouterr().out
+
+
+def test_valued_option_config_inline():
+    assert _valued_option(
+        'cfoo.cfg', '-cfoo.cfg', 'buildout.cfg', [], []) == 'foo.cfg'
+
+
+def test_valued_option_config_from_args():
+    args = ['bar.cfg']
+    assert _valued_option('c', '-c', 'buildout.cfg', args, []) == 'bar.cfg'
+    assert args == []
+
+
+def test_valued_option_config_missing_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _valued_option('c', '-c', 'buildout.cfg', [], [])
+    assert exc.value.code == 1
+    assert 'No file name specified for option' in capsys.readouterr().err
+
+
+def test_valued_option_timeout_appends_option():
+    args = ['5']
+    options = []
+    assert _valued_option('t', '-t', 'buildout.cfg', args,
+                          options) == 'buildout.cfg'
+    assert args == []
+    assert options == [('buildout', 'socket-timeout', '5')]
+
+
+def test_valued_option_timeout_missing_exits(capsys):
+    with pytest.raises(SystemExit):
+        _valued_option('t', '-t', 'buildout.cfg', [], [])
+    assert 'No timeout value specified for option' in capsys.readouterr().err
+
+
+def test_valued_option_timeout_non_numeric_exits(capsys):
+    with pytest.raises(SystemExit):
+        _valued_option('t', '-t', 'buildout.cfg', ['abc'], [])
+    assert 'Timeout value must be numeric' in capsys.readouterr().err
+
+
+def test_long_option_help_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _long_option('--help', '-help')
+    assert exc.value.code == 0
+    assert 'Usage:' in capsys.readouterr().out
+
+
+def test_long_option_version_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _long_option('--version', '-version')
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.startswith('buildout version ')
+
+
+def test_long_option_invalid_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _long_option('--bogus', '-bogus')
+    assert exc.value.code == 1
+    assert 'Invalid option' in capsys.readouterr().err
+
+
+def test_option_assignment_defaults_to_buildout_section():
+    assert _option_assignment('a=1') == ('buildout', 'a', '1')
+
+
+def test_option_assignment_with_section():
+    assert _option_assignment('s:a=1') == ('s', 'a', '1')
+
+
+def test_option_assignment_strips_whitespace():
+    assert _option_assignment(' s : a = 1 ') == ('s', 'a', '1')
+
+
+def test_option_assignment_too_many_colons_is_type_error():
+    # Preserved quirk: _error space-joins its arguments, so the list
+    # argument raises TypeError instead of a clean error exit.
+    with pytest.raises(TypeError):
+        _option_assignment('s:a:b=1')
+
+
+def test_pop_command_pops():
+    args = ['install', 'x']
+    assert _pop_command(args) == 'install'
+    assert args == ['x']
+
+
+def test_pop_command_defaults_to_install():
+    assert _pop_command([]) == 'install'
+
+
+def test_pop_command_invalid_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _pop_command(['not-a-command'])
+    assert exc.value.code == 1
+    assert 'invalid command:' in capsys.readouterr().err
+
+
+def test_handle_buildout_error_user_error_exits_1(capsys):
+    try:
+        raise zc.buildout.UserError('bad things')
+    except zc.buildout.UserError:
+        with pytest.raises(SystemExit) as exc:
+            _handle_buildout_error(False)
+    assert exc.value.code == 1
+    assert 'Error: bad things' in capsys.readouterr().err
+
+
+def test_handle_buildout_error_internal_error_exits_1(capsys):
+    try:
+        raise RuntimeError('boom')
+    except RuntimeError:
+        with pytest.raises(SystemExit) as exc:
+            _handle_buildout_error(False)
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert 'An internal error occurred' in err
+    assert 'RuntimeError: boom' in err
+
+
+def test_handle_buildout_error_debug_starts_post_mortem(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(pdb, 'post_mortem', calls.append)
+    try:
+        raise RuntimeError('boom')
+    except RuntimeError:
+        with pytest.raises(SystemExit) as exc:
+            _handle_buildout_error(True)
+    assert exc.value.code == 1
+    assert len(calls) == 1
+    assert 'Starting pdb' in capsys.readouterr().err
+
+
+def test_consume_letter_flags_consumes_bundle():
+    options = []
+    op, verbosity, use_user_defaults, debug = _consume_letter_flags(
+        'vqUDoN', 0, True, False, options)
+    assert op == ''
+    assert verbosity == 0
+    assert not use_user_defaults
+    assert debug
+    assert options == [('buildout', 'offline', 'true'),
+                       ('buildout', 'newest', 'false')]
+
+
+def test_consume_letter_flags_stops_at_valued_option():
+    op, verbosity, _, _ = _consume_letter_flags('vcfoo.cfg', 5, True, False, [])
+    assert op == 'cfoo.cfg'
+    assert verbosity == 15
+
+
+def test_consume_letter_flags_empty_op():
+    assert _consume_letter_flags('', 5, True, False, []) == ('', 5, True, False)
+
+
+def test_consume_letter_flags_help_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _consume_letter_flags('h', 0, True, False, [])
+    assert exc.value.code == 0
+    assert 'Usage:' in capsys.readouterr().out
