@@ -11,12 +11,14 @@ from zc.buildout import easy_install
 from zc.buildout.easy_install import (
     BIN_SCRIPTS,
     _available_dists,
+    _best_matching_dist,
     _best_version_dists,
     _collect_req_scripts,
     _develop_dist,
     _dist_distutils_scripts,
     _dist_entry_points,
     _dist_info_dirname,
+    _fetch_requested_dists,
     _final_dists,
     _find_req_dist,
     _installed_dist_name,
@@ -316,6 +318,95 @@ def test_resolve_extra_requirements_missing_extra_rejected(tmp_path, caplog):
         with pytest.raises(zc.buildout.UserError):
             _resolve_extra_requirements(req, dist, False)
     assert "does not provide the extra 'nothere'" in caplog.text
+
+
+def test_fetch_requested_dists_fetches_each_requirement_in_order():
+    calls = []
+    dists = {'demo': ['d1'], 'other': ['o1', 'o2']}
+
+    def get_dist(req, ws):
+        calls.append(('get', req.key))
+        return dists[req.key]
+
+    def maybe_add_setuptools(ws, dist):
+        calls.append(('setuptools?', dist))
+
+    requirements = [
+        pkg_resources.Requirement.parse('demo'),
+        pkg_resources.Requirement.parse('other'),
+    ]
+    _fetch_requested_dists(
+        requirements, pkg_resources.WorkingSet([]),
+        get_dist, maybe_add_setuptools)
+    assert calls == [
+        ('get', 'demo'), ('setuptools?', 'd1'),
+        ('get', 'other'), ('setuptools?', 'o1'), ('setuptools?', 'o2'),
+    ]
+
+
+def test_fetch_requested_dists_without_dists_adds_nothing():
+    calls = []
+
+    def get_dist(req, ws):
+        return []
+
+    def maybe_add_setuptools(ws, dist):
+        calls.append(dist)
+
+    _fetch_requested_dists(
+        [pkg_resources.Requirement.parse('demo')],
+        pkg_resources.WorkingSet([]), get_dist, maybe_add_setuptools)
+    assert calls == []
+
+
+def test_best_matching_dist_prefers_dist_picked_so_far(monkeypatch):
+    dist = _env_dist('1.0')
+    req = pkg_resources.Requirement.parse('demo')
+    env = _env_with(_env_dist('2.0'))
+
+    def boom(req, ws):
+        raise AssertionError('env must not be consulted')
+
+    monkeypatch.setattr(env, 'best_match', boom)
+    assert _best_matching_dist(
+        {'demo': dist}, env, req, pkg_resources.WorkingSet([]), req, True,
+    ) is dist
+
+
+def test_best_matching_dist_uses_environment_best_match():
+    dist = _env_dist('1.0')
+    req = pkg_resources.Requirement.parse('demo')
+    assert _best_matching_dist(
+        {}, _env_with(dist), req, pkg_resources.WorkingSet([]), req, True,
+    ) is dist
+
+
+def test_best_matching_dist_conflict_ignored_during_buildout_run(
+        monkeypatch, caplog):
+    req = pkg_resources.Requirement.parse('demo')
+    env = _env_with()
+
+    def conflict(req, ws):
+        raise pkg_resources.VersionConflict('dist', 'req')
+
+    monkeypatch.setattr(env, 'best_match', conflict)
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        assert _best_matching_dist(
+            {}, env, req, pkg_resources.WorkingSet([]), req, True) is None
+    assert 'Version conflict while processing requirement' in caplog.text
+
+
+def test_best_matching_dist_conflict_fatal_outside_buildout_run(monkeypatch):
+    req = pkg_resources.Requirement.parse('demo')
+    env = _env_with()
+
+    def conflict(req, ws):
+        raise pkg_resources.VersionConflict('dist', 'req')
+
+    monkeypatch.setattr(env, 'best_match', conflict)
+    with pytest.raises(easy_install.VersionConflict):
+        _best_matching_dist(
+            {}, env, req, pkg_resources.WorkingSet([]), req, False)
 
 
 def _env_dist(version, precedence=pkg_resources.EGG_DIST, project_name='demo'):

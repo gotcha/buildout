@@ -614,6 +614,54 @@ def _select_from_best(
     return best[-1]
 
 
+def _fetch_requested_dists(
+        requirements: List[pkg_resources.Requirement],
+        ws: pkg_resources.WorkingSet,
+        get_dist: Callable,
+        maybe_add_setuptools: Callable,
+        ) -> None:
+    """Fetch the dists of the initially requested requirements into the
+    working set."""
+    for requirement in requirements:
+        for dist in get_dist(requirement, ws):
+            maybe_add_setuptools(ws, dist)
+
+
+def _best_matching_dist(
+        best: Dict[str, Any],
+        env: pkg_resources.Environment,
+        req: pkg_resources.Requirement,
+        ws: pkg_resources.WorkingSet,
+        current_requirement: pkg_resources.Requirement,
+        for_buildout_run: bool,
+        ) -> Optional[pkg_resources.Distribution]:
+    """Return the best dist picked so far for ``req``, or the
+    environment's best match.
+
+    A version conflict is fatal, except during a buildout run: the
+    active global ``pkg_resources.working_set`` includes all system
+    packages, so conflicts can be fine to ignore — the correct version
+    is picked up a few lines down.
+    """
+    dist = best.get(req.key)
+    if dist is None:
+        try:
+            dist = env.best_match(req, ws)
+        except pkg_resources.VersionConflict as err:
+            logger.debug(
+                "Version conflict while processing requirement %s "
+                "(constrained to %s)",
+                current_requirement, req)
+            # Installing buildout itself and its extensions and
+            # recipes requires the global ``pkg_resources.working_set``
+            # to be active, which also includes all system packages.
+            # So there might be conflicts, which are fine to ignore.
+            # We'll grab the correct version a few lines down.
+            if not for_buildout_run:
+                raise VersionConflict(err, ws)
+    return dist
+
+
 class Installer(object):
 
     _versions = {}
@@ -1021,9 +1069,8 @@ class Installer(object):
 
         ws = _working_set_or_default(working_set)
 
-        for requirement in requirements:
-            for dist in self._get_dist(requirement, ws):
-                self._maybe_add_setuptools(ws, dist)
+        _fetch_requested_dists(
+            requirements, ws, self._get_dist, self._maybe_add_setuptools)
 
         # OK, we have the requested distributions and they're in the working
         # set, but they may have unmet requirements.  We'll resolve these
@@ -1047,23 +1094,8 @@ class Installer(object):
             if req in processed:
                 # Ignore cyclic or redundant dependencies.
                 continue
-            dist = best.get(req.key)
-            if dist is None:
-                try:
-                    dist = env.best_match(req, ws)
-                except pkg_resources.VersionConflict as err:
-                    logger.debug(
-                        "Version conflict while processing requirement %s "
-                        "(constrained to %s)",
-                        current_requirement, req)
-                    # Installing buildout itself and its extensions and
-                    # recipes requires the global
-                    # ``pkg_resources.working_set`` to be active, which also
-                    # includes all system packages. So there might be
-                    # conflicts, which are fine to ignore. We'll grab the
-                    # correct version a few lines down.
-                    if not for_buildout_run:
-                        raise VersionConflict(err, ws)
+            dist = _best_matching_dist(
+                best, env, req, ws, current_requirement, for_buildout_run)
             if dist is None:
                 if self._dest:
                     logger.debug('Getting required %r', str(req))
