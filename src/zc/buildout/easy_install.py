@@ -2000,6 +2000,76 @@ def _pip_install_args(spec: str, dest: str, editable: bool,
     return args
 
 
+def _run_pip(args: List[str], env: Dict[str, str], dest: str, level: int) -> str:
+    """Run ``pip install`` and return its output, with debug logging."""
+    if level <= logging.DEBUG:
+        logger.debug('Running pip install:\n"%s"\npath=%s\n',
+                        '" "'.join(args), pip_path)
+
+    sys.stdout.flush() # We want any pending output first
+
+    # This will quit the buildout process if there is an error.
+    output = get_subprocess_output(list(args), env=env)
+    if level <= logging.DEBUG:
+        if output:
+            logger.debug(output)
+        logger.debug("Pip install completed successfully.")
+        logger.debug("Contents of %s:", dest)
+        for entry in os.listdir(dest):
+            logger.debug("- %s", entry)
+    return output
+
+
+def _scan_editable_install(
+        split_entries: List[Tuple[str, str]]) -> Tuple[str, Optional[str]]:
+    """Scan pip install output entries for egg-link / nspkg.pth markers.
+
+    ``split_entries`` holds ``os.path.splitext`` results for the files pip
+    created.  Return ``(package_name, namespaces)``: ``package_name`` is the
+    base name of the ``.egg-link`` file ('' when there is none), and
+    ``namespaces`` the guessed old-style namespace list (None unless a
+    ``-nspkg.pth`` file accompanies the egg-link).
+    """
+    package_name = ""
+    for base, ext in split_entries:
+        if ext == ".egg-link":
+            package_name = base
+            break
+    if not package_name:
+        return "", None
+    # For pkg_resources style namespaces a .pth file is created,
+    # for example `plone.app.something-nspkg.pth`.
+    for base, ext in split_entries:
+        if ext != ".pth" or not base.endswith("-nspkg"):
+            continue
+        # We don't want to analyze this file, so we can only make an
+        # educated guess about the namespaces.
+        # Assume at most two dots, that is enough info for our warning.
+        # `a.b` -> `a`
+        # `a.b.c` -> `a\na.b`
+        # `a.b.c.d` -> `a\na.b`
+        # Get all names except the last one, and then keep the first two:
+        names = package_name.split(".")[:-1][:2]
+        if len(names) > 1:
+            names[1] = ".".join(names)
+        return package_name, "\n".join(names)
+    return package_name, None
+
+
+def _dist_info_dirname(split_entries: List[Tuple[str, str]]) -> str:
+    """Return the ``.dist-info`` directory name among pip's output entries."""
+    return [
+        base + ext for base, ext in split_entries if ext == ".dist-info"
+    ][0]
+
+
+def _installed_dist_name(full_distinfo_dir: str) -> Optional[str]:
+    """Read the package name from an installed ``.dist-info`` directory."""
+    distrib = metadata.Distribution.at(full_distinfo_dir)
+    # On Python 3.10 we could use `distrib.name`.
+    return distrib.metadata['Name']
+
+
 def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, List[str]]:
     """
     Call `pip install` from a subprocess to install a
@@ -2031,74 +2101,40 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
     python_path.append(env.get('PYTHONPATH', ''))
     env['PYTHONPATH'] = os.pathsep.join(python_path)
 
-    if level <= logging.DEBUG:
-        logger.debug('Running pip install:\n"%s"\npath=%s\n',
-                        '" "'.join(args), pip_path)
-
-    sys.stdout.flush() # We want any pending output first
-
-    # This will quit the buildout process if there is an error.
-    output = get_subprocess_output(list(args), env=env)
-    if level <= logging.DEBUG:
-        if output:
-            logger.debug(output)
-        logger.debug("Pip install completed successfully.")
-        logger.debug("Contents of %s:", dest)
-        for entry in os.listdir(dest):
-            logger.debug("- %s", entry)
+    output = _run_pip(args, env, dest, level)
 
     split_entries = [os.path.splitext(entry) for entry in os.listdir(dest)]
     if editable:
         # On setuptools 79 and earlier, the egg-link file is created.
-        package_name = ""
-        for base, ext in split_entries:
-            if ext == ".egg-link":
-                logger.debug(
-                    "Found .egg-link file after successful pip install of %s",
-                    spec,
-                )
-                package_name = base
-                break
+        package_name, namespaces = _scan_editable_install(split_entries)
         if package_name:
-            # For pkg_resources style namespaces a .pth file is created,
-            # for example `plone.app.something-nspkg.pth`.  We only need this
-            # if the name was found.  If name was not found, the namespaces
-            # will be checked in a different way further on.
-            for base, ext in split_entries:
-                if ext != ".pth" or not base.endswith("-nspkg"):
-                    continue
-                logger.debug(
-                    "Found -nspkg.pth file after successful pip install of %s",
-                    spec,
-                )
-                logger.warning(
-                    "WARNING: Package %s at %s is using old style namespace packages. "
-                    "You should switch to native namespaces (PEP 420).",
-                    package_name,
-                    spec,
-                )
-                # We don't want to analyze this file, so we can only make an
-                # educated guess about the namespaces.
-                # Assume at most two dots, that is enough info for our warning.
-                # `a.b` -> `a`
-                # `a.b.c` -> `a\na.b`
-                # `a.b.c.d` -> `a\na.b`
-                # Get all names except the last one, and then keep the first two:
-                names = package_name.split(".")[:-1][:2]
-                if len(names) > 1:
-                    names[1] = ".".join(names)
-                namespaces = "\n".join(names)
-                Installer._namespace_packages[package_name] = namespaces
-                break
+            logger.debug(
+                "Found .egg-link file after successful pip install of %s",
+                spec,
+            )
+        if namespaces is not None:
+            # We only need this if the name was found.  If name was not
+            # found, the namespaces will be checked in a different way
+            # further on.
+            logger.debug(
+                "Found -nspkg.pth file after successful pip install of %s",
+                spec,
+            )
+            logger.warning(
+                "WARNING: Package %s at %s is using old style namespace packages. "
+                "You should switch to native namespaces (PEP 420).",
+                package_name,
+                spec,
+            )
+            Installer._namespace_packages[package_name] = namespaces
+        if package_name:
             return package_name
 
     # With normal (non-editable) installs, there won't be an egg-link file created.
     # The same is true for editable installs with setuptools 80+.
     # In both cases, we need to look for the .dist-info directory.
     try:
-        distinfo_dir = [
-            base + ext for base, ext in split_entries if ext == ".dist-info"
-        ][0]
+        distinfo_dir = _dist_info_dirname(split_entries)
     except IndexError:
         logger.error(
             "No .dist-info directory after successful pip install of %s",
@@ -2106,9 +2142,7 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
         raise
 
     full_distinfo_dir = os.path.join(dest, distinfo_dir)
-    distrib = metadata.Distribution.at(full_distinfo_dir)
-    # On Python 3.10 we could use `distrib.name`.
-    name = distrib.metadata['Name']
+    name = _installed_dist_name(full_distinfo_dir)
     if not name:
         logger.error(
             "Could not find package name in metadata after installing %s.",
