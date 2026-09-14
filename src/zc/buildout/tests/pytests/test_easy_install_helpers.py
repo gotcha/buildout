@@ -1,5 +1,6 @@
 """Unit tests for the pure helpers extracted from zc.buildout.easy_install."""
 import logging
+import os
 import sys
 
 import pkg_resources
@@ -9,9 +10,13 @@ import zc.buildout
 from zc.buildout import easy_install
 from zc.buildout.easy_install import (
     BIN_SCRIPTS,
+    _collect_req_scripts,
     _develop_dist,
+    _dist_distutils_scripts,
+    _dist_entry_points,
     _dist_info_dirname,
     _final_dists,
+    _find_req_dist,
     _installed_dist_name,
     _is_url,
     _matching_dists,
@@ -27,7 +32,10 @@ from zc.buildout.easy_install import (
     _resolve_extra_requirements,
     _run_pip,
     _scan_editable_install,
+    _script_paths,
+    _script_target,
     _select_newer_dist,
+    _warn_missing_scripts,
     _working_set_or_default,
 )
 
@@ -653,3 +661,239 @@ def test_move_record_leftovers_reuses_existing_egg_dirs(tmp_path):
         str(dest), str(egg_dir), ['demo/a.so', 'demo/b.so'])
     assert (egg_dir / 'demo' / 'a.so').read_text() == 'a'
     assert (egg_dir / 'demo' / 'b.so').read_text() == 'b'
+
+
+def _make_scripts_dist(tmp_path, project_name='demo',
+                       entry_points_txt=None, scripts_meta=None):
+    """Build a real 1.0 dist with entry-points and/or scripts metadata."""
+    egg_info = tmp_path / (project_name + '.egg-info')
+    egg_info.mkdir()
+    (egg_info / 'PKG-INFO').write_text(
+        'Metadata-Version: 2.1\nName: %s\nVersion: 1.0\n' % project_name)
+    if entry_points_txt is not None:
+        (egg_info / 'entry_points.txt').write_text(entry_points_txt)
+    if scripts_meta is not None:
+        scripts_dir = egg_info / 'scripts'
+        scripts_dir.mkdir()
+        for name, contents in scripts_meta.items():
+            (scripts_dir / name).write_text(contents)
+    (dist,) = pkg_resources.find_distributions(str(tmp_path))
+    return dist
+
+
+def _ws_with(*dists):
+    ws = pkg_resources.WorkingSet([])
+    for dist in dists:
+        ws.add(dist)
+    return ws
+
+
+def test_script_paths_collects_locations_and_extras():
+    ws = _ws_with(
+        _env_dist('1.0', project_name='aa'),
+        _env_dist('2.0', project_name='bb'),
+    )
+    realpath = easy_install.realpath
+    assert _script_paths(ws, ['/extra']) == [
+        realpath('/aa-1.0.egg'), realpath('/bb-2.0.egg'), realpath('/extra')]
+
+
+def test_script_paths_dedupes_preserving_order():
+    ws = _ws_with(_env_dist('1.0', project_name='aa'))
+    realpath = easy_install.realpath
+    assert _script_paths(ws, ['/extra', '/aa-1.0.egg', '/extra']) == [
+        realpath('/aa-1.0.egg'), realpath('/extra')]
+
+
+def test_find_req_dist_returns_matching_dist(tmp_path):
+    dist = _make_scripts_dist(tmp_path)
+    assert _find_req_dist('demo', _ws_with(dist)) is dist
+
+
+def test_find_req_dist_missing_raises():
+    with pytest.raises(ValueError, match="Could not find requirement 'demo'"):
+        _find_req_dist('demo', _ws_with())
+
+
+def test_find_req_dist_excluded_marker_returns_none(tmp_path):
+    dist = _make_scripts_dist(tmp_path)
+    assert _find_req_dist('demo; python_version < "1.0"', _ws_with(dist)) is None
+
+
+def test_find_req_dist_included_marker_still_matches(tmp_path):
+    dist = _make_scripts_dist(tmp_path)
+    assert _find_req_dist('demo; python_version >= "3"', _ws_with(dist)) is dist
+
+
+def test_find_req_dist_non_normalized_name_matches_by_canonical(tmp_path):
+    dist = _make_scripts_dist(tmp_path)
+    assert _find_req_dist('Demo', _ws_with(dist)) is dist
+
+
+def test_find_req_dist_falls_back_to_original_name(monkeypatch):
+    ws = _ws_with()
+    dist = _env_dist('1.0', project_name='other')
+    looked_up = []
+
+    def fake_find(req):
+        looked_up.append(req.project_name)
+        if req.project_name == 'My-Pkg':
+            return dist
+        return None
+
+    monkeypatch.setattr(ws, 'find', fake_find)
+    assert _find_req_dist('My_Pkg', ws) is dist
+    assert looked_up == ['my-pkg', 'My-Pkg']
+
+
+def test_find_req_dist_non_normalized_missing_mentions_canonical():
+    with pytest.raises(ValueError, match="normalized 'my-pkg'"):
+        _find_req_dist('My_Pkg', _ws_with())
+
+
+def test_dist_entry_points_reads_console_scripts(tmp_path):
+    dist = _make_scripts_dist(
+        tmp_path, entry_points_txt='[console_scripts]\ndemo-cli = demo.cli:main\n')
+    assert _dist_entry_points(dist) == [('demo-cli', 'demo.cli', 'main')]
+
+
+def test_dist_entry_points_joins_dotted_attrs(tmp_path):
+    dist = _make_scripts_dist(
+        tmp_path, entry_points_txt='[console_scripts]\nrun = pkg.mod:cls.run\n')
+    assert _dist_entry_points(dist) == [('run', 'pkg.mod', 'cls.run')]
+
+
+def test_dist_entry_points_without_metadata_returns_empty(tmp_path):
+    assert _dist_entry_points(_make_scripts_dist(tmp_path)) == []
+
+
+def test_dist_distutils_scripts_reads_scripts_metadata(tmp_path):
+    dist = _make_scripts_dist(
+        tmp_path, scripts_meta={'run': '#!python\nprint(1)\n'})
+    assert _dist_distutils_scripts(dist) == [('run', '#!python\nprint(1)\n')]
+
+
+def test_dist_distutils_scripts_skips_dirs_and_exe(tmp_path):
+    dist = _make_scripts_dist(
+        tmp_path, scripts_meta={'run': '#!python\n', 'run.exe': 'MZ'})
+    (tmp_path / 'demo.egg-info' / 'scripts' / '__pycache__').mkdir()
+    assert _dist_distutils_scripts(dist) == [('run', '#!python\n')]
+
+
+def test_dist_distutils_scripts_develop_egg_fallback(tmp_path, monkeypatch):
+    dist = _make_scripts_dist(tmp_path)
+    monkeypatch.setitem(
+        easy_install._develop_distutils_scripts, dist.key,
+        [('dev-run', '#!python\ndev\n')])
+    assert _dist_distutils_scripts(dist) == [('dev-run', '#!python\ndev\n')]
+
+
+def test_dist_distutils_scripts_without_any_metadata_returns_empty(tmp_path):
+    dist = _make_scripts_dist(tmp_path, project_name='bare-demo')
+    assert _dist_distutils_scripts(dist) == []
+
+
+def test_collect_req_scripts_passes_entry_point_tuples_through():
+    req = ('demo', 'demo.cli', 'main')
+    entry_points, distutils_scripts = _collect_req_scripts([req], _ws_with())
+    assert entry_points == [('demo', 'demo.cli', 'main')]
+    assert distutils_scripts == []
+
+
+def test_collect_req_scripts_collects_from_requirement_strings(tmp_path):
+    dist = _make_scripts_dist(
+        tmp_path,
+        entry_points_txt='[console_scripts]\ndemo-cli = demo.cli:main\n',
+        scripts_meta={'run': '#!python\n'})
+    entry_points, distutils_scripts = _collect_req_scripts(
+        ['demo'], _ws_with(dist))
+    assert entry_points == [('demo-cli', 'demo.cli', 'main')]
+    assert distutils_scripts == [('run', '#!python\n')]
+
+
+def test_collect_req_scripts_skips_marker_excluded_requirements(tmp_path):
+    dist = _make_scripts_dist(
+        tmp_path,
+        entry_points_txt='[console_scripts]\ndemo-cli = demo.cli:main\n',
+        scripts_meta={'run': '#!python\n'})
+    entry_points, distutils_scripts = _collect_req_scripts(
+        ['demo; python_version < "1.0"'], _ws_with(dist))
+    assert entry_points == []
+    assert distutils_scripts == []
+
+
+def test_collect_req_scripts_missing_requirement_raises():
+    with pytest.raises(ValueError, match="Could not find requirement 'demo'"):
+        _collect_req_scripts(['demo'], _ws_with())
+
+
+def test_script_target_without_scripts_uses_entry_point_name(tmp_path):
+    dest = str(tmp_path / 'bin')
+    target = _script_target('demo', None, dest, ['/a', '/b'], False)
+    assert target is not None
+    sname, spath, rpsetup = target
+    assert sname == os.path.join(dest, 'demo')
+    assert spath == "'/a',\n  '/b'"
+    assert rpsetup == ''
+
+
+def test_script_target_scripts_mapping_renames_script(tmp_path):
+    dest = str(tmp_path / 'bin')
+    target = _script_target('demo', {'demo': 'custom'}, dest, ['/a'], False)
+    assert target is not None
+    sname, _, _ = target
+    assert sname == os.path.join(dest, 'custom')
+
+
+def test_script_target_scripts_mapping_miss_returns_none(tmp_path):
+    dest = str(tmp_path / 'bin')
+    assert _script_target('demo', {'other': 'x'}, dest, ['/a'], False) is None
+
+
+def test_script_target_mapping_miss_returns_none_before_dest_assert():
+    # A scripts-mapping miss must not trip the destination assertion.
+    assert _script_target('demo', {}, None, [], False) is None
+
+
+def test_script_target_without_dest_asserts():
+    with pytest.raises(AssertionError):
+        _script_target('demo', None, None, [], False)
+
+
+def test_script_target_relative_paths_builds_base_setup(tmp_path):
+    dest_dir = tmp_path / 'bin'
+    egg = tmp_path / 'eggs' / 'demo.egg'
+    target = _script_target(
+        'demo', None, str(dest_dir), [str(egg)], str(tmp_path))
+    assert target is not None
+    sname, spath, rpsetup = target
+    assert sname == os.path.normcase(os.path.abspath(str(dest_dir / 'demo')))
+    assert spath == "join(base, 'eggs/demo.egg')"
+    assert rpsetup == (
+        easy_install.relative_paths_setup + 'base = os.path.dirname(base)\n')
+
+
+def test_warn_missing_scripts_without_mapping_is_silent(caplog):
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        _warn_missing_scripts(None, [])
+    assert caplog.records == []
+
+
+def test_warn_missing_scripts_known_names_are_silent(caplog):
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        _warn_missing_scripts({'demo': 'demo'}, ['demo'])
+    assert caplog.records == []
+
+
+def test_warn_missing_scripts_same_name_warns(caplog):
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        _warn_missing_scripts({'missing': 'missing'}, ['demo'])
+    assert ("Could not generate script 'missing' as it is not defined "
+            'in the egg entry points.') in caplog.text
+
+
+def test_warn_missing_scripts_renamed_warns_with_target(caplog):
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        _warn_missing_scripts({'missing': 'target'}, ['demo'])
+    assert ("Could not generate script 'missing' as script 'target' is not "
+            'defined in the egg entry points.') in caplog.text

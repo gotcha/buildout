@@ -1534,6 +1534,167 @@ def working_set(specs: Tuple[str, ...], executable: str, path: Optional[List[str
 
 
 
+def _script_paths(
+        working_set: pkg_resources.WorkingSet,
+        extra_paths: Union[Tuple[str, ...], List[str]],
+        ) -> List[str]:
+    path = [_dist_location(dist) for dist in working_set]
+    path.extend(extra_paths)
+    # order preserving unique
+    unique_path = []
+    for p in path:
+        if p not in unique_path:
+            unique_path.append(p)
+    return [realpath(p) for p in unique_path]
+
+
+def _find_req_dist(
+        req: str,
+        working_set: pkg_resources.WorkingSet,
+        ) -> Optional[pkg_resources.Distribution]:
+    """Resolve a requirement string to a dist of the working set.
+
+    Returns ``None`` when the requirement's environment marker excludes
+    the current environment; raises ``ValueError`` when no dist matches.
+    """
+    orig_req = pkg_resources.Requirement.parse(req)
+    if orig_req.marker and not orig_req.marker.evaluate():
+        return None
+    if is_normalized_name(orig_req.name):
+        dist = working_set.find(orig_req)
+        if dist is None:
+            raise ValueError(
+                f"Could not find requirement '{orig_req.name}' in working set. "
+            )
+    else:
+        # First try finding the package by its canonical name.
+        canonicalized_name = canonicalize_name(orig_req.name)
+        canonical_req = pkg_resources.Requirement.parse(canonicalized_name)
+        dist = working_set.find(canonical_req)
+        if dist is None:
+            # Now try to find the package by the original name we got from
+            # the requirements.  This may succeed with setuptools versions
+            # older than 75.8.2.
+            dist = working_set.find(orig_req)
+            if dist is None:
+                raise ValueError(
+                    f"Could not find requirement '{orig_req.name}' in working "
+                    f"set. Could not find it with normalized "
+                    f"'{canonicalized_name}' either."
+                )
+    return dist
+
+
+def _dist_entry_points(
+        dist: pkg_resources.Distribution,
+        ) -> List[Tuple[str, str, str]]:
+    # regular console_scripts entry points
+    entry_points = []
+    for name in pkg_resources.get_entry_map(dist, 'console_scripts'):
+        entry_point = dist.get_entry_info('console_scripts', name)
+        # The name comes from the dist's own entry map, so the
+        # entry point is guaranteed to exist.
+        assert entry_point is not None
+        entry_points.append(
+            (name, entry_point.module_name,
+             '.'.join(entry_point.attrs))
+            )
+    return entry_points
+
+
+def _dist_distutils_scripts(
+        dist: pkg_resources.Distribution,
+        ) -> List[Tuple[str, str]]:
+    # The metadata on "old-style" distutils scripts is not retained by
+    # distutils/setuptools, except by placing the original scripts in
+    # /EGG-INFO/scripts/.
+    distutils_scripts = []
+    if dist.metadata_isdir('scripts'):
+        # egg-info metadata from installed egg.
+        for name in dist.metadata_listdir('scripts'):
+            if dist.metadata_isdir('scripts/' + name):
+                # Probably Python 3 __pycache__ directory.
+                continue
+            if name.lower().endswith('.exe'):
+                # windows: scripts are implemented with 2 files
+                #          the .exe gets also into metadata_listdir
+                #          get_metadata chokes on the binary
+                continue
+            contents = dist.get_metadata('scripts/' + name)
+            distutils_scripts.append((name, contents))
+    elif dist.key in _develop_distutils_scripts:
+        # Development eggs don't have metadata about scripts, so we
+        # collected it ourselves in develop()/ and
+        # _detect_distutils_scripts().
+        for name, contents in _develop_distutils_scripts[dist.key]:
+            distutils_scripts.append((name, contents))
+    return distutils_scripts
+
+
+def _collect_req_scripts(
+        reqs: List[Union[Tuple[str, str, str], str]],
+        working_set: pkg_resources.WorkingSet,
+        ) -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str]]]:
+    """Collect entry points and distutils scripts from requirements."""
+    entry_points = []
+    distutils_scripts = []
+    for req in reqs:
+        if isinstance(req, str):
+            dist = _find_req_dist(req, working_set)
+            if dist is None:
+                # The requirement's marker excludes this environment.
+                continue
+            entry_points.extend(_dist_entry_points(dist))
+            distutils_scripts.extend(_dist_distutils_scripts(dist))
+        else:
+            entry_points.append(req)
+    return entry_points, distutils_scripts
+
+
+def _script_target(
+        name: str,
+        scripts: Optional[Dict[str, str]],
+        dest: Optional[str],
+        path: List[str],
+        relative_paths: Union[str, bool],
+        ) -> Optional[Tuple[str, str, str]]:
+    """Resolve a script name to its destination and path setup.
+
+    Returns ``None`` when a ``scripts`` mapping was given that does not
+    include the name.
+    """
+    if scripts is not None:
+        sname = scripts.get(name)
+        if sname is None:
+            return None
+    else:
+        sname = name
+
+    # Generating a script requires a destination directory.
+    assert dest is not None
+    sname = os.path.join(dest, sname)
+    spath, rpsetup = _relative_path_and_setup(sname, path, relative_paths)
+    return sname, spath, rpsetup
+
+
+def _warn_missing_scripts(
+        scripts: Optional[Dict[str, str]],
+        entry_points_names: List[str],
+        ) -> None:
+    # warn when a script name passed in 'scripts' argument
+    # is not defined in an entry point.
+    if scripts is None:
+        return
+    for name, target in scripts.items():
+        if name not in entry_points_names:
+            if name == target:
+                logger.warning("Could not generate script '%s' as it is not "
+                    "defined in the egg entry points.", name)
+            else:
+                logger.warning("Could not generate script '%s' as script "
+                    "'%s' is not defined in the egg entry points.", name, target)
+
+
 def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resources.WorkingSet, executable: str, dest: Optional[str]=None,
             scripts: Optional[Dict[str, str]]=None,
             extra_paths: Union[Tuple[str, ...], List[str]]=(),
@@ -1544,14 +1705,7 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
             ) -> List[str]:
     assert executable == sys.executable, (executable, sys.executable)
 
-    path = [_dist_location(dist) for dist in working_set]
-    path.extend(extra_paths)
-    # order preserving unique
-    unique_path = []
-    for p in path:
-        if p not in unique_path:
-            unique_path.append(p)
-    path = [realpath(p) for p in unique_path]
+    path = _script_paths(working_set, extra_paths)
 
     generated = []
 
@@ -1562,119 +1716,28 @@ def scripts(reqs: List[Union[Tuple[str, str, str], str]], working_set: pkg_resou
     if initialization:
         initialization = '\n'+initialization+'\n'
 
-    entry_points = []
-    distutils_scripts = []
-    for req in reqs:
-        if isinstance(req, str):
-            orig_req = pkg_resources.Requirement.parse(req)
-            if orig_req.marker and not orig_req.marker.evaluate():
-                continue
-            dist = None
-            if is_normalized_name(orig_req.name):
-                dist = working_set.find(orig_req)
-                if dist is None:
-                    raise ValueError(
-                        f"Could not find requirement '{orig_req.name}' in working set. "
-                    )
-            else:
-                # First try finding the package by its canonical name.
-                canonicalized_name = canonicalize_name(orig_req.name)
-                canonical_req = pkg_resources.Requirement.parse(canonicalized_name)
-                dist = working_set.find(canonical_req)
-                if dist is None:
-                    # Now try to find the package by the original name we got from
-                    # the requirements.  This may succeed with setuptools versions
-                    # older than 75.8.2.
-                    dist = working_set.find(orig_req)
-                    if dist is None:
-                        raise ValueError(
-                            f"Could not find requirement '{orig_req.name}' in working "
-                            f"set. Could not find it with normalized "
-                            f"'{canonicalized_name}' either."
-                        )
-
-            # regular console_scripts entry points
-            for name in pkg_resources.get_entry_map(dist, 'console_scripts'):
-                entry_point = dist.get_entry_info('console_scripts', name)
-                # The name comes from the dist's own entry map, so the
-                # entry point is guaranteed to exist.
-                assert entry_point is not None
-                entry_points.append(
-                    (name, entry_point.module_name,
-                     '.'.join(entry_point.attrs))
-                    )
-            # The metadata on "old-style" distutils scripts is not retained by
-            # distutils/setuptools, except by placing the original scripts in
-            # /EGG-INFO/scripts/.
-            if dist.metadata_isdir('scripts'):
-                # egg-info metadata from installed egg.
-                for name in dist.metadata_listdir('scripts'):
-                    if dist.metadata_isdir('scripts/' + name):
-                        # Probably Python 3 __pycache__ directory.
-                        continue
-                    if name.lower().endswith('.exe'):
-                        # windows: scripts are implemented with 2 files
-                        #          the .exe gets also into metadata_listdir
-                        #          get_metadata chokes on the binary
-                        continue
-                    contents = dist.get_metadata('scripts/' + name)
-                    distutils_scripts.append((name, contents))
-            elif dist.key in _develop_distutils_scripts:
-                # Development eggs don't have metadata about scripts, so we
-                # collected it ourselves in develop()/ and
-                # _detect_distutils_scripts().
-                for name, contents in _develop_distutils_scripts[dist.key]:
-                    distutils_scripts.append((name, contents))
-
-        else:
-            entry_points.append(req)
+    entry_points, distutils_scripts = _collect_req_scripts(reqs, working_set)
 
     entry_points_names = []
 
     for name, module_name, attrs in entry_points:
         entry_points_names.append(name)
-        if scripts is not None:
-            sname = scripts.get(name)
-            if sname is None:
-                continue
-        else:
-            sname = name
-
-        # Generating a script requires a destination directory.
-        assert dest is not None
-        sname = os.path.join(dest, sname)
-        spath, rpsetup = _relative_path_and_setup(sname, path, relative_paths)
-
+        target = _script_target(name, scripts, dest, path, relative_paths)
+        if target is None:
+            continue
+        sname, spath, rpsetup = target
         generated.extend(
             _script(module_name, attrs, spath, sname, arguments,
                     initialization, rpsetup)
             )
 
-    # warn when a script name passed in 'scripts' argument
-    # is not defined in an entry point.
-    if scripts is not None:
-        for name, target in scripts.items():
-            if name not in entry_points_names:
-                if name == target:
-                    logger.warning("Could not generate script '%s' as it is not "
-                        "defined in the egg entry points.", name)
-                else:
-                    logger.warning("Could not generate script '%s' as script "
-                        "'%s' is not defined in the egg entry points.", name, target)
+    _warn_missing_scripts(scripts, entry_points_names)
 
     for name, contents in distutils_scripts:
-        if scripts is not None:
-            sname = scripts.get(name)
-            if sname is None:
-                continue
-        else:
-            sname = name
-
-        # Generating a script requires a destination directory.
-        assert dest is not None
-        sname = os.path.join(dest, sname)
-        spath, rpsetup = _relative_path_and_setup(sname, path, relative_paths)
-
+        target = _script_target(name, scripts, dest, path, relative_paths)
+        if target is None:
+            continue
+        sname, spath, rpsetup = target
         generated.extend(
             _distutils_script(spath, sname, contents, initialization, rpsetup)
             )
