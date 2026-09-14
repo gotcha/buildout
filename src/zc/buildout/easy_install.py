@@ -474,6 +474,84 @@ def _resolve_extra_requirements(
     return dist.requires(req.extras)[::-1]
 
 
+def _matching_dists(
+        env: pkg_resources.Environment,
+        req: pkg_resources.Requirement) -> List[pkg_resources.Distribution]:
+    """Return the distributions in ``env`` for ``req``'s project that match
+    ``req``."""
+    return [dist for dist in env[req.project_name] if dist in req]
+
+
+def _develop_dist(
+        dists: List[pkg_resources.Distribution],
+        ) -> Optional[pkg_resources.Distribution]:
+    """Return the first develop dist in ``dists``, if there is one."""
+    for dist in dists:
+        if dist.precedence == pkg_resources.DEVELOP_DIST:
+            logger.debug('We have a develop egg: %s', dist)
+            return dist
+    return None
+
+
+def _final_dists(
+        dists: List[pkg_resources.Distribution],
+        prefer_final: bool,
+        final_version: Callable[[Version], bool],
+        ) -> List[pkg_resources.Distribution]:
+    """Filter ``dists`` down to final releases when finals are preferred.
+
+    The input list is returned unchanged when finals are not preferred or
+    no dist is final.
+    """
+    if prefer_final:
+        fdists = [dist for dist in dists
+                  if final_version(dist.parsed_version)
+                  ]
+        if fdists:
+            # There are final dists, so only use those
+            return fdists
+    return dists
+
+
+def _select_newer_dist(
+        best_we_have: pkg_resources.Distribution,
+        best_available: pkg_resources.Distribution,
+        prefer_final: bool,
+        final_version: Callable[[Version], bool],
+        ) -> Optional[pkg_resources.Distribution]:
+    """Return ``best_available`` when it should replace ``best_we_have``.
+
+    ``None`` means ``best_we_have`` stays.  When ``prefer_final`` is set, a
+    final release beats a pre-release regardless of the version numbers.
+    """
+    if prefer_final:
+        if final_version(best_available.parsed_version):
+            if final_version(best_we_have.parsed_version):
+                if (best_we_have.parsed_version
+                    <
+                    best_available.parsed_version
+                    ):
+                    return best_available
+            else:
+                return best_available
+        else:
+            if (not final_version(best_we_have.parsed_version)
+                and
+                (best_we_have.parsed_version
+                 <
+                 best_available.parsed_version
+                 )
+                ):
+                return best_available
+    else:
+        if (best_we_have.parsed_version
+            <
+            best_available.parsed_version
+            ):
+            return best_available
+    return None
+
+
 class Installer(object):
 
     _versions = {}
@@ -587,7 +665,7 @@ class Installer(object):
         return '\n  '.join(output)
 
     def _satisfied(self, req: pkg_resources.Requirement, source: Optional[int]=None) -> Tuple[Optional[pkg_resources.Distribution], Optional[pkg_resources.Distribution]]:
-        dists = [dist for dist in self._env[req.project_name] if dist in req]
+        dists = _matching_dists(self._env, req)
         if not dists:
             logger.debug('We have no distributions for %s that satisfies %r.',
                          req.project_name, str(req))
@@ -597,10 +675,9 @@ class Installer(object):
         # Note that dists are sorted from best to worst, as promised by
         # env.__getitem__
 
-        for dist in dists:
-            if (dist.precedence == pkg_resources.DEVELOP_DIST):
-                logger.debug('We have a develop egg: %s', dist)
-                return dist, None
+        develop_dist = _develop_dist(dists)
+        if develop_dist is not None:
+            return develop_dist, None
 
         # Special common case, we have a specification for a single version:
         specs = req.specs
@@ -609,13 +686,7 @@ class Installer(object):
                          str(req))
             return dists[0], None
 
-        if self._prefer_final:
-            fdists = [dist for dist in dists
-                      if self._final_version(dist.parsed_version)
-                      ]
-            if fdists:
-                # There are final dists, so only use those
-                dists = fdists
+        dists = _final_dists(dists, self._prefer_final, self._final_version)
 
         if not self._newest:
             # We don't need the newest, so we'll use the newest one we
@@ -641,31 +712,11 @@ class Installer(object):
                 str(req), best_we_have)
             return best_we_have, None
 
-        if self._prefer_final:
-            if self._final_version(best_available.parsed_version):
-                if self._final_version(best_we_have.parsed_version):
-                    if (best_we_have.parsed_version
-                        <
-                        best_available.parsed_version
-                        ):
-                        return None, best_available
-                else:
-                    return None, best_available
-            else:
-                if (not self._final_version(best_we_have.parsed_version)
-                    and
-                    (best_we_have.parsed_version
-                     <
-                     best_available.parsed_version
-                     )
-                    ):
-                    return None, best_available
-        else:
-            if (best_we_have.parsed_version
-                <
-                best_available.parsed_version
-                ):
-                return None, best_available
+        newer = _select_newer_dist(
+            best_we_have, best_available,
+            self._prefer_final, self._final_version)
+        if newer is not None:
+            return None, newer
 
         logger.debug(
             'We have the best distribution that satisfies %r.',

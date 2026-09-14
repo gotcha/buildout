@@ -8,14 +8,18 @@ import pytest
 import zc.buildout
 from zc.buildout import easy_install
 from zc.buildout.easy_install import (
+    _develop_dist,
     _dist_info_dirname,
+    _final_dists,
     _installed_dist_name,
     _is_url,
+    _matching_dists,
     _parse_requirements,
     _pip_install_args,
     _resolve_extra_requirements,
     _run_pip,
     _scan_editable_install,
+    _select_newer_dist,
     _working_set_or_default,
 )
 
@@ -293,3 +297,139 @@ def test_resolve_extra_requirements_missing_extra_rejected(tmp_path, caplog):
         with pytest.raises(zc.buildout.UserError):
             _resolve_extra_requirements(req, dist, False)
     assert "does not provide the extra 'nothere'" in caplog.text
+
+
+def _env_dist(version, precedence=pkg_resources.EGG_DIST, project_name='demo'):
+    """Build a stub distribution addable to a ``pkg_resources.Environment``."""
+    return pkg_resources.Distribution(
+        location='/%s-%s.egg' % (project_name, version),
+        project_name=project_name,
+        version=version,
+        precedence=precedence,
+    )
+
+
+def _env_with(*dists):
+    env = pkg_resources.Environment([])
+    for dist in dists:
+        env.add(dist)
+    return env
+
+
+def _is_final(parsed_version):
+    return not parsed_version.is_prerelease
+
+
+def test_matching_dists_returns_only_dists_satisfying_req():
+    old = _env_dist('1.0')
+    new = _env_dist('2.0')
+    env = _env_with(old, new)
+    req = pkg_resources.Requirement.parse('demo <2')
+    assert _matching_dists(env, req) == [old]
+
+
+def test_matching_dists_ignores_other_projects():
+    env = _env_with(_env_dist('1.0', project_name='other'))
+    req = pkg_resources.Requirement.parse('demo')
+    assert _matching_dists(env, req) == []
+
+
+def test_matching_dists_empty_environment_returns_empty():
+    req = pkg_resources.Requirement.parse('demo')
+    assert _matching_dists(_env_with(), req) == []
+
+
+def test_develop_dist_returns_first_develop_egg(caplog):
+    plain = _env_dist('2.0')
+    develop = _env_dist('1.0', precedence=pkg_resources.DEVELOP_DIST)
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        assert _develop_dist([plain, develop]) is develop
+    assert 'We have a develop egg: demo 1.0' in caplog.text
+
+
+def test_develop_dist_first_develop_egg_wins():
+    first = _env_dist('1.0', precedence=pkg_resources.DEVELOP_DIST)
+    second = _env_dist('2.0', precedence=pkg_resources.DEVELOP_DIST)
+    assert _develop_dist([first, second]) is first
+
+
+def test_develop_dist_without_develop_egg_returns_none(caplog):
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        assert _develop_dist([_env_dist('1.0'), _env_dist('2.0')]) is None
+    assert 'We have a develop egg' not in caplog.text
+
+
+def test_develop_dist_empty_list_returns_none():
+    assert _develop_dist([]) is None
+
+
+def test_final_dists_without_preference_returns_input_unchanged():
+    dists = [_env_dist('1.0a1'), _env_dist('1.0')]
+    assert _final_dists(dists, False, _is_final) is dists
+
+
+def test_final_dists_filters_out_prereleases():
+    pre = _env_dist('2.0a1')
+    final = _env_dist('1.0')
+    assert _final_dists([pre, final], True, _is_final) == [final]
+
+
+def test_final_dists_without_any_final_returns_input_unchanged():
+    dists = [_env_dist('1.0a1'), _env_dist('2.0a1')]
+    assert _final_dists(dists, True, _is_final) is dists
+
+
+def test_final_dists_all_final_keeps_order():
+    dists = [_env_dist('2.0'), _env_dist('1.0')]
+    assert _final_dists(dists, True, _is_final) == dists
+
+
+def test_select_newer_dist_not_prefer_final_newer_available():
+    have = _env_dist('1.0')
+    available = _env_dist('2.0')
+    assert _select_newer_dist(have, available, False, _is_final) is available
+
+
+def test_select_newer_dist_not_prefer_final_older_available():
+    have = _env_dist('2.0')
+    assert _select_newer_dist(have, _env_dist('1.0'), False, _is_final) is None
+
+
+def test_select_newer_dist_not_prefer_final_same_version():
+    have = _env_dist('1.0')
+    assert _select_newer_dist(have, _env_dist('1.0'), False, _is_final) is None
+
+
+def test_select_newer_dist_prefer_final_both_final_newer_available():
+    have = _env_dist('1.0')
+    available = _env_dist('2.0')
+    assert _select_newer_dist(have, available, True, _is_final) is available
+
+
+def test_select_newer_dist_prefer_final_both_final_older_available():
+    have = _env_dist('2.0')
+    assert _select_newer_dist(have, _env_dist('1.0'), True, _is_final) is None
+
+
+def test_select_newer_dist_prefer_final_final_beats_newer_prerelease():
+    have = _env_dist('1.0')
+    assert _select_newer_dist(
+        have, _env_dist('2.0a1'), True, _is_final) is None
+
+
+def test_select_newer_dist_prefer_final_final_beats_higher_prerelease_have():
+    have = _env_dist('2.0a1')
+    available = _env_dist('1.0')
+    assert _select_newer_dist(have, available, True, _is_final) is available
+
+
+def test_select_newer_dist_prefer_final_both_prerelease_newer_available():
+    have = _env_dist('1.0a1')
+    available = _env_dist('1.0a2')
+    assert _select_newer_dist(have, available, True, _is_final) is available
+
+
+def test_select_newer_dist_prefer_final_both_prerelease_older_available():
+    have = _env_dist('1.0a2')
+    assert _select_newer_dist(
+        have, _env_dist('1.0a1'), True, _is_final) is None
