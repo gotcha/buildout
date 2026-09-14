@@ -267,8 +267,16 @@ class BuildoutCi:
         return (
             ctr.with_mounted_directory("/src", source)
             .with_workdir("/src")
-            .with_exec(["sh", "-c", "until curl -sf http://devpi:3141/ >/dev/null; do sleep 1; done"])
-            .with_exec(["pip", "install", "--quiet", "uv", *job.pip_install])
+            # A cold devpi answers 200 on / while its index is not serving
+            # yet: demand real index content, and retry the first install.
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    'until curl -sf http://devpi:3141/root/pypi/+simple/uv/ | grep -q "<a "; do sleep 1; done',
+                ]
+            )
+            .with_exec(["pip", "install", "--quiet", "--retries", "10", "uv", *job.pip_install])
         )
 
     async def _run(self, source: dagger.Directory, devpi: dagger.Service, job: Job) -> None:
