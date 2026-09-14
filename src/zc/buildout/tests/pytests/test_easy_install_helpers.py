@@ -1,17 +1,22 @@
-"""Unit tests for the pure helpers extracted from easy_install.call_pip_install."""
+"""Unit tests for the pure helpers extracted from zc.buildout.easy_install."""
 import logging
 import sys
 
+import pkg_resources
 import pytest
 
+import zc.buildout
 from zc.buildout import easy_install
 from zc.buildout.easy_install import (
     _dist_info_dirname,
     _installed_dist_name,
     _is_url,
+    _parse_requirements,
     _pip_install_args,
+    _resolve_extra_requirements,
     _run_pip,
     _scan_editable_install,
+    _working_set_or_default,
 )
 
 BASE_ARGS = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', '/dest']
@@ -186,3 +191,105 @@ def test_installed_dist_name_missing_name_returns_none(tmp_path):
     distinfo.mkdir()
     (distinfo / 'METADATA').write_text('Metadata-Version: 2.1\nVersion: 1.0\n')
     assert _installed_dist_name(str(distinfo)) is None
+
+
+def _make_dist(tmp_path, requires_txt=None):
+    """Build a real ``demo 1.0`` distribution from a requires.txt body."""
+    egg_info = tmp_path / 'demo.egg-info'
+    egg_info.mkdir()
+    (egg_info / 'PKG-INFO').write_text(
+        'Metadata-Version: 2.1\nName: demo\nVersion: 1.0\n')
+    if requires_txt is not None:
+        (egg_info / 'requires.txt').write_text(requires_txt)
+    (dist,) = pkg_resources.find_distributions(str(tmp_path))
+    return dist
+
+
+def test_parse_requirements_parses_and_constrains_specs():
+    constrained = []
+
+    def constrain(requirement):
+        constrained.append(requirement)
+        return requirement
+
+    requirements = _parse_requirements(['demo', 'other >= 1.0'], constrain)
+    assert requirements == [
+        pkg_resources.Requirement.parse('demo'),
+        pkg_resources.Requirement.parse('other >= 1.0'),
+    ]
+    assert constrained == requirements
+
+
+def test_parse_requirements_keeps_requirement_without_marker():
+    requirements = _parse_requirements(['demo'], lambda r: r)
+    assert requirements == [pkg_resources.Requirement.parse('demo')]
+
+
+def test_parse_requirements_keeps_requirement_with_true_marker():
+    requirements = _parse_requirements(
+        ['demo; python_version >= "3.0"'], lambda r: r)
+    assert requirements == [
+        pkg_resources.Requirement.parse('demo; python_version >= "3.0"')]
+
+
+def test_parse_requirements_drops_requirement_with_false_marker():
+    constrained = []
+
+    def constrain(requirement):
+        constrained.append(requirement)
+        return requirement
+
+    requirements = _parse_requirements(
+        ['demo; python_version < "1.0"'], constrain)
+    assert requirements == []
+    # The constraint applies only to surviving requirements.
+    assert constrained == []
+
+
+def test_working_set_or_default_returns_fresh_empty_set():
+    ws = _working_set_or_default(None)
+    assert isinstance(ws, pkg_resources.WorkingSet)
+    assert ws.entries == []
+
+
+def test_working_set_or_default_keeps_given_set():
+    given = pkg_resources.WorkingSet([])
+    assert _working_set_or_default(given) is given
+
+
+def test_resolve_extra_requirements_without_extras_asks_dist(tmp_path):
+    req = pkg_resources.Requirement.parse('demo')
+    dist = _make_dist(tmp_path, 'dep1\ndep2 >= 1.0\n')
+    assert _resolve_extra_requirements(req, dist, False) == [
+        pkg_resources.Requirement.parse('dep2 >= 1.0'),
+        pkg_resources.Requirement.parse('dep1'),
+    ]
+
+
+def test_resolve_extra_requirements_forwards_requested_extras(tmp_path):
+    req = pkg_resources.Requirement.parse('demo[web]')
+    dist = _make_dist(tmp_path, 'base-dep\n\n[web]\nweb-dep\n')
+    # The base dependency alone would mean requires() got no extras.
+    assert _resolve_extra_requirements(req, dist, False) == [
+        pkg_resources.Requirement.parse('web-dep'),
+        pkg_resources.Requirement.parse('base-dep'),
+    ]
+
+
+def test_resolve_extra_requirements_missing_extra_warns_and_intersects(
+        tmp_path, caplog):
+    req = pkg_resources.Requirement.parse('demo[web,nothere]')
+    dist = _make_dist(tmp_path, '[web]\nweb-dep\n')
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        result = _resolve_extra_requirements(req, dist, True)
+    assert result == ['web']
+    assert "does not provide the extra 'nothere'" in caplog.text
+
+
+def test_resolve_extra_requirements_missing_extra_rejected(tmp_path, caplog):
+    req = pkg_resources.Requirement.parse('demo[nothere]')
+    dist = _make_dist(tmp_path)
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        with pytest.raises(zc.buildout.UserError):
+            _resolve_extra_requirements(req, dist, False)
+    assert "does not provide the extra 'nothere'" in caplog.text

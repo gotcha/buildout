@@ -410,6 +410,70 @@ def _constrained_requirement(constraint: str, requirement: pkg_resources.Require
     return pkg_resources.Requirement.parse(str(constrained))
 
 
+def _parse_requirements(
+        specs: Union[Tuple[str, ...], List[str]],
+        constrain: Callable[[pkg_resources.Requirement],
+                            pkg_resources.Requirement],
+        ) -> List[pkg_resources.Requirement]:
+    """Parse ``specs`` into constrained requirements.
+
+    Requirements whose environment marker does not apply are dropped;
+    ``constrain`` applies the installer [versions] constraints.
+    """
+    requirements = [pkg_resources.Requirement.parse(spec)
+                    for spec in specs]
+    return [
+        constrain(requirement)
+        for requirement in requirements
+        if not requirement.marker or requirement.marker.evaluate()
+    ]
+
+
+def _working_set_or_default(
+        working_set: Optional[pkg_resources.WorkingSet],
+        ) -> pkg_resources.WorkingSet:
+    """Return ``working_set``, or a fresh empty one when none was given."""
+    if working_set is None:
+        return pkg_resources.WorkingSet([])
+    return working_set
+
+
+def _resolve_extra_requirements(
+        req: pkg_resources.Requirement,
+        dist: pkg_resources.Distribution,
+        allow_unknown_extras: bool,
+        ) -> Union[List[str], List[pkg_resources.Requirement]]:
+    """Return the requirements to follow from ``dist`` for ``req``.
+
+    Extras requested by ``req`` but not provided by ``dist`` are warned
+    about; unless ``allow_unknown_extras`` is set, that is a user error.
+    With unknown extras, the surviving extras are returned by name.
+    """
+    missing_requested = sorted(
+        set(req.extras) - set(dist.extras)
+    )
+    for missing in missing_requested:
+        logger.warning(
+            '%s does not provide the extra \'%s\'',
+            dist, missing
+        )
+    if missing_requested:
+        if not allow_unknown_extras:
+            raise zc.buildout.UserError(
+                "Couldn't find the required extra. "
+                "This means the requirement is incorrect. "
+                "If the requirement is itself from software you "
+                "requested, then there might be a bug in "
+                "requested software. You can ignore this by "
+                "using 'allow-unknown-extras=true', however "
+                "that may simply cause needed software to be omitted."
+            )
+        return sorted(
+            set(dist.extras) & set(req.extras)
+        )
+    return dist.requires(req.extras)[::-1]
+
+
 class Installer(object):
 
     _versions = {}
@@ -878,19 +942,9 @@ class Installer(object):
 
         for_buildout_run = bool(working_set)
 
-        requirements = [pkg_resources.Requirement.parse(spec)
-                        for spec in specs]
+        requirements = _parse_requirements(specs, self._constrain)
 
-        requirements = [
-            self._constrain(requirement)
-            for requirement in requirements
-            if not requirement.marker or requirement.marker.evaluate()
-        ]
-
-        if working_set is None:
-            ws = pkg_resources.WorkingSet([])
-        else:
-            ws = working_set
+        ws = _working_set_or_default(working_set)
 
         for requirement in requirements:
             for dist in self._get_dist(requirement, ws):
@@ -954,38 +1008,17 @@ class Installer(object):
 
             best[req.key] = dist
 
-            missing_requested = sorted(
-                set(req.extras) - set(dist.extras)
-            )
-            for missing in missing_requested:
-                logger.warning(
-                    '%s does not provide the extra \'%s\'',
-                    dist, missing
-                )
-
-            if missing_requested:
-                if not self._allow_unknown_extras:
-                    raise zc.buildout.UserError(
-                        "Couldn't find the required extra. "
-                        "This means the requirement is incorrect. "
-                        "If the requirement is itself from software you "
-                        "requested, then there might be a bug in "
-                        "requested software. You can ignore this by "
-                        "using 'allow-unknown-extras=true', however "
-                        "that may simply cause needed software to be omitted."
-                    )
-
-                extra_requirements = sorted(
-                    set(dist.extras) & set(req.extras)
-                )
-            else:
-                extra_requirements = dist.requires(req.extras)[::-1]
+            extra_requirements = _resolve_extra_requirements(
+                req, dist, self._allow_unknown_extras)
 
             for extra_requirement in extra_requirements:
                 self._requirements_and_constraints.append(
                     "Requirement of %s: %s" % (
                         current_requirement, extra_requirement))
-            requirements.extend(extra_requirements)
+            # Quirk preserved from the original code: when unknown extras are
+            # allowed, extra_requirements holds extra *names* (str), not
+            # Requirement objects.
+            requirements.extend(extra_requirements)  # ty: ignore[invalid-argument-type]
 
             processed[req] = True
         return ws
