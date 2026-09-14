@@ -3,7 +3,10 @@
 # not gateable signal, excluded from the static tier.
 # etc/tracing is a MonkeyType driver used with an ad-hoc monkeytype
 # install; the gate venv intentionally lacks it.
-exclude = ["src/zc/buildout/_vendor", "etc/tracing"]
+# dagger is a Dagger SDK module (own pyproject, generated sdk/ dir);
+# the repo venv has no dagger-io to check it against. It is verified
+# by running it (dagger call), not statically.
+exclude = ["src/zc/buildout/_vendor", "etc/tracing", "dagger"]
 
 [tool.pytest.ini_options]
 # src/zc is a namespace package (no __init__.py). Without this, pytest's
