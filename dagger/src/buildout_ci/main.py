@@ -1,6 +1,7 @@
 """Run the repo's .github/workflows CI jobs locally under Dagger with a devpi PyPI cache."""
 
 import asyncio
+import shlex
 from typing import Annotated
 
 import dagger
@@ -61,6 +62,32 @@ TRANSIENT_SIGNATURES = (
     "Read timed out",
 )
 
+# Fast cells chosen to prove the module machinery end to end (base
+# image, devpi wiring, module graft, exec layers), not repo coverage.
+SMOKE_JOBS = ("ruff", "ty", "module-tests", "scripts-zest.releaser-py3.12")
+
+
+def _exec_output(exc: dagger.ExecError) -> str:
+    # the failed exec's combined stdout+stderr; each attribute may be
+    # empty or raise when the engine has nothing, so guard defensively
+    parts = []
+    for attr in ("stdout", "stderr"):
+        try:
+            text = getattr(exc, attr, "") or ""
+        except Exception:
+            text = ""
+        if text.strip():
+            parts.append(text.rstrip())
+    return "\n".join(parts)
+
+
+def _failure(job: Job, command: tuple[str, ...], exc: dagger.ExecError) -> RuntimeError:
+    # str(exc) is only "exit code: N", so attach the job, the command,
+    # and the output tail: the FAIL lines in ci() surface that tail and
+    # nobody has to mine engine logs for what actually failed
+    tail = "\n".join(_exec_output(exc).splitlines()[-30:])
+    return RuntimeError(f"{job.name}: `{shlex.join(command)}` failed with {exc}\nlast output lines:\n{tail}")
+
 
 @object_type
 class BuildoutCi:
@@ -110,6 +137,50 @@ class BuildoutCi:
                 return f"PASS {job.name}"
 
         results = await asyncio.gather(*(run(job) for job in selected))
+        summary = "\n".join(results)
+        if any(result.startswith("FAIL") for result in results):
+            raise Exception(summary)
+        return summary
+
+    @function
+    async def debug(self, source: Source, module_source: ModuleSource, name: str) -> dagger.Container:
+        """Build the named job's container, stopping at its first failing command, and return it in that state.
+
+        Use `dagger call debug --name <job> terminal` for an interactive
+        shell inside the failed cell, or chain further with-exec calls.
+        If all commands succeed, returns the final container (useful for
+        exploring a green cell).
+        """
+        spec = _find_job(name)
+        ctr = self._base(source, self.devpi_service(), spec)
+        if spec.family == "module":
+            # mirror _run: graft the dagger/ dir in from module_source
+            ctr = ctr.with_directory("/src/dagger", module_source)
+        for command in spec.commands:
+            # ReturnType.ANY is correct here: this is an inspection flow
+            # and the failure state is exactly what we want to keep. It
+            # must NOT be used for the retry path in _run — ANY caches
+            # nonzero-exit results as layers, so a retry would never
+            # re-run the exec.
+            probe = ctr.with_exec(list(command), expect=dagger.ReturnType.ANY)
+            if await probe.exit_code() != 0:
+                return probe
+            ctr = probe
+        return ctr
+
+    @function
+    async def smoke(self, source: Source, module_source: ModuleSource) -> str:
+        """Quick module self-check (~2 min warm): the static tier, the module harness, and one scripts cell."""
+        devpi = self.devpi_service()
+        results = []
+        for name in SMOKE_JOBS:
+            try:
+                await self._run(source, devpi, _find_job(name), module_source)
+            except Exception as exc:
+                lines = [ln for ln in str(exc).splitlines() if ln.strip()]
+                results.append(f"FAIL {name}: {lines[-1] if lines else exc!r}")
+            else:
+                results.append(f"PASS {name}")
         summary = "\n".join(results)
         if any(result.startswith("FAIL") for result in results):
             raise Exception(summary)
@@ -192,9 +263,15 @@ class BuildoutCi:
             except dagger.ExecError as exc:
                 # engine v0.21.9: str(exc) is only "exit code: N"; the
                 # failed command's output lives on .stdout/.stderr
-                output = f"{exc}\n{exc.stdout}\n{exc.stderr}"
-                if not any(sig in output for sig in TRANSIENT_SIGNATURES):
-                    raise
-                # execs are atomic layers: re-awaiting re-runs from the
-                # last good layer, against a now-warmer devpi
-                await ctr.stdout()
+                output = f"{exc}\n{_exec_output(exc)}"
+                if any(sig in output for sig in TRANSIENT_SIGNATURES):
+                    # execs are atomic layers: re-awaiting re-runs from the
+                    # last good layer, against a now-warmer devpi. Keep
+                    # this on the exception path: ReturnType.ANY caches
+                    # nonzero-exit results, so it could never retry.
+                    try:
+                        await ctr.stdout()
+                        continue
+                    except dagger.ExecError as retry_exc:
+                        exc = retry_exc
+                raise _failure(job, command, exc) from exc
