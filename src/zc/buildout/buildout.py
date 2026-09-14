@@ -1040,6 +1040,48 @@ def _upgrade_and_restart(
     sys.exit(subprocess.call(args, env=env))
 
 
+def _split_query_option(arg: str) -> Tuple[str, str]:
+    """Split a ``section:option`` query argument, defaulting the section
+    to ``buildout`` and rejecting malformed arguments."""
+    option = arg.split(':')
+    if len(option) == 1:
+        option = 'buildout', option[0]
+    elif len(option) != 2:
+        _error("Invalid query argument: %r (expected section:option)"
+               % arg)
+    section, option = option
+    if not section or not option:
+        _error("Invalid query argument: %r (expected section:option)"
+               % arg)
+    return section, option
+
+
+def _parse_query_args(args: Optional[List[str]]) -> Tuple[str, str, bool]:
+    """Parse the query command arguments into ``(section, option,
+    interpolated)``."""
+    interpolated = bool(args) and '--interpolated' in args
+    if interpolated:
+        args = [arg for arg in args if arg != '--interpolated']
+    if args is None or len(args) != 1:
+        _error('The query command requires a single argument.')
+    section, option = _split_query_option(args[0])
+    return section, option, interpolated
+
+
+def _raw_query_value(
+        raw: Dict[str, Dict[str, str]], section: str, option: str,
+        ) -> str:
+    """Return the raw value of ``section:option``, reporting the missing
+    section or key."""
+    try:
+        return raw[section][option]
+    except KeyError:
+        if section in raw:
+            _error('Key not found:', option)
+        else:
+            _error('Section not found:', section)
+
+
 @commands
 class Buildout(DictMixin):
 
@@ -1861,32 +1903,11 @@ The following list shows the affected packages and their namespaces:
 
     @command
     def query(self, args: Optional[List[str]]=None) -> None:
-        interpolated = bool(args) and '--interpolated' in args
-        if interpolated:
-            args = [arg for arg in args if arg != '--interpolated']
-        if args is None or len(args) != 1:
-            _error('The query command requires a single argument.')
-        option = args[0]
-        option = option.split(':')
-        if len(option) == 1:
-            option = 'buildout', option[0]
-        elif len(option) != 2:
-            _error("Invalid query argument: %r (expected section:option)"
-                   % args[0])
-        section, option = option
-        if not section or not option:
-            _error("Invalid query argument: %r (expected section:option)"
-                   % args[0])
+        section, option, interpolated = _parse_query_args(args)
         verbose = self['buildout'].get('verbosity', 0) != 0
         if verbose:
             print_('${%s:%s}' % (section, option))
-        try:
-            value = self._raw[section][option]
-        except KeyError:
-            if section in self._raw:
-                _error('Key not found:', option)
-            else:
-                _error('Section not found:', section)
+        value = _raw_query_value(self._raw, section, option)
         if interpolated:
             value = self[section].get(option)
         print_(value)

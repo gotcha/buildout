@@ -43,17 +43,20 @@ from zc.buildout.buildout import (
     _option_assignment,
     _optional_extends_results,
     _parse_config_file,
+    _parse_query_args,
     _part_is_up_to_date,
     _pin_buildout_version,
     _pop_command,
     _previous_develop_links,
     _print_configuration_data,
+    _raw_query_value,
     _record_installed_part,
     _resolve_config_file,
     _resolve_config_location,
     _save_or_update_installed,
     _setup_download_cache,
     _split_parts,
+    _split_query_option,
     _uninstall_stale_parts,
     _upgrade_and_restart,
     _update_part,
@@ -1545,3 +1548,70 @@ def test_upgrade_and_restart_regenerates_scripts_and_restarts(
     ]
     assert ('Upgraded:\n  zc.buildout version 9.9;\nRestarting.'
             in caplog.text)
+
+
+def test_split_query_option_defaults_to_buildout_section():
+    assert _split_query_option('develop') == ('buildout', 'develop')
+
+
+def test_split_query_option_section_and_option():
+    assert _split_query_option('values:host') == ('values', 'host')
+
+
+def test_split_query_option_rejects_extra_colons(capsys):
+    with pytest.raises(SystemExit) as exc:
+        _split_query_option('invalid:section:key')
+    assert exc.value.code == 1
+    assert ("Error: Invalid query argument: 'invalid:section:key' "
+            "(expected section:option)") in capsys.readouterr().err
+
+
+def test_split_query_option_rejects_empty_parts(capsys):
+    for arg in (':port', 'values:', ':', ''):
+        with pytest.raises(SystemExit) as exc:
+            _split_query_option(arg)
+        assert exc.value.code == 1
+        assert ("Error: Invalid query argument: %r (expected "
+                "section:option)" % arg) in capsys.readouterr().err
+
+
+def test_parse_query_args_single_option():
+    assert _parse_query_args(
+        ['buildout:develop']) == ('buildout', 'develop', False)
+
+
+def test_parse_query_args_interpolated_flag_either_position():
+    assert _parse_query_args(
+        ['--interpolated', 'values:url']) == ('values', 'url', True)
+    assert _parse_query_args(
+        ['values:url', '--interpolated']) == ('values', 'url', True)
+
+
+def test_parse_query_args_requires_single_argument(capsys):
+    for args in (None, [], ['versions', 'parts'], ['--interpolated']):
+        with pytest.raises(SystemExit) as exc:
+            _parse_query_args(args)
+        assert exc.value.code == 1
+        assert ('Error: The query command requires a single argument.'
+                ) in capsys.readouterr().err
+
+
+def test_raw_query_value_returns_value():
+    raw = {'buildout': {'parts': 'core'}}
+    assert _raw_query_value(raw, 'buildout', 'parts') == 'core'
+
+
+def test_raw_query_value_missing_key(capsys):
+    raw = {'buildout': {'parts': 'core'}}
+    with pytest.raises(SystemExit) as exc:
+        _raw_query_value(raw, 'buildout', 'port')
+    assert exc.value.code == 1
+    assert 'Error: Key not found: port' in capsys.readouterr().err
+
+
+def test_raw_query_value_missing_section(capsys):
+    raw = {'buildout': {'parts': 'core'}}
+    with pytest.raises(SystemExit) as exc:
+        _raw_query_value(raw, 'specific', 'port')
+    assert exc.value.code == 1
+    assert 'Error: Section not found: specific' in capsys.readouterr().err
