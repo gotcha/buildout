@@ -1,6 +1,7 @@
 """Unit tests for the pure helpers extracted from zc.buildout.buildout."""
 import logging
 import os
+from typing import Dict, Union
 
 import pkg_resources
 import pytest
@@ -8,6 +9,7 @@ import pytest
 import zc.buildout
 import zc.buildout.easy_install
 from zc.buildout.buildout import (
+    Options,
     SectionKey,
     _absolutize_cache_dirs,
     _absolutize_standard_dirs,
@@ -22,13 +24,18 @@ from zc.buildout.buildout import (
     _links_and_hosts,
     _load_config,
     _load_user_defaults,
+    _log_part_option_changes,
     _merge_config_data,
     _new_develop_eggs,
+    _part_is_up_to_date,
     _pin_buildout_version,
     _previous_develop_links,
+    _print_configuration_data,
     _resolve_config_file,
     _resolve_config_location,
     _setup_download_cache,
+    _split_parts,
+    _uninstall_stale_parts,
     _use_default_options,
     _validated_extends_cache,
     _version_eggs_directory,
@@ -677,3 +684,186 @@ def test_use_default_options_reads_every_default():
     options = _CountingDict((name, '') for name in _buildout_default_options)
     _use_default_options(options)
     assert sorted(reads) == sorted(_buildout_default_options)
+
+
+def test_split_parts_empty():
+    assert _split_parts('') == []
+
+
+def test_split_parts_whitespace_separated():
+    assert _split_parts('  a\tb  c\n') == ['a', 'b', 'c']
+
+
+def test_print_configuration_data(capsys):
+    data = {'b': {'x': '2'}, 'a': {'y': '1'}}
+    _print_configuration_data(data, lambda section: data[section])
+    assert capsys.readouterr().out == (
+        '\nConfiguration data:\n[a]\ny = 1\n[b]\nx = 2\n\n')
+
+
+def test_part_is_up_to_date_unchanged_options_and_files_present(tmp_path):
+    (tmp_path / 'f').write_text('x')
+    assert _part_is_up_to_date(
+        {'a': '1'}, 'f', {'a': '1'},
+        lambda p: str(tmp_path / p))
+
+
+def test_part_is_up_to_date_changed_options():
+    assert not _part_is_up_to_date(
+        {'a': '1'}, '', {'a': '2'}, lambda p: p)
+
+
+def test_part_is_up_to_date_no_installed_files():
+    # No recorded files: considered up to date when options are unchanged.
+    assert _part_is_up_to_date({'a': '1'}, '', {'a': '1'}, lambda p: p)
+
+
+def test_part_is_up_to_date_missing_installed_file(tmp_path):
+    (tmp_path / 'kept.txt').write_text('x')
+    assert not _part_is_up_to_date(
+        {'a': '1'}, 'kept.txt\ngone.txt', {'a': '1'},
+        lambda p: str(tmp_path / p))
+
+
+def test_log_part_option_changes_dropped(caplog):
+    logger = logging.getLogger('test.partchanges')
+    with caplog.at_level(logging.DEBUG, logger='test.partchanges'):
+        _log_part_option_changes(logger, 'p', {'old': '1'}, {})
+    assert 'Part p, dropped option old.' in caplog.text
+
+
+def test_log_part_option_changes_changed(caplog):
+    logger = logging.getLogger('test.partchanges')
+    with caplog.at_level(logging.DEBUG, logger='test.partchanges'):
+        _log_part_option_changes(logger, 'p', {'k': '1'}, {'k': '2'})
+    assert "Part p, option k changed:\n'2' != '1'" in caplog.text
+
+
+def test_log_part_option_changes_new(caplog):
+    logger = logging.getLogger('test.partchanges')
+    with caplog.at_level(logging.DEBUG, logger='test.partchanges'):
+        _log_part_option_changes(logger, 'p', {}, {'n': '1'})
+    assert 'Part p, new option n.' in caplog.text
+
+
+def test_log_part_option_changes_unchanged_logs_nothing(caplog):
+    logger = logging.getLogger('test.partchanges')
+    with caplog.at_level(logging.DEBUG, logger='test.partchanges'):
+        _log_part_option_changes(logger, 'p', {'k': '1'}, {'k': '1'})
+    assert caplog.text == ''
+
+
+def _uninstall_spy(calls):
+    def uninstall_part(part, installed_part_options):
+        calls.append(part)
+    return uninstall_part
+
+
+def test_uninstall_stale_parts_keeps_up_to_date_part(tmp_path):
+    (tmp_path / 'f').write_text('x')
+    calls = []
+    updates = []
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'buildout': {'parts': 'a'},
+        'a': {'__buildout_installed__': 'f', 'mode': '1'},
+    }
+    result = _uninstall_stale_parts(
+        ['a'], ['a'], installed_part_options,
+        uninstall_missing=True, installed_exists=True,
+        get_options=lambda part: {'mode': '1'},
+        buildout_path=lambda p: str(tmp_path / p),
+        logger=logging.getLogger('test.uninstall'),
+        uninstall_part=_uninstall_spy(calls),
+        update_installed=lambda **kw: updates.append(kw))
+    assert result == ['a']
+    assert calls == []
+    assert updates == []
+
+
+def test_uninstall_stale_parts_reinstalls_changed_part():
+    calls = []
+    updates = []
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'buildout': {'parts': 'a'},
+        'a': {'__buildout_installed__': '', 'mode': '1'},
+    }
+    result = _uninstall_stale_parts(
+        ['a'], ['a'], installed_part_options,
+        uninstall_missing=True, installed_exists=True,
+        get_options=lambda part: {'mode': '2'},
+        buildout_path=lambda p: p,
+        logger=logging.getLogger('test.uninstall'),
+        uninstall_part=_uninstall_spy(calls),
+        update_installed=lambda **kw: updates.append(kw))
+    assert result == []
+    assert calls == ['a']
+    assert updates == [{'parts': ''}]
+
+
+def test_uninstall_stale_parts_reinstalls_when_installed_file_missing():
+    calls = []
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'buildout': {'parts': 'a'},
+        'a': {'__buildout_installed__': 'gone', 'mode': '1'},
+    }
+    result = _uninstall_stale_parts(
+        ['a'], ['a'], installed_part_options,
+        uninstall_missing=True, installed_exists=False,
+        get_options=lambda part: {'mode': '1'},
+        buildout_path=lambda p: p,
+        logger=logging.getLogger('test.uninstall'),
+        uninstall_part=_uninstall_spy(calls),
+        update_installed=lambda **kw: None)
+    assert result == []
+    assert calls == ['a']
+
+
+def test_uninstall_stale_parts_keeps_missing_part_when_not_uninstalling():
+    calls = []
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {'buildout': {'parts': 'a'}}
+    result = _uninstall_stale_parts(
+        [], ['a'], installed_part_options,
+        uninstall_missing=False, installed_exists=True,
+        get_options=lambda part: None,
+        buildout_path=lambda p: p,
+        logger=logging.getLogger('test.uninstall'),
+        uninstall_part=_uninstall_spy(calls),
+        update_installed=lambda **kw: None)
+    assert result == ['a']
+    assert calls == []
+
+
+def test_uninstall_stale_parts_removes_missing_parts_in_reverse():
+    calls = []
+    updates = []
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {'buildout': {'parts': 'a b'}}
+    result = _uninstall_stale_parts(
+        [], ['a', 'b'], installed_part_options,
+        uninstall_missing=True, installed_exists=True,
+        get_options=lambda part: None,
+        buildout_path=lambda p: p,
+        logger=logging.getLogger('test.uninstall'),
+        uninstall_part=_uninstall_spy(calls),
+        update_installed=lambda **kw: updates.append(kw))
+    assert result == []
+    assert calls == ['b', 'a']
+    assert updates == [{'parts': 'a'}, {'parts': ''}]
+
+
+def test_uninstall_stale_parts_logs_option_changes_at_debug(caplog):
+    logger = logging.getLogger('test.uninstall.debug')
+    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+        'buildout': {'parts': 'a'},
+        'a': {'__buildout_installed__': '', 'mode': '1'},
+    }
+    # The caller gate is effective level *below* logging.DEBUG.
+    with caplog.at_level(1, logger='test.uninstall.debug'):
+        _uninstall_stale_parts(
+            ['a'], ['a'], installed_part_options,
+            uninstall_missing=True, installed_exists=False,
+            get_options=lambda part: {'mode': '2'},
+            buildout_path=lambda p: p,
+            logger=logger,
+            uninstall_part=_uninstall_spy([]),
+            update_installed=lambda **kw: None)
+    assert "Part a, option mode changed:\n'2' != '1'" in caplog.text

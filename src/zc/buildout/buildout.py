@@ -688,6 +688,112 @@ def _use_default_options(options: Mapping[str, str]) -> None:
         options[name]
 
 
+def _split_parts(parts: str) -> List[str]:
+    """Split a whitespace-separated part list option, mapping empty to
+    ``[]``."""
+    return parts.split() if parts else []
+
+
+def _print_configuration_data(
+        data: Mapping[str, Union['Options', Dict[str, str]]],
+        get_options: Callable[[str], Union['Options', Dict[str, str]]],
+        ) -> None:
+    """Print the full configuration data (quiet log levels only)."""
+    print_()
+    print_('Configuration data:')
+    for section in sorted(data):
+        _save_options(section, get_options(section), sys.stdout)
+    print_()
+
+
+def _part_is_up_to_date(
+        old_options: Mapping[str, str],
+        installed_files: str,
+        new_options: Mapping[str, str],
+        buildout_path: Callable[[str], str],
+        ) -> bool:
+    """Decide whether an installed part can be kept as-is.
+
+    A part is up to date when its options are unchanged and every file
+    it installed still exists.
+    """
+    if old_options != new_options:
+        return False
+    # The options are the same, but are all of the installed files still
+    # there?  If not, we should reinstall.
+    if not installed_files:
+        return True
+    for f in installed_files.split('\n'):
+        if not os.path.exists(buildout_path(f)):
+            return False
+    return True
+
+
+def _log_part_option_changes(
+        logger: logging.Logger,
+        part: str,
+        old_options: Mapping[str, str],
+        new_options: Mapping[str, str],
+        ) -> None:
+    """Log the dropped, changed and new options of a part being
+    reinstalled."""
+    for k in old_options:
+        if k not in new_options:
+            logger.debug("Part %s, dropped option %s.", part, k)
+        elif old_options[k] != new_options[k]:
+            logger.debug(
+                "Part %s, option %s changed:\n%r != %r",
+                part, k, new_options[k], old_options[k],
+                )
+    for k in new_options:
+        if k not in old_options:
+            logger.debug("Part %s, new option %s.", part, k)
+
+
+def _uninstall_stale_parts(
+        install_parts: Sequence[str],
+        installed_parts: List[str],
+        installed_part_options: Dict[str, Union['Options', Dict[str, str]]],
+        uninstall_missing: bool,
+        installed_exists: bool,
+        get_options: Callable[[str], Optional[Mapping[str, str]]],
+        buildout_path: Callable[[str], str],
+        logger: logging.Logger,
+        uninstall_part: Callable[
+            [str, Dict[str, Union['Options', Dict[str, str]]]], None],
+        update_installed: Callable[..., None],
+        ) -> List[str]:
+    """Uninstall the parts that are no longer used or whose configuration
+    changed; return the updated list of installed parts."""
+    for part in reversed(installed_parts):
+        if part in install_parts:
+            old_options = installed_part_options[part].copy()
+            installed_files = old_options.pop('__buildout_installed__')
+            new_options = get_options(part)
+            # part is in install_parts, whose sections were all loaded
+            # above, so the section exists.
+            assert new_options is not None
+            if _part_is_up_to_date(
+                    old_options, installed_files, new_options,
+                    buildout_path):
+                continue
+
+            # output debugging info
+            if logger.getEffectiveLevel() < logging.DEBUG:
+                _log_part_option_changes(
+                    logger, part, old_options, new_options)
+
+        elif not uninstall_missing:
+            continue
+
+        uninstall_part(part, installed_part_options)
+        installed_parts = [p for p in installed_parts if p != part]
+
+        if installed_exists:
+            update_installed(parts=' '.join(installed_parts))
+    return installed_parts
+
+
 @commands
 class Buildout(DictMixin):
 
@@ -971,11 +1077,9 @@ class Buildout(DictMixin):
                     installed_develop_eggs=installed_develop_eggs)
 
             # get configured and installed part lists
-            conf_parts = self['buildout']['parts']
-            conf_parts = conf_parts.split() if conf_parts else []
-            installed_parts = installed_part_options['buildout']['parts']
-            installed_parts = (installed_parts.split()
-                               if installed_parts else [])
+            conf_parts = _split_parts(self['buildout']['parts'])
+            installed_parts = _split_parts(
+                installed_part_options['buildout']['parts'])
 
             if install_args:
                 install_parts = install_args
@@ -990,64 +1094,21 @@ class Buildout(DictMixin):
                 install_parts = self._parts
 
             if self._log_level < logging.DEBUG:
+                # Quirk preserved: the sorted sections list is unused.
                 sections = list(self)
                 sections.sort()
-                print_()
-                print_('Configuration data:')
-                for section in sorted(self._data):
-                    _save_options(section, self[section], sys.stdout)
-                print_()
-
+                _print_configuration_data(self._data, self.__getitem__)
 
             # compute new part recipe signatures
             self._compute_part_signatures(install_parts)
 
             # uninstall parts that are no-longer used or who's configs
             # have changed
-            for part in reversed(installed_parts):
-                if part in install_parts:
-                    old_options = installed_part_options[part].copy()
-                    installed_files = old_options.pop('__buildout_installed__')
-                    new_options = self.get(part)
-                    # part is in install_parts, whose sections were all loaded
-                    # above, so the section exists.
-                    assert new_options is not None
-                    if old_options == new_options:
-                        # The options are the same, but are all of the
-                        # installed files still there?  If not, we should
-                        # reinstall.
-                        if not installed_files:
-                            continue
-                        for f in installed_files.split('\n'):
-                            if not os.path.exists(self._buildout_path(f)):
-                                break
-                        else:
-                            continue
-
-                    # output debugging info
-                    if self._logger.getEffectiveLevel() < logging.DEBUG:
-                        for k in old_options:
-                            if k not in new_options:
-                                self._logger.debug("Part %s, dropped option %s.",
-                                                   part, k)
-                            elif old_options[k] != new_options[k]:
-                                self._logger.debug(
-                                    "Part %s, option %s changed:\n%r != %r",
-                                    part, k, new_options[k], old_options[k],
-                                    )
-                        for k in new_options:
-                            if k not in old_options:
-                                self._logger.debug("Part %s, new option %s.",
-                                                   part, k)
-
-                elif not uninstall_missing:
-                    continue
-
-                self._uninstall_part(part, installed_part_options)
-                installed_parts = [p for p in installed_parts if p != part]
-
-                if installed_exists:
-                    self._update_installed(parts=' '.join(installed_parts))
+            installed_parts = _uninstall_stale_parts(
+                install_parts, installed_parts, installed_part_options,
+                uninstall_missing, installed_exists,
+                self.get, self._buildout_path, self._logger,
+                self._uninstall_part, self._update_installed)
 
             # Check for unused buildout options:
             _check_for_unused_options_in_section(self, 'buildout')
