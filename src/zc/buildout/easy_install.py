@@ -1950,6 +1950,16 @@ class MissingDistribution(zc.buildout.UserError):
         req, ws = self.data
         return "Couldn't find a distribution for %r." % str(req)
 
+def _is_url(value: str) -> bool:
+    """True when ``value`` carries a real URL scheme.
+
+    A Windows drive path such as ``C:\\index`` parses with the
+    one-letter scheme ``c``. Real index schemes (http, https, file)
+    are longer than one character.
+    """
+    return len(urllib.parse.urlsplit(value).scheme) > 1
+
+
 def _pip_install_args(spec: str, dest: str, editable: bool,
                       package_index_url: Optional[str],
                       log_level: int) -> List[str]:
@@ -1964,7 +1974,7 @@ def _pip_install_args(spec: str, dest: str, editable: bool,
     args = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', dest]
     if package_index_url:
         url: Optional[str] = package_index_url
-        if not urllib.parse.urlsplit(url).scheme:
+        if not _is_url(url):
             # pip 25+ does not accept a directory as index, which buildout
             # does support.
             index_path = Path(url)

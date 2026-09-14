@@ -2,7 +2,7 @@
 import logging
 import sys
 
-from zc.buildout.easy_install import _pip_install_args
+from zc.buildout.easy_install import _is_url, _pip_install_args
 
 BASE_ARGS = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', '/dest']
 
@@ -46,3 +46,19 @@ def test_spec_is_always_last():
     args = _pip_install_args(
         'demo', '/dest', True, 'https://example.com/simple', logging.DEBUG)
     assert args[-1] == 'demo'
+
+
+def test_windows_drive_path_is_not_a_url():
+    assert not _is_url('C:\\index')
+    assert not _is_url('C:/index')
+
+
+def test_http_and_file_schemes_are_urls():
+    assert _is_url('https://example.com/simple')
+    assert _is_url('http://example.com/simple')
+    assert _is_url('file:///srv/index')
+
+
+def test_bare_paths_are_not_urls():
+    assert not _is_url('/srv/index')
+    assert not _is_url('index')
