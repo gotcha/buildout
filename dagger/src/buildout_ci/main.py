@@ -29,6 +29,8 @@ Source = Annotated[
             "sandbox",
             "dagger/sdk",
             "dagger/.venv",
+            "dagger/src",
+            "news",
             "**/*.egg-info",
             "**/__pycache__",
             ".coverage",
@@ -51,6 +53,9 @@ class Job:
 
 
 FAMILIES = ("setuptools", "python", "pip", "scripts", "static", "coverage")
+
+# rough duration hints for scheduling only, not gates
+FAMILY_MINUTES = {"coverage": 15, "pip": 8, "python": 7, "setuptools": 4, "scripts": 1, "static": 1}
 
 
 def _scripts_commands(makefile: str) -> tuple[tuple[str, ...], ...]:
@@ -212,6 +217,8 @@ class BuildoutCi:
         Pass family to run only that family's jobs (see families).
         """
         selected = _select_jobs(family)
+        # longest first, so slow cells claim semaphore slots early and the tail stays short
+        selected.sort(key=lambda job: FAMILY_MINUTES[job.family], reverse=True)
         semaphore = asyncio.Semaphore(concurrency)
         devpi = self.devpi_service()
 
@@ -257,15 +264,7 @@ class BuildoutCi:
             .with_env_variable("USE_UV", "1")
             .with_env_variable("UV_VENV_CLEAR", "1")
             .with_env_variable("PYTHON_VERSION", job.python)
-        )
-        if job.setuptools:
-            ctr = ctr.with_env_variable("SETUPTOOLS_VERSION", job.setuptools)
-        if job.pip:
-            ctr = ctr.with_env_variable("PIP_VERSION", job.pip)
-        if job.package:
-            ctr = ctr.with_env_variable("PACKAGE", job.package)
-        return (
-            ctr.with_mounted_directory("/src", source)
+            .with_mounted_directory("/src", source)
             .with_workdir("/src")
             # A cold devpi answers 200 on / while its index is not serving
             # yet: demand real index content, and retry the first install.
@@ -276,8 +275,19 @@ class BuildoutCi:
                     'until curl -sf http://devpi:3141/root/pypi/+simple/uv/ | grep -q "<a "; do sleep 1; done',
                 ]
             )
-            .with_exec(["pip", "install", "--quiet", "--retries", "10", "uv", *job.pip_install])
+            .with_exec(["pip", "install", "--quiet", "--retries", "10", "uv"])
         )
+        # env vars participate in exec cache keys, so everything
+        # job-specific stays after the shared prefix
+        if job.setuptools:
+            ctr = ctr.with_env_variable("SETUPTOOLS_VERSION", job.setuptools)
+        if job.pip:
+            ctr = ctr.with_env_variable("PIP_VERSION", job.pip)
+        if job.package:
+            ctr = ctr.with_env_variable("PACKAGE", job.package)
+        if job.pip_install:
+            ctr = ctr.with_exec(["pip", "install", "--quiet", "--retries", "10", *job.pip_install])
+        return ctr
 
     async def _run(self, source: dagger.Directory, devpi: dagger.Service, job: Job) -> None:
         ctr = self._base(source, devpi, job)
