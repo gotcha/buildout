@@ -273,20 +273,23 @@ class BuildoutCi:
                     )
                 )
             ctr = ctr.with_exec(list(command))
-            try:
-                await ctr.stdout()
-            except dagger.ExecError as exc:
-                # engine v0.21.9: str(exc) is only "exit code: N"; the
-                # failed command's output lives on .stdout/.stderr
-                output = f"{exc}\n{_exec_output(exc)}"
-                if any(sig in output for sig in TRANSIENT_SIGNATURES):
+            # A cold devpi flakes in bursts: GH run 34876803047 saw one
+            # cell burn both its attempts on two different transient
+            # fetches. Give each command three attempts when the failure
+            # smells transient.
+            attempts = 3
+            while True:
+                try:
+                    await ctr.stdout()
+                    break
+                except dagger.ExecError as exc:
+                    # engine v0.21.9: str(exc) is only "exit code: N"; the
+                    # failed command's output lives on .stdout/.stderr
+                    attempts -= 1
+                    output = f"{exc}\n{_exec_output(exc)}"
+                    if attempts == 0 or not any(sig in output for sig in TRANSIENT_SIGNATURES):
+                        raise _failure(job, command, exc) from exc
                     # execs are atomic layers: re-awaiting re-runs from the
                     # last good layer, against a now-warmer devpi. Keep
                     # this on the exception path: ReturnType.ANY caches
                     # nonzero-exit results, so it could never retry.
-                    try:
-                        await ctr.stdout()
-                        continue
-                    except dagger.ExecError as retry_exc:
-                        exc = retry_exc
-                raise _failure(job, command, exc) from exc
