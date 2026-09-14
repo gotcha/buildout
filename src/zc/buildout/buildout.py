@@ -2058,6 +2058,44 @@ def _default_globals() -> Dict[str, Any]:
 
 variable_template_split = re.compile('([$]{[^}]*})').split
 
+def _validated_extends_cache(raw_download_options: Dict[str, str]) -> Optional[str]:
+    """Return the extends-cache option, rejecting variable substitutions."""
+    extends_cache = raw_download_options.get('extends-cache')
+    if extends_cache and variable_template_split(extends_cache)[1::2]:
+        raise ValueError(
+            "extends-cache '%s' may not contain ${section:variable} to expand."
+            % extends_cache
+        )
+    return extends_cache
+
+def _resolve_config_location(base: str, filename: str) -> Tuple[str, str, bool]:
+    """Resolve a config file reference against its base.
+
+    Return the filename to open, the base for further relative
+    references, and whether the file must be downloaded first.
+    """
+    if _isurl(filename):
+        return filename, filename[:filename.rfind('/')], True
+    if _isurl(base):
+        if os.path.isabs(filename):
+            return filename, os.path.dirname(filename), False
+        filename = base + '/' + filename
+        return filename, filename[:filename.rfind('/')], True
+    filename = os.path.join(base, filename)
+    return filename, os.path.dirname(filename), False
+
+def _filename_for_logging(filename: str, downloaded_filename: Optional[str]) -> str:
+    if downloaded_filename:
+        return '%s (downloaded as %s)' % (filename, downloaded_filename)
+    return filename
+
+def _merge_config_data(eresults: List[ConfigData]) -> ConfigData:
+    """Merge per-file config dicts into one, later files winning."""
+    final_result: ConfigData = {}
+    for eresult in eresults:
+        final_result = _update(final_result, eresult)
+    return final_result
+
 def _open(
         base: str, filename: str, seen: List[str], download_options: Dict[str, SectionKey],
         override: Dict[str, SectionKey], downloaded: Set[str], user_defaults: Dict[str, Dict[str, SectionKey]]
@@ -2074,34 +2112,18 @@ def _open(
     raw_download_options = _unannotate_section(download_options)
     newest = bool_option(raw_download_options, 'newest', 'false')
     fallback = newest and filename not in downloaded
-    extends_cache = raw_download_options.get('extends-cache')
-    if extends_cache and variable_template_split(extends_cache)[1::2]:
-        raise ValueError(
-            "extends-cache '%s' may not contain ${section:variable} to expand."
-            % extends_cache
-        )
+    extends_cache = _validated_extends_cache(raw_download_options)
     download = zc.buildout.download.Download(
         raw_download_options, cache=extends_cache,
         fallback=fallback, hash_name=True)
     is_temp = False
     downloaded_filename = None
-    if _isurl(filename):
+    filename, base, needs_download = _resolve_config_location(base, filename)
+    if needs_download:
         downloaded_filename, is_temp = download(filename)
         fp = open(downloaded_filename)
-        base = filename[:filename.rfind('/')]
-    elif _isurl(base):
-        if os.path.isabs(filename):
-            fp = open(filename)
-            base = os.path.dirname(filename)
-        else:
-            filename = base + '/' + filename
-            downloaded_filename, is_temp = download(filename)
-            fp = open(downloaded_filename)
-            base = filename[:filename.rfind('/')]
     else:
-        filename = os.path.join(base, filename)
         fp = open(filename)
-        base = os.path.dirname(filename)
     downloaded.add(filename)
 
     if filename in seen:
@@ -2115,12 +2137,9 @@ def _open(
     root_config_file = not seen
     seen.append(filename)
 
-    filename_for_logging = filename
-    if downloaded_filename:
-        filename_for_logging = '%s (downloaded as %s)' % (
-            filename, downloaded_filename)
     result = zc.buildout.configparser.parse(
-        fp, filename_for_logging, _default_globals)
+        fp, _filename_for_logging(filename, downloaded_filename),
+        _default_globals)
 
     fp.close()
     if is_temp:
@@ -2178,10 +2197,7 @@ def _open(
     seen.pop()
 
     if root_config_file:
-        final_result: ConfigData = {}
-        for eresult in eresults:
-            final_result = _update(final_result, eresult)
-        return final_result, user_defaults
+        return _merge_config_data(eresults), user_defaults
     else:
         return eresults, user_defaults
 
