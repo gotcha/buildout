@@ -315,6 +315,58 @@ def _get_user_config() -> str:
     return os.path.join(buildout_home, 'default.cfg')
 
 
+def _develop_source_dir(egg_path: str) -> str:
+    """Return the source directory for an egg-link target path.
+
+    The egg path is the source directory itself or, for src-layouts, its
+    'src' subdirectory.  Note that the source directory itself may also be
+    named 'src' (a flat layout in a directory called src), so check which
+    of the candidates holds the packaging metadata.
+    """
+    source = egg_path
+    if os.path.basename(egg_path) == 'src':
+        parent = os.path.dirname(egg_path)
+        metadata = ('setup.py', 'setup.cfg', 'pyproject.toml')
+        if (any(os.path.isfile(os.path.join(parent, name))
+                for name in metadata)
+                and not any(os.path.isfile(os.path.join(egg_path, name))
+                            for name in metadata)):
+            source = parent
+    return source
+
+
+def _previous_develop_links(
+        previously_installed: str,
+        buildout_path: Callable[[str], str]) -> Dict[str, str]:
+    """Map develop source directories to their existing egg-link files.
+
+    ``previously_installed`` is the newline-separated list of files created
+    by the previous run; ``buildout_path`` resolves buildout-relative paths.
+    Keys are realpaths of the source directories.
+    """
+    previous_links = {}
+    for f in previously_installed.split('\n'):
+        if not f:
+            continue
+        f = buildout_path(f)
+        if not f.endswith('.egg-link') or not os.path.isfile(f):
+            continue
+        with open(f) as fp:
+            egg_path = fp.readline().strip()
+        previous_links[os.path.realpath(_develop_source_dir(egg_path))] = f
+    return previous_links
+
+
+def _new_develop_eggs(dest: str, old_files: List[str]) -> str:
+    """Return newline-joined paths of entries created in ``dest`` since
+    ``old_files`` was listed."""
+    return '\n'.join(
+        [os.path.join(dest, f)
+         for f in os.listdir(dest)
+         if f not in old_files
+         ])
+
+
 @commands
 class Buildout(DictMixin):
 
@@ -1024,30 +1076,8 @@ class Buildout(DictMixin):
 
             # Map the previously installed egg-links to the source directory
             # they point at, so we can tell which ones are still current.
-            previous_links = {}
-            for f in previously_installed.split('\n'):
-                if not f:
-                    continue
-                f = self._buildout_path(f)
-                if not f.endswith('.egg-link') or not os.path.isfile(f):
-                    continue
-                with open(f) as fp:
-                    egg_path = fp.readline().strip()
-                # The egg path is the source directory itself or, for
-                # src-layouts, its 'src' subdirectory.  Note that the source
-                # directory itself may also be named 'src' (a flat layout in a
-                # directory called src), so check which of the candidates
-                # holds the packaging metadata.
-                source = egg_path
-                if os.path.basename(egg_path) == 'src':
-                    parent = os.path.dirname(egg_path)
-                    metadata = ('setup.py', 'setup.cfg', 'pyproject.toml')
-                    if (any(os.path.isfile(os.path.join(parent, name))
-                            for name in metadata)
-                            and not any(os.path.isfile(os.path.join(egg_path, name))
-                                        for name in metadata)):
-                        source = parent
-                previous_links[os.path.realpath(source)] = f
+            previous_links = _previous_develop_links(
+                previously_installed, self._buildout_path)
 
             here = os.getcwd()
         try:
@@ -1099,11 +1129,7 @@ class Buildout(DictMixin):
                 # if we had an error, we need to roll back changes, by
                 # removing any files we created.
                 self._sanity_check_develop_eggs_files(dest, old_files)
-                self._uninstall('\n'.join(
-                    [os.path.join(dest, f)
-                     for f in os.listdir(dest)
-                     if f not in old_files
-                     ]))
+                self._uninstall(_new_develop_eggs(dest, old_files))
                 raise
 
             else:
