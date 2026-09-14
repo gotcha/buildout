@@ -186,6 +186,42 @@ bug.
   environment, so diff the environments first (`env | grep -i nix`,
   `sys.path` dumps) before suspecting the code under test.
 
+## Windows CI watchdog
+
+The Windows leg is the one CI surface no local checkout can
+reproduce, so failures there arrive as surprises. Check it on a
+regular cadence and route real failures to a subagent.
+
+- **Check at the start of every turn that works in this
+  checkout.** List recent runs for the current branch
+  (`gh run list --branch "$(git branch --show-current)" --limit 5`)
+  and inspect the Windows job of any failed run
+  (`gh run view <run-id> --json jobs`). A scheduled Buzz workflow
+  trigger gives true periodicity. The check is the same however
+  the turn starts.
+- **Classify before fixing.** Nix store errors, runner
+  provisioning failures, and network timeouts are flakes. Re-run
+  them (`gh run rerun <run-id> --failed`) and move on. Only a
+  real test or build failure earns a fix.
+- **One failure, one subagent.** Before delegating, check the
+  channel and the commits on top of the failing run's head SHA.
+  A fix already in flight means no new agent.
+- **The subagent's mission** (goose `delegate`): pull the failed
+  job's log
+  (`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs`),
+  trace to the root cause, apply the smallest truthful fix, and
+  push to the same branch (append-only, regular push). Verify
+  locally what is verifiable. Unit tests pin classification and
+  parsing logic on every platform; Windows-only behavior (path
+  existence, URI conversion, console scripts) is verified by the
+  Windows leg on the next run. The subagent posts the diagnosis
+  and the new run id to the channel and ends its turn without
+  waiting on CI.
+- **Suspect platform assumptions first.** Most Windows-only
+  failures live in shared code, not in the test: path vs URL
+  classification, `sys.platform` branches, line endings, shell
+  quoting, case-insensitive filesystems.
+
 ## Static tier (ty)
 
 `make typecheck` gates on Astral's `ty` (provided by the devenv) at zero
