@@ -256,7 +256,22 @@ class BuildoutCi:
             # caches), but the harness cell needs the module source and
             # its tests: graft the dagger/ dir in from module_source.
             ctr = ctr.with_directory("/src/dagger", module_source)
-        for command in job.commands:
+        for index, command in enumerate(job.commands):
+            if job.family == "scripts" and index == 1:
+                # mount the sandbox egg caches only after the makefile's
+                # `uv venv sandbox` has run: with UV_VENV_CLEAR set, uv
+                # clears the target directory, which would empty a cache
+                # mounted there before venv creation
+                ctr = (
+                    ctr.with_mounted_cache(
+                        "/src/sandbox/eggs",
+                        dag.cache_volume(f"buildout-ci-scripts-eggs-py{job.python}-{job.package}"),
+                    )
+                    .with_mounted_cache(
+                        "/src/sandbox/downloads",
+                        dag.cache_volume(f"buildout-ci-scripts-downloads-py{job.python}-{job.package}"),
+                    )
+                )
             ctr = ctr.with_exec(list(command))
             try:
                 await ctr.stdout()
