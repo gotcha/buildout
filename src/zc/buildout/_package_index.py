@@ -53,7 +53,8 @@ import urllib.parse
 import urllib.request
 from fnmatch import translate
 from functools import wraps
-from typing import Any, BinaryIO, Callable, Dict, Iterable, Iterator, List, NoReturn, Optional, Tuple, Union, NamedTuple, cast
+from typing import Any, BinaryIO, NoReturn, Optional, Union, NamedTuple, cast
+from collections.abc import Callable, Iterable, Iterator
 
 import setuptools
 from pkg_resources import (
@@ -223,7 +224,7 @@ def parse_requirement_arg(spec: str) -> Requirement:
         ) from e
 
 
-def parse_bdist_wininst(name: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+def parse_bdist_wininst(name: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Return (base,pyversion) or (None,None) for possible .exe name"""
 
     lower = name.lower()
@@ -247,7 +248,7 @@ def parse_bdist_wininst(name: str) -> Tuple[Optional[str], Optional[str], Option
     return base, py_ver, plat
 
 
-def egg_info_for_url(url: str) -> Tuple[str, str]:
+def egg_info_for_url(url: str) -> tuple[str, str]:
     parts = urllib.parse.urlparse(url)
     _scheme, server, path, _parameters, _query, fragment = parts
     base = urllib.parse.unquote(path.split('/')[-1])
@@ -474,7 +475,7 @@ class PackageIndex(Environment):
     def __init__(
         self,
         index_url: str = "https://pypi.org/simple/",
-        hosts: Tuple[str, ...]=('*',),
+        hosts: tuple[str, ...]=('*',),
         ca_bundle: Optional[str]=None,
         verify_ssl: bool = True,
         *args: Any,
@@ -485,7 +486,7 @@ class PackageIndex(Environment):
         self.scanned_urls: dict = {}
         self.fetched_urls: dict = {}
         # package name -> {package page url: True}
-        self.package_pages: Dict[str, Dict[str, bool]] = {}
+        self.package_pages: dict[str, dict[str, bool]] = {}
         self.allows = re.compile('|'.join(map(translate, hosts))).match
         # None once prescan() has run: from then on, scan immediately.
         self.to_scan: Optional[list] = []
@@ -592,7 +593,7 @@ class PackageIndex(Environment):
         is_file = s and s.group(1).lower() == 'file'
         return bool(is_file or self.allows(urllib.parse.urlparse(url)[1]))
 
-    def scan_egg_links(self, search_path: List[str]) -> None:
+    def scan_egg_links(self, search_path: list[str]) -> None:
         dirs = filter(os.path.isdir, search_path)
         egg_links = (
             (path, entry)
@@ -618,7 +619,7 @@ class PackageIndex(Environment):
             dist.precedence = SOURCE_DIST
             self.add(dist)
 
-    def _scan(self, link: str) -> Union[Tuple[str, str], Tuple[None, None]]:
+    def _scan(self, link: str) -> Union[tuple[str, str], tuple[None, None]]:
         # Process a URL to see if it's for a package page
         NO_MATCH_SENTINEL = None, None
         if not link.startswith(self.index_url):
@@ -733,7 +734,7 @@ class PackageIndex(Environment):
                 "possible download problem?"
             )
 
-    def add_find_links(self, urls: List[str]) -> None:
+    def add_find_links(self, urls: list[str]) -> None:
         """Add `urls` to the list that will be prescanned for searches"""
         for url in urls:
             if (
@@ -1143,7 +1144,7 @@ class PackageIndex(Environment):
         raise DistutilsError(f"Unexpected HTML page found at {url}")
 
     @staticmethod
-    def _vcs_split_rev_from_url(url: str) -> Tuple[str, Optional[str]]:
+    def _vcs_split_rev_from_url(url: str) -> tuple[str, Optional[str]]:
         """
         Given a possible VCS URL, return a clean URL and resolved revision if any.
 
@@ -1271,7 +1272,7 @@ class PyPIConfig(configparser.RawConfigParser):
             _cfg_read_utf8_with_fallback(self, rc)
 
     @property
-    def creds_by_repository(self) -> Dict[Any, Any]:
+    def creds_by_repository(self) -> dict[Any, Any]:
         sections_with_repositories = [
             section
             for section in self.sections()
@@ -1280,7 +1281,7 @@ class PyPIConfig(configparser.RawConfigParser):
 
         return dict(map(self._get_repo_cred, sections_with_repositories))
 
-    def _get_repo_cred(self, section: str) -> Tuple[str, Credential]:
+    def _get_repo_cred(self, section: str) -> tuple[str, Credential]:
         repo = self.get(section, 'repository').strip()
         return repo, Credential(
             self.get(section, 'username').strip(),
@@ -1346,7 +1347,7 @@ def open_with_auth(url: str, opener: Callable[..., Any]=urllib.request.urlopen) 
 
 # copy of urllib.parse._splituser from Python 3.8
 # See https://github.com/python/cpython/issues/80072.
-def _splituser(host: str) -> Tuple[Optional[str], str]:
+def _splituser(host: str) -> tuple[Optional[str], str]:
     """splituser('user[:passwd]@host[:port]')
     --> 'user[:passwd]', 'host[:port]'."""
     user, delim, host = host.rpartition('@')

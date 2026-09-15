@@ -36,7 +36,8 @@ warnings.filterwarnings('ignore', message='Setuptools is replacing distutils.')
 
 import sys
 import contextlib
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 import zc.buildout.patches  # NOQA
 
 

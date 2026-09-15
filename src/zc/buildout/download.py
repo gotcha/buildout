@@ -26,7 +26,7 @@ import shutil
 import sys
 import tempfile
 import zc.buildout
-from typing import Dict, Optional, Tuple, Union
+from typing import Optional, Union
 
 
 class ChecksumError(zc.buildout.UserError):
@@ -50,7 +50,7 @@ class Download:
 
     """
 
-    def __init__(self, options: Optional[Dict[str, str]]=None, cache: Optional[Union[str, int]]=-1, namespace: Optional[str]=None,
+    def __init__(self, options: Optional[dict[str, str]]=None, cache: Optional[Union[str, int]]=-1, namespace: Optional[str]=None,
                  offline: Union[int, bool]=-1, fallback: bool=False, hash_name: bool=False, logger: Optional[logging.Logger]=None) -> None:
         if options is None:
             options = {}
@@ -81,7 +81,7 @@ class Download:
         if self.download_cache is not None:
             return os.path.join(self.download_cache, self.namespace or '')
 
-    def __call__(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> Tuple[str, bool]:
+    def __call__(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> tuple[str, bool]:
         """Download a file according to the utility's configuration.
 
         url: URL to download
@@ -98,7 +98,7 @@ class Download:
 
         return locate_at(local_path, path), is_temp
 
-    def download_cached(self, url: str, md5sum: Optional[str]=None) -> Tuple[str, bool]:
+    def download_cached(self, url: str, md5sum: Optional[str]=None) -> tuple[str, bool]:
         """Download a file from a URL using the cache.
 
         This method assumes that the cache has been configured. Optionally, it
@@ -144,7 +144,7 @@ class Download:
 
         return cached_path, is_temp
 
-    def download(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> Tuple[str, bool]:
+    def download(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> tuple[str, bool]:
         """Download a file from a URL to a given or temporary path.
 
         An online resource is always downloaded to a temporary file and moved

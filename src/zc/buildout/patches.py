@@ -12,7 +12,7 @@
 #
 ##############################################################################
 
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 
 def patch_Distribution() -> None:
@@ -22,7 +22,7 @@ def patch_Distribution() -> None:
     except ImportError:
         return
 
-    def hashcmp(self: Any) -> Tuple[Any, ...]:
+    def hashcmp(self: Any) -> tuple[Any, ...]:
         if hasattr(self, '_hashcmp'):
             return self._hashcmp
         else:

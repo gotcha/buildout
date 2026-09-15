@@ -6,7 +6,8 @@ import warnings
 import sysconfig
 import distutils.util  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 
-from typing import Callable, Optional, Tuple
+from typing import Optional
+from collections.abc import Callable
 
 
 def get_config_var(var: str) -> Optional[str]:
@@ -38,7 +39,7 @@ def get_impl_ver() -> str:
     return impl_ver
 
 
-def get_impl_version_info() -> Tuple[int, ...]:
+def get_impl_version_info() -> tuple[int, ...]:
     """Return sys.version_info-like tuple for use in decrementing the minor
     version."""
     if get_abbr_impl() == 'pp':

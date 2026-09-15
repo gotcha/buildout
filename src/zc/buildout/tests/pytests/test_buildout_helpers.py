@@ -4,7 +4,7 @@ import os
 import pdb
 import sys
 from io import StringIO
-from typing import Dict, Union
+from typing import Union
 
 import pkg_resources
 import pytest
@@ -800,7 +800,7 @@ def test_uninstall_stale_parts_keeps_up_to_date_part(tmp_path):
     (tmp_path / 'f').write_text('x')
     calls = []
     updates = []
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'buildout': {'parts': 'a'},
         'a': {'__buildout_installed__': 'f', 'mode': '1'},
     }
@@ -820,7 +820,7 @@ def test_uninstall_stale_parts_keeps_up_to_date_part(tmp_path):
 def test_uninstall_stale_parts_reinstalls_changed_part():
     calls = []
     updates = []
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'buildout': {'parts': 'a'},
         'a': {'__buildout_installed__': '', 'mode': '1'},
     }
@@ -839,7 +839,7 @@ def test_uninstall_stale_parts_reinstalls_changed_part():
 
 def test_uninstall_stale_parts_reinstalls_when_installed_file_missing():
     calls = []
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'buildout': {'parts': 'a'},
         'a': {'__buildout_installed__': 'gone', 'mode': '1'},
     }
@@ -857,7 +857,7 @@ def test_uninstall_stale_parts_reinstalls_when_installed_file_missing():
 
 def test_uninstall_stale_parts_keeps_missing_part_when_not_uninstalling():
     calls = []
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {'buildout': {'parts': 'a'}}
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {'buildout': {'parts': 'a'}}
     result = _uninstall_stale_parts(
         [], ['a'], installed_part_options,
         uninstall_missing=False, installed_exists=True,
@@ -873,7 +873,7 @@ def test_uninstall_stale_parts_keeps_missing_part_when_not_uninstalling():
 def test_uninstall_stale_parts_removes_missing_parts_in_reverse():
     calls = []
     updates = []
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {'buildout': {'parts': 'a b'}}
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {'buildout': {'parts': 'a b'}}
     result = _uninstall_stale_parts(
         [], ['a', 'b'], installed_part_options,
         uninstall_missing=True, installed_exists=True,
@@ -889,7 +889,7 @@ def test_uninstall_stale_parts_removes_missing_parts_in_reverse():
 
 def test_uninstall_stale_parts_logs_option_changes_at_debug(caplog):
     logger = logging.getLogger('test.uninstall.debug')
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'buildout': {'parts': 'a'},
         'a': {'__buildout_installed__': '', 'mode': '1'},
     }
@@ -972,7 +972,7 @@ def test_update_part_success_merges_files():
         def update(self):
             return ['old2', 'new1']
 
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'buildout': {'parts': 'p'},
         'p': {'__buildout_installed__': 'old1\nold2'},
     }
@@ -990,7 +990,7 @@ def test_update_part_none_result_keeps_previous_files():
         def update(self):
             return None
 
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'p': {'__buildout_installed__': 'old1'},
     }
     installed_files, new_files = _update_part(
@@ -1010,7 +1010,7 @@ def test_update_part_failure_rolls_back():
     uninstalled = []
     updates = []
     installed_parts = ['p', 'q']
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'p': {'__buildout_installed__': 'old1'},
     }
     with pytest.raises(RuntimeError):
@@ -1030,7 +1030,7 @@ def test_update_part_failure_without_installed_file_skips_update():
             raise RuntimeError('boom')
 
     updates = []
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'p': {'__buildout_installed__': 'old1'},
     }
     with pytest.raises(RuntimeError):
@@ -1048,7 +1048,7 @@ def test_update_part_without_update_method_warns_and_uses_install(caplog):
             return ['f']
 
     logger = logging.getLogger('test.updatepart.fallback')
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'p': {'__buildout_installed__': ''},
     }
     with caplog.at_level(logging.WARNING, logger='test.updatepart.fallback'):
@@ -1063,7 +1063,7 @@ def test_update_part_without_update_method_warns_and_uses_install(caplog):
 
 def test_record_installed_part_moves_part_to_end():
     saved = {'recipe': 'x'}
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'buildout': {'parts': 'a b'},
     }
     result = _record_installed_part(
@@ -1075,7 +1075,7 @@ def test_record_installed_part_moves_part_to_end():
 
 
 def test_record_installed_part_empty_files_list():
-    saved: Dict[str, str] = {}
+    saved: dict[str, str] = {}
     result = _record_installed_part('p', 'sig', saved, [], [], {})
     assert result == ['p']
     assert saved['__buildout_installed__'] == ''
@@ -1083,7 +1083,7 @@ def test_record_installed_part_empty_files_list():
 
 def test_save_or_update_installed_saves_when_needed():
     saved = []
-    installed_part_options: Dict[str, Union[Options, Dict[str, str]]] = {
+    installed_part_options: dict[str, Union[Options, dict[str, str]]] = {
         'buildout': {'parts': ''},
     }
     exists = _save_or_update_installed(

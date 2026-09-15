@@ -23,7 +23,8 @@ import logging
 
 from packaging import markers
 from io import StringIO, TextIOWrapper
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Optional, Union
+from collections.abc import Callable
 
 
 Marker = markers.Marker
@@ -120,7 +121,7 @@ option_start = re.compile(
 
 leading_blank_lines = re.compile(r"^(\s*\n)+")
 
-def _merge_option(cursect: Dict[str, str], optname: str, optval: str) -> None:
+def _merge_option(cursect: dict[str, str], optname: str, optval: str) -> None:
     """Merge one option line into a section dict.
 
     A ``name +``/``name -`` operator accumulates values across
@@ -168,7 +169,7 @@ def _evaluate_section_condition(head: str, expression: str, tail: str, context_g
         return eval(head + expr + tail, context_getter())[0]
 
 
-def _append_continuation(cursect: Dict[str, str], optname: str, line: str, blockmode: bool) -> None:
+def _append_continuation(cursect: dict[str, str], optname: str, line: str, blockmode: bool) -> None:
     """Append a continuation line to the current option value."""
     if blockmode:
         line = line.rstrip()
@@ -177,7 +178,7 @@ def _append_continuation(cursect: Dict[str, str], optname: str, line: str, block
     cursect[optname] = "%s\n%s" % (cursect[optname], line)
 
 
-def _finalize_sections(sections: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, str]]:
+def _finalize_sections(sections: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
     """Dedent and right-strip multi-line option values in place."""
     for sectname in sections:
         section = sections[sectname]
@@ -190,7 +191,7 @@ def _finalize_sections(sections: Dict[str, Dict[str, str]]) -> Dict[str, Dict[st
 
 
 def _handle_continuation(
-        line: str, cursect: Optional[Dict[str, str]], optname: Optional[str],
+        line: str, cursect: Optional[dict[str, str]], optname: Optional[str],
         section_condition: bool, blockmode: bool) -> bool:
     """Handle a continuation line of the current option value.
 
@@ -210,7 +211,7 @@ def _handle_continuation(
     return True
 
 
-def _expression_context(context: List[Any], exp_globals: Callable) -> Any:
+def _expression_context(context: list[Any], exp_globals: Callable) -> Any:
     """Return the evaluation context for old-style section expressions,
     lazily populated from ``exp_globals``.
 
@@ -225,9 +226,9 @@ def _expression_context(context: List[Any], exp_globals: Callable) -> Any:
 
 
 def _start_section(
-        header: re.Match, sections: Dict[str, Dict[str, str]],
-        context: List[Any], exp_globals: Callable,
-        ) -> Tuple[Optional[Dict[str, str]], bool]:
+        header: re.Match, sections: dict[str, dict[str, str]],
+        context: list[Any], exp_globals: Callable,
+        ) -> tuple[Optional[dict[str, str]], bool]:
     """Start the section named by a section header match.
 
     Return ``(cursect, section_condition)``; the condition is reset to
@@ -268,10 +269,10 @@ def _handle_preamble_line(line: str, fpname: str, lineno: int) -> None:
 
 
 def _handle_option_line(
-        line: str, cursect: Dict[str, str], optname: Optional[str],
+        line: str, cursect: dict[str, str], optname: Optional[str],
         blockmode: bool, section_condition: bool, fpname: str,
         lineno: int, error: Optional[ParsingError],
-        ) -> Optional[Tuple[Optional[str], bool, Optional[ParsingError]]]:
+        ) -> Optional[tuple[Optional[str], bool, Optional[ParsingError]]]:
     """Process an option or bogus line within a section.
 
     Return None when the line must be skipped: an option filtered out
@@ -303,7 +304,7 @@ def _handle_option_line(
     return optname, blockmode, error
 
 
-def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Type[dict], Callable]=dict) -> Dict[str, Dict[str, str]]:
+def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[type[dict], Callable]=dict) -> dict[str, dict[str, str]]:
     """Parse a sectioned setup file.
 
     The sections in setup files contain a title line at the top,
@@ -327,7 +328,7 @@ def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[Ty
     sections = {}
     # the current section condition, possibly updated from a section expression
     section_condition = True
-    context: List[Any] = []  # lazy expression context, see _expression_context
+    context: list[Any] = []  # lazy expression context, see _expression_context
     cursect = None                            # None, or a dictionary
     blockmode = False
     optname = None

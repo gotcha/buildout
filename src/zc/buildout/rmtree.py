@@ -20,7 +20,7 @@ import time
 import unittest
 
 from types import TracebackType
-from typing import Callable, Tuple, Type
+from collections.abc import Callable
 
 def rmtree (path: str) -> None:
     """
@@ -60,7 +60,7 @@ def rmtree (path: str) -> None:
     0
     """
     def retry_writeable (func: Callable[[str], None], path: str,
-                         exc: Tuple[Type[BaseException], BaseException,
+                         exc: tuple[type[BaseException], BaseException,
                                     TracebackType]) -> None:
         os.chmod (path, 384) # 0600
         for i in range(10):
