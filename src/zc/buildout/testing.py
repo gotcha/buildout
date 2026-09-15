@@ -245,6 +245,39 @@ class Buildout(zc.buildout.buildout.Buildout):
 
     Options = TestOptions
 
+def hermetic_pip_env():
+    """Cut test-spawned pips off from any package index.
+
+    The pips the suites spawn (build isolation on sdist and editable
+    installs, ``python -m build``) resolve their build requirements
+    (setuptools, wheel) from the ambient index otherwise. With no index
+    allowed and the wheels seeded by prepare.sh in downloads/test-seed
+    as find-links, suite runs need no network index at all.
+
+    Returns a callable restoring the previous environment, or None when
+    the seed directory is absent (tests run without prepare.sh): the
+    ambient environment is then left alone, the pre-seed behavior.
+    """
+    seed = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        os.pardir, os.pardir, os.pardir, 'downloads', 'test-seed')
+    if not os.path.isdir(seed):
+        return None
+    old = {name: os.environ.get(name)
+           for name in ('PIP_NO_INDEX', 'PIP_FIND_LINKS')}
+    os.environ['PIP_NO_INDEX'] = '1'
+    os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
+
+    def restore():
+        for name, value in old.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    return restore
+
+
 def buildoutSetUp(test):
 
     test.globs['__tear_downs'] = __tear_downs = []
@@ -292,6 +325,10 @@ def buildoutSetUp(test):
     zc.buildout.easy_install.default_index_url = 'file://'+tmp
     os.environ['buildout_testing_index_url'] = (
         zc.buildout.easy_install.default_index_url)
+
+    restore = hermetic_pip_env()
+    if restore is not None:
+        register_teardown(restore)
 
     def tmpdir(name):
         path = os.path.join(base, name)

@@ -120,6 +120,19 @@ echo "pip list output:"
 "$VENV_PYTHON" -m pip list --verbose
 
 echo
+echo "Seeding downloads/test-seed with the setuptools and wheel wheels just installed."
+echo "The test suites resolve their spawned pips' build requirements from there"
+echo "(see buildoutSetUp in src/zc/buildout/testing.py), so suite runs need no index."
+SEED="$HERE/downloads/test-seed"
+mkdir -p "$SEED"
+rm -f "$SEED"/*.whl
+SEED_SETUPTOOLS=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("setuptools"))')
+SEED_WHEEL=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("wheel"))')
+"$VENV_PYTHON" -m pip download --quiet --no-deps --dest "$SEED" \
+    "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL"
+ls -l "$SEED"
+
+echo
 echo "Building source dist, so we get an egg-info directory."
 "$VENV_PYTHON" -m build --sdist .
 

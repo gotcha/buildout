@@ -3844,6 +3844,10 @@ def test_suite():
                 with open(os.path.join(*path), 'w') as f:
                     f.write(text)
 
+            restore = zc.buildout.testing.hermetic_pip_env()
+            if restore is not None:
+                setupstack.register(test, restore)
+
             test.globs.update(
                 run_buildout=zc.buildout.testing.run_buildout_in_process,
                 yup=lambda cond, orelse='Nope': None if cond else orelse,

@@ -3,6 +3,7 @@ bin/
 build/
 include/
 develop-eggs/
+downloads/
 eggs/
 parts/
 python*/
