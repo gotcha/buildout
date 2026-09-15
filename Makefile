@@ -85,7 +85,8 @@ complexity:
 	# Cyclomatic-complexity budget gate, a static tier of
 	# verify-buildout: no function or method may exceed its entry in
 	# etc/complexity-baseline.json, and code without an entry must be
-	# radon grade B or better. radon comes from the devenv; the gate
+	# radon grade B or better. radon comes from the devenv (the
+	# daggerized CI pins the same version in its radon cell); the gate
 	# script (etc/complexity_gate.py) is stdlib-only. After landing an
 	# accepted simplification, refresh and commit the baseline:
 	# make complexity-baseline

@@ -106,13 +106,16 @@ def _workflow_cells(data):
         "setuptools": matrix["setuptools-version"][0],
     }
 
-    # static tier: the lint and typecheck jobs
+    # static tier: the lint, typecheck, and complexity jobs
     steps = {step["name"]: step for step in wf["lint"]["steps"] if "name" in step}
     python, command = _devenv_run(steps["Run ruff"]["run"])
     cells["ruff"] = {"python": python, "commands": (command,), "family": "static"}
     steps = {step["name"]: step for step in wf["typecheck"]["steps"] if "name" in step}
     python, command = _devenv_run(steps["Run ty"]["run"])
     cells["ty"] = {"python": python, "commands": (command,), "family": "static"}
+    steps = {step["name"]: step for step in wf["complexity"]["steps"] if "name" in step}
+    python, command = _devenv_run(steps["Run complexity gate"]["run"])
+    cells["radon"] = {"python": python, "commands": (command,), "family": "static"}
 
     # coverage variants
     for wf_name, job_name in (("coverage", "coverage-legacy"), ("coverage-pytest", "coverage-pytest")):
@@ -154,7 +157,7 @@ def test_jobs_module_imports_nothing_from_dagger():
 
 def test_workflow_cells_match_job_table(workflow):
     cells = _workflow_cells(workflow)
-    assert len(cells) == 44
+    assert len(cells) == 45
     by_name = {job.name: job for job in jobs.JOBS}
     missing = set(cells) - set(by_name)
     assert not missing, f"workflow cells without a Job row: {sorted(missing)}"
@@ -192,13 +195,13 @@ def test_family_invariants():
         "python": 6,
         "pip": 12,
         "scripts": 22,
-        "static": 2,
+        "static": 3,
         "coverage": 2,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 55
+    assert len(jobs.JOBS) == 56
 
 
 def test_select_jobs_pip():

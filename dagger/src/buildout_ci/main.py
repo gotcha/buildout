@@ -64,7 +64,7 @@ TRANSIENT_SIGNATURES = (
 
 # Fast cells chosen to prove the module machinery end to end (base
 # image, devpi wiring, module graft, exec layers), not repo coverage.
-SMOKE_JOBS = ("ruff", "ty", "module-tests", "scripts-zest.releaser-py3.12")
+SMOKE_JOBS = ("ruff", "ty", "radon", "module-tests", "scripts-zest.releaser-py3.12")
 
 
 def _exec_output(exc: dagger.ExecError) -> str:
