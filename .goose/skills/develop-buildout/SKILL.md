@@ -165,6 +165,17 @@ so CI also runs locally via `dagger call ci`. Rules for changing it:
   workflow's dagger matrix, so CI runs it too.
 - Module (`dagger/src/`) and `news/` edits do not invalidate the job
   cells' engine cache by design — keep it that way.
+- Cells fetch from PyPI directly; there is no proxy container. The
+  per-command 3-attempt retry on transient fetch signatures (both
+  "No matching distribution" wordings, connection resets, timeouts) is
+  PyPI-outage tolerance — keep it, and add newly observed transient
+  wordings to `TRANSIENT_SIGNATURES` when CI shows one.
+- Verify with the dagger axis first when the result must match CI
+  (module, workflow, or bootstrap-path changes): `dagger call smoke`
+  before the suites when `prepare.sh`/`Makefile`/`devenv.nix` moved,
+  after the suites on the push candidate otherwise. The full reasoning
+  and the cache expectations live in verify-buildout ("Daggerized CI
+  axis").
 
 ## Reproducing CI failures: match the CI surface
 

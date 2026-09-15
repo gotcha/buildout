@@ -45,8 +45,11 @@ dagger engine self-provisions on the runner's docker daemon.
 
 `dagger/src/buildout_ci/` is a Dagger module whose Job table
 (`jobs.py`, pure data) transcribes this workflow's matrix, so
-`dagger call ci` replays the whole CI in containers with a devpi PyPI
-cache in front. The workflow's `dagger` job runs one GH job per module
+`dagger call ci` replays the whole CI in containers. Cells fetch from
+PyPI directly (no proxy), with per-Python pip/uv cache volumes
+persisting the bootstrap fetches across cells and runs; an unchanged
+cell reruns in seconds on the exec-layer cache. The workflow's
+`dagger` job runs one GH job per module
 family (`setuptools`, `python`, `pip`, `scripts`, `static`,
 `coverage`) plus `module` (the module's own test harness in
 `dagger/tests/`). The two lists — workflow matrix and Job table — must
@@ -68,9 +71,10 @@ Verifying a change to the dagger module itself:
 Reading a failed dagger job on GitHub: the job summary prints one
 `PASS`/`FAIL` line per cell; for the failing cell's detail fetch the
 job log (`gh api repos/<owner>/<repo>/actions/jobs/<id>/logs`) and
-search backwards from the `FAIL <name>` line. Transient devpi/PyPI
-fetch errors ("Can't download http://devpi:...") are retried by the
-module; persistent ones mean the devpi proxy or the pin set needs a
+search backwards from the `FAIL <name>` line. Transient fetch errors
+("No matching distribution found" / the pip < 23 plural wording,
+connection resets, timeouts) get three attempts per command; a failure
+that survives them is persistent and means the pin set or PyPI needs a
 look.
 
 ## Proof ladder for a CI change

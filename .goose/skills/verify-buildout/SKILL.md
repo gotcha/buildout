@@ -116,7 +116,9 @@ drive runs in its own `mktemp -d` project dir with its own
 side as long as each has its own `$D`. The only shared, mutable state
 is the pip download cache (`~/.cache/pip`) — reads/writes there are
 safe but mean "offline" behavior is not truly hermetic unless pip is
-starved; see Gotchas in the feature files.
+starved; see Gotchas in the feature files. (The suites, by contrast,
+ARE index-hermetic: their spawned pips run with `PIP_NO_INDEX` against
+seeded wheels — see [`features/repo-test-suites.md`](./features/repo-test-suites.md).)
 
 Feature recipes live in [`features/`](./features/README.md) — read the
 index, then follow the feature file. The tiers:
@@ -172,25 +174,52 @@ the suites and never substitute for them.
    (easy_install.py and buildout.py stay lenient longest); until
    then the gate is the trend.
 
-## Daggerized CI axis
+## Daggerized CI axis (use it first)
 
-The repo's CI matrix is mirrored by a Dagger module in `dagger/`, so
-any cell runs locally in a container with a warm devpi cache:
+The repo's CI matrix is mirrored by a Dagger module in `dagger/`:
 `dagger call jobs` lists the cells, `dagger call job --name <cell>`
-runs one, `dagger call ci [--family <name>]` runs a family or all.
-This axis complements the suites above for environment-shaped
-questions (does this pin set install? does the suite pass on 3.14?)
-without touching your checkout's `venvs/`/`eggs/`. An unchanged repo
-reruns a finished cell in seconds; edits to project files (`src/`,
-`Makefile`, `pyproject.toml`, …) invalidate, while module
+runs one, `dagger call ci [--family <name>]` runs a family or all,
+`dagger call smoke` runs the fast self-check set (the static tier, the
+module harness, one scripts cell; ~2 min warm). Reach for this axis
+FIRST whenever the answer must match CI: environment-shaped questions
+(does this pin set install? does the suite pass on 3.14?), workflow or
+module changes, and the pre-push parity check. It adds no moving parts
+beyond the engine: cells fetch from PyPI directly, with per-Python
+pip/uv cache volumes for the bootstrap fetches. It never touches your
+checkout's `venvs/`/`eggs/`.
+
+Cache expectations (measured 2026-09-15, engine 0.21.9): an unchanged
+repo reruns a finished cell in seconds (exec-layer cache); a static
+cell costs ~10 min fully cold, seconds warm. A re-executed suite cell
+saves only its bootstrap fetches (~10% of the cell) — budget a suite
+cell at roughly its suite's wall time. Edits to project files (`src/`,
+`Makefile`, `pyproject.toml`, …) invalidate the cells; module
 (`dagger/src/`) and `news/` edits do not.
+
+Order the smoke set by what the change breaks first: a bootstrap-path
+change (`prepare.sh`, `Makefile`, `devenv.nix`) can void every suite
+run, so run `dagger call smoke` BEFORE the suites; for suite-internal
+changes run the suites first (they are the faster decisive probe) and
+smoke last, on the exact tree you will push. The suites above stay the
+official truth for behavior; the local `make` loop stays the
+iteration tool for debugging a red test.
 
 For changes to the dagger module itself, the proof ladder is its own
 harness: `uvx --with pytest --with pyyaml python -m pytest
 dagger/tests -q` for the fast loop, `dagger call ci --family module`
-for the dogfooded run, then a `static` family run. Details and the
+for the dogfooded run, then a real cell (`dagger call job --name
+<cell>`) — the harness cannot see container behavior. Details and the
 failure-reading recipe live in
 [`features/ci.md`](./features/ci.md) ("The daggerized mirror").
+
+Engine care: the engine runs in the devenv's podman machine. If dagger
+calls hang at "connecting to engine" or die with a terminated
+`podman exec`, check the container
+(`podman --connection devenv ps -a --filter name=devenv-dagger`) and
+start it (`podman --connection devenv start devenv-dagger`) — a podman
+machine restart does not always bring it back. Keep long dagger calls
+in the foreground of their shell: backgrounded with stdin closed, the
+CLI's `podman exec -i` bridge gets EOF and the call dies mid-run.
 
 ## Evidence
 
