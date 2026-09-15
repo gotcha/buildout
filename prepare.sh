@@ -132,6 +132,24 @@ SEED_WHEEL=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version(
     "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL"
 ls -l "$SEED"
 
+# The spawned builds' expectations match modern setuptools: PEP 660's
+# build_editable hook (added in setuptools 64) and normalized wheel
+# filenames (fixed in 75.8.x). A cell pinning an older setuptools keeps
+# it at runtime, but the seed must also carry a floor version: build
+# environments resolve the highest version find-links offers. Without
+# the floor, old-setuptools cells fail where the pre-hermetic proxy
+# setup did not (GH run 34977253833).
+SEED_FLOOR_SETUPTOOLS="75.8.2"
+SV=$(echo "$SEED_SETUPTOOLS" | cut -d "." -f-2 | sed "s/\.//")
+SF=$(echo "$SEED_FLOOR_SETUPTOOLS" | cut -d "." -f-2 | sed "s/\.//")
+if test "$SV" -lt "$SF"; then
+  echo
+  echo "Adding setuptools floor $SEED_FLOOR_SETUPTOOLS to the seed for spawned builds."
+  "$VENV_PYTHON" -m pip download --quiet --no-deps --dest "$SEED" \
+      "setuptools==$SEED_FLOOR_SETUPTOOLS"
+  ls -l "$SEED"
+fi
+
 echo
 echo "Building source dist, so we get an egg-info directory."
 "$VENV_PYTHON" -m build --sdist .
