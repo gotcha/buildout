@@ -129,7 +129,7 @@ class Download:
                     _, is_temp = self.download(url, md5sum, cached_path)
                 except ChecksumError:
                     raise
-                except Exception:  # noqa: S110 - deliberately silent:
+                except Exception:  # noqa: BLE001, S110 - deliberately silent:
                     # a failed re-download leaves the stale cache entry
                     # in place for the fallback below.
                     pass

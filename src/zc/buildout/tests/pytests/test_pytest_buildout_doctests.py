@@ -127,13 +127,15 @@ def test_buildout_error_handling(easy_install_env):
     try:
         buildout['eek']
         assert False, "Expected MissingSection not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(type(_exc).__name__ + ": " + str(_exc), "MissingSection: The referenced section, 'eek', was not defined.", N)
     # Asking for an option that doesn't exist, a MissingOption error is raised:
     try:
         buildout['buildout']['eek']
         assert False, "Expected MissingOption not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(type(_exc).__name__ + ": " + str(_exc), 'MissingOption: Missing option: buildout:eek', N)
     # It is an error to create a variable-reference cycle:
     write(sample_buildout, 'buildout.cfg', '\n[buildout]\nparts =\nx = ${buildout:y}\ny = ${buildout:z}\nz = ${buildout:x}\n')
@@ -1946,7 +1948,8 @@ def test_error_installing_in_offline_mode_if_dont_have_needed_dist(easy_install_
             ['demo==0.2'], None,
             links=[link_server], index=link_server+'index/')
         assert False, "Expected and can't install one in offline (no-install) mode. not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(type(_exc).__name__ + ": " + str(_exc), "and can't install one in offline (no-install) mode.", N)
 
 def test_error_building_in_offline_mode_if_dont_have_needed_dist(easy_install_env):
@@ -1957,7 +1960,8 @@ def test_error_building_in_offline_mode_if_dont_have_needed_dist(easy_install_en
           'extdemo', None,
           {}, links=[link_server], index=link_server+'index/')
         assert False, "Expected and can't build one in offline (no-install) mode. not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(type(_exc).__name__ + ": " + str(_exc), "and can't build one in offline (no-install) mode.", N)
 
 def test_buildout_section_shorthand_for_command_line_assignments(easy_install_env):

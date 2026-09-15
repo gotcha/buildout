@@ -60,7 +60,8 @@ When trying to access a file that doesn't exist, we'll get an exception:
 
 >>> try:
 ...     download(server_url+'not-there') # doctest: +ELLIPSIS
-... except Exception:
+... except Exception:  # noqa: BLE001 - fallback marker print;
+...     # the error type is not under test here
 ...     print_('download error')
 ... else:
 ...     print_('woops')
@@ -415,7 +416,8 @@ If the file cannot be served, the cached copy will be used:
 >>> remove(server_data, 'foo.txt')
 >>> try:
 ...     Download()(server_url+'foo.txt') # doctest: +ELLIPSIS
-... except Exception:
+... except Exception:  # noqa: BLE001 - fallback marker print;
+...     # the error type is not under test here
 ...     print_('download error')
 ... else:
 ...     print_('woops')

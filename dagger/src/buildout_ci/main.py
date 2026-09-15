@@ -84,7 +84,8 @@ def _exec_output(exc: dagger.ExecError) -> str:
     for attr in ("stdout", "stderr"):
         try:
             text = getattr(exc, attr, "") or ""
-        except Exception:
+        except Exception:  # noqa: BLE001 - a failed attribute read must
+            # not break summary rendering
             text = ""
         if text.strip():
             parts.append(text.rstrip())
@@ -140,7 +141,8 @@ class BuildoutCi:
             async with semaphore:
                 try:
                     await self._run(source, job, module_source)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - CI aggregation:
+                    # every job failure becomes a FAIL summary line
                     lines = [ln for ln in str(exc).splitlines() if ln.strip()]
                     return f"FAIL {job.name}: {lines[-1] if lines else exc!r}"
                 return f"PASS {job.name}"
@@ -184,7 +186,8 @@ class BuildoutCi:
         for name in SMOKE_JOBS:
             try:
                 await self._run(source, _find_job(name), module_source)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - CI aggregation:
+                # every job failure becomes a FAIL summary line
                 lines = [ln for ln in str(exc).splitlines() if ln.strip()]
                 results.append(f"FAIL {name}: {lines[-1] if lines else exc!r}")
             else:

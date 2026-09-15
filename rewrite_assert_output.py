@@ -101,7 +101,7 @@ def find_assert_output_string_spans(src: str):
                         continue
                     try:
                         value = ast.literal_eval(raw)
-                    except Exception:
+                    except (ValueError, SyntaxError, TypeError):
                         i = j
                         continue
                     if not isinstance(value, str) or '\n' not in value:

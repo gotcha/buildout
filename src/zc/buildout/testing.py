@@ -537,7 +537,7 @@ def start_server(tree):
 def stop_server(url, thread=None):
     try:
         urlopen(url+'__stop__')
-    except Exception:  # noqa: S110 - best-effort stop: the server may
+    except Exception:  # noqa: BLE001, S110 - best-effort stop: the server may
         # already be gone
         pass
     if thread is not None:

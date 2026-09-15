@@ -17,7 +17,8 @@ try:
     )
     sys.setprofile(_tracer)
     atexit.register(_logger.flush)
-except Exception:
+except Exception:  # noqa: BLE001 - tracing setup must never break the
+    # host process; MT_TRACING_DEBUG surfaces the traceback
     import os
     if os.environ.get('MT_TRACING_DEBUG'):
         import traceback

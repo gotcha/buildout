@@ -238,7 +238,8 @@ def test_easy_install_distribution_installation_unknown_extras(easy_install_env)
             ['demo[unknown_extra]'], dest, links=[link_server],
             index=link_server+'index/')
         assert False, "Expected UserError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "Couldn't find the required extra...", N)
     # We can pass the ``allow_unknown_extras`` argument to force the
     # installation to proceed.
@@ -322,7 +323,8 @@ def test_easy_install_specifying_versions(easy_install_env):
             index=link_server+'index/',
             versions = {'demo': '0.2', 'demoneeded': '1.0'})
         assert False, "Expected IncompatibleConstraintError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "The requirement ('demo>0.2') is not allowed by your [versions] constraint (0.2)", N)
     assert_output(str(handler), """
 zc.buildout.easy_install DEBUG
@@ -391,7 +393,8 @@ zc.buildout.easy_install DEBUG
             ['demo'], dest, links=[link_server], index=link_server+'index/',
             )
         assert False, "Expected OR set `allow-picked-versions = true`. not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), 'OR set `allow-picked-versions = true`.', N)
     _val = (zc.buildout.easy_install.allow_picked_versions(True))
     assert repr(_val) == 'False' or str(_val) == 'False'
@@ -1587,7 +1590,8 @@ d  demoneeded-1.1-py2.4.egg
         spec, dest, links=[link_server], index=link_server+'index/',
         versions = {'demo': '0.3'})
         assert False, "Expected zc.buildout.easy_install.IncompatibleConstraintError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "The requirement ('demo==0...", N)
 
 
@@ -2354,7 +2358,8 @@ def test_download(easy_install_env):
     # When trying to access a file that doesn't exist, we'll get an exception:
     try:
         download(server_url+'not-there') # doctest: +ELLIPSIS
-    except Exception:
+    except Exception:  # noqa: BLE001 - fallback marker print;
+        # the error type is not under test here
         print_('download error')
     else:
         print_('woops')
@@ -2374,7 +2379,8 @@ def test_download(easy_install_env):
         download(server_url+'foo.txt',
                  md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     # The error message in the event of an MD5 checksum mismatch for a local file
     # reads somewhat differently:
@@ -2385,7 +2391,8 @@ def test_download(easy_install_env):
         download(join(server_data, 'foo.txt'),
                  md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "MD5 checksum mismatch for local resource at '/sample_files/foo.txt'.", N)
     # Finally, we can download the file to a specified place in the file system:
     target_dir = tmpdir('download-target')
@@ -2400,7 +2407,8 @@ def test_download(easy_install_env):
     try:
         download(server_url+'foo.txt')
         assert False, "Expected UserError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "Couldn't download 'http://localhost/foo.txt' in offline mode.", N)
     # As an exception to this rule, file system paths and URLs in the ``file``
     # scheme will still work:
@@ -2439,7 +2447,8 @@ def test_download(easy_install_env):
     try:
         download(server_url+'foo.txt', md5(b'The wrong text.').hexdigest())
         assert False, "Expected from 'http not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "               from 'http://localhost/foo.txt' at '/download-cache/foo.txt'", N)
     # Trying to access another file at a different URL which has the same base name
     # will result in the cached copy being used:
@@ -2489,7 +2498,8 @@ def test_download(easy_install_env):
     try:
         download(server_url+'foo.txt', md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     ls(cache)
     remove(path)
@@ -2497,7 +2507,8 @@ def test_download(easy_install_env):
     try:
         download(server_url+'bar.txt')
         assert False, "Expected ...404... not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), '...404...', N)
     ls(cache)
     # Finally, let's see what happens if the download cache to be used doesn't exist
@@ -2505,7 +2516,8 @@ def test_download(easy_install_env):
     try:
         Download(cache=join(cache, 'non-existent'))(server_url+'foo.txt')
         assert False, "Expected to be used as a download cache doesn't exist. not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "to be used as a download cache doesn't exist.", N)
     # Using namespace sub-directories of the download cache
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2607,7 +2619,8 @@ def test_download(easy_install_env):
     remove(server_data, 'foo.txt')
     try:
         Download()(server_url+'foo.txt') # doctest: +ELLIPSIS
-    except Exception:
+    except Exception:  # noqa: BLE001 - fallback marker print;
+        # the error type is not under test here
         print_('download error')
     else:
         print_('woops')
@@ -2638,7 +2651,8 @@ def test_download(easy_install_env):
     try:
         download(server_url+'foo.txt', md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
-    except Exception as _exc:
+    except Exception as _exc:  # noqa: BLE001 - the class
+        # and message are pinned by the assertion below
         assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     assert_output(capture_print(cat, cache, 'foo.txt'), 'The wrong text.', N)
     # Configuring the download utility from buildout options

@@ -253,7 +253,8 @@ def emit_example(ex, fixture_var):
         for line in stripped.split('\n'):
             lines.append('        ' + line)
         lines.append(f'        assert False, "Expected {exc_type} not raised"')
-        lines.append('    except Exception as _exc:')
+        lines.append('    except Exception as _exc:  # noqa: BLE001 - the class\n'
+                     '        # and message are pinned by the assertion below')
         lines.append(
             f'        assert_output(type(_exc).__name__ + ": " + str(_exc), {last_line!r}, N)')
 

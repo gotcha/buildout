@@ -2649,7 +2649,8 @@ def _dir_hash(dir: str) -> str:
                 try:
                     with open(path) as f:
                         sections = zc.buildout.configparser.parse(f, path)
-                except Exception:
+                except Exception:  # noqa: BLE001 - any parse failure falls
+                    # back to hashing the raw bytes
                     with open(path, 'rb') as f:
                         data = f.read()
                 else:
@@ -3102,7 +3103,8 @@ def main(args: list[str] | None=None) -> None:
             # Make sure we properly propagate an exit code from a restarted
             # buildout process.
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - top-level error funnel: every
+            # buildout failure is reported through _handle_buildout_error
             _handle_buildout_error(debug)
 
     finally:

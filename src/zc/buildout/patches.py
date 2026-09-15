@@ -30,7 +30,8 @@ def patch_Distribution() -> None:
         else:
             try:
                 parsed_version = self.parsed_version
-            except Exception:
+            except Exception:  # noqa: BLE001 - see the note below: the
+                # InvalidVersion class may come from either packaging copy
                 # You get here when there is an distribution on PyPI
                 # with a version that is no longer seen as valid.
                 # I want to catch version.InvalidVersion, but it may
@@ -246,7 +247,8 @@ def patch_pkg_resources_requirement_contains() -> None:
         # more accurately.
         try:
             return self.specifier.contains(item, prereleases=True)
-        except Exception:
+        except Exception:  # noqa: BLE001 - see the note below: the
+            # InvalidVersion class may come from either packaging copy
             # For example on https://pypi.org/simple/zope-exceptions/
             # the first distribution is zope.exceptions-3.4dev-r73107.tar.gz
             # I want to catch version.InvalidVersion, but it may
@@ -295,7 +297,8 @@ def patch_pkg_resources_working_set_find() -> None:
             return
         if setuptools_version < Version("62"):
             return
-    except Exception:
+    except Exception:  # noqa: BLE001 - defensive probe against
+        # setuptools version oddities; any failure means 'do not patch'
         return
 
     try:

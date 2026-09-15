@@ -502,7 +502,8 @@ class PackageIndex(Environment):
         # ignore invalid versions
         try:
             parse_version(dist.version)
-        except Exception:
+        except Exception:  # noqa: BLE001 - the invalid-version class may
+            # come from the vendored or the public packaging copy
             return None
         return super().add(dist)
 
