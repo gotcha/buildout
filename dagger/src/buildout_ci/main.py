@@ -53,10 +53,15 @@ ModuleSource = Annotated[
 
 
 # Failure output signatures that mean "transient fetch/index failure,
-# safe to retry once" — observed against a cold devpi on GitHub runners.
+# safe to retry" — observed against a cold devpi on GitHub runners.
 TRANSIENT_SIGNATURES = (
     "Can't download http",
     "No matching distribution found",
+    # Old pips report a momentarily hidden index page as a
+    # ResolutionImpossible carrying this qualifier instead (GH run
+    # 34952880661, pip-21.3.1 cell). A genuine pin conflict does not
+    # print it, so real failures still fail fast.
+    "no matching distributions available for your environment",
     "Connection reset",
     "Connection refused",
     "Read timed out",
