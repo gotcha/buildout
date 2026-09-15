@@ -56,7 +56,7 @@ except ValueError:
 
 def command(method: Callable) -> Callable:
     # The marker attribute is created dynamically at runtime.
-    setattr(method, 'buildout_command', True)
+    setattr(method, 'buildout_command', True)  # noqa: B010 - dynamic marker
     return method
 
 
@@ -93,8 +93,8 @@ class MissingSection(zc.buildout.UserError, KeyError):
 
 
 def _annotate_section(section: dict[str, Any], source: str) -> dict[str, SectionKey]:
-    for key in section:
-        section[key] = SectionKey(section[key], source)
+    for key, value in section.items():
+        section[key] = SectionKey(value, source)
     return section
 
 
@@ -238,8 +238,8 @@ ConfigData = dict[str, dict[str, SectionKey] | dict[Any, Any]]
 
 
 def _annotate(data: dict[str, dict[str, str] | dict[Any, Any]], note: str) -> dict[str, dict[str, SectionKey] | dict[Any, Any]]:
-    for key in data:
-        data[key] = _annotate_section(data[key], note)
+    for key, section in data.items():
+        data[key] = _annotate_section(section, note)
     return data
 
 
@@ -1082,7 +1082,7 @@ def _raw_query_value(
 @commands
 class Buildout(DictMixin):
 
-    COMMANDS = set()
+    COMMANDS: ClassVar[set] = set()
     # Bound further below, where the Options class is defined
     # (``Buildout.Options = Options``).
     Options: ClassVar[type[Options]]
@@ -1243,11 +1243,11 @@ class Buildout(DictMixin):
     def bootstrap(self, args: list[str] | tuple[str, ...]) -> None:
         with _activity('Bootstrapping.'):
 
-            if os.path.exists(self['buildout']['develop-eggs-directory']):
-                if os.path.isdir(self['buildout']['develop-eggs-directory']):
-                    rmtree(self['buildout']['develop-eggs-directory'])
-                    self._logger.debug(
-                        "Removed existing develop-eggs directory")
+            if os.path.exists(self['buildout']['develop-eggs-directory']) and os.path.isdir(
+                    self['buildout']['develop-eggs-directory']):
+                rmtree(self['buildout']['develop-eggs-directory'])
+                self._logger.debug(
+                    "Removed existing develop-eggs directory")
 
             self._setup_directories()
 
@@ -1295,33 +1295,32 @@ class Buildout(DictMixin):
 
     def _init_config(self, config_file: str, args: tuple[str, ...] | list[str]) -> None:
         print_(f'Creating {config_file!r}.')
-        f = open(config_file, 'w')
         sep = re.compile(r'[\\/]')
-        if args:
-            eggs = '\n  '.join(a for a in args if not sep.search(a))
-            sepsub = os.path.sep == '/' and '/' or re.escape(os.path.sep)
-            paths = '\n  '.join(
-                sep.sub(sepsub, a)
-                for a in args if sep.search(a))
-            f.write('[buildout]\n'
-                    'parts = py\n'
-                    '\n'
-                    '[py]\n'
-                    'recipe = zc.recipe.egg\n'
-                    'interpreter = py\n'
-                    'eggs =\n'
-                    )
-            if eggs:
-                f.write(f'  {eggs}\n')
-            if paths:
-                f.write(f'extra-paths =\n  {paths}\n')
-                for p in [a for a in args if sep.search(a)]:
-                    if not os.path.exists(p):
-                        os.mkdir(p)
+        with open(config_file, 'w') as f:
+            if args:
+                eggs = '\n  '.join(a for a in args if not sep.search(a))
+                sepsub = os.path.sep == '/' and '/' or re.escape(os.path.sep)
+                paths = '\n  '.join(
+                    sep.sub(sepsub, a)
+                    for a in args if sep.search(a))
+                f.write('[buildout]\n'
+                        'parts = py\n'
+                        '\n'
+                        '[py]\n'
+                        'recipe = zc.recipe.egg\n'
+                        'interpreter = py\n'
+                        'eggs =\n'
+                        )
+                if eggs:
+                    f.write(f'  {eggs}\n')
+                if paths:
+                    f.write(f'extra-paths =\n  {paths}\n')
+                    for p in [a for a in args if sep.search(a)]:
+                        if not os.path.exists(p):
+                            os.mkdir(p)
 
-        else:
-            f.write('[buildout]\nparts =\n')
-        f.close()
+            else:
+                f.write('[buildout]\nparts =\n')
 
     @command
     def init(self, args: list[str]) -> None:
@@ -1440,11 +1439,10 @@ class Buildout(DictMixin):
 
     def _update_installed(self, **buildout_options: str) -> None:
         installed = self['buildout']['installed']
-        f = open(installed, 'a')
-        f.write('\n[buildout]\n')
-        for option, value in list(buildout_options.items()):
-            _save_option(option, value, f)
-        f.close()
+        with open(installed, 'a') as f:
+            f.write('\n[buildout]\n')
+            for option, value in list(buildout_options.items()):
+                _save_option(option, value, f)
 
     def _uninstall_part(self, part: str, installed_part_options: dict[str, Options | dict[str, str]]) -> None:
         # uninstall part
@@ -1612,7 +1610,7 @@ class Buildout(DictMixin):
             options = self.get(part)
             if options is None:
                 options = self[part] = {}
-            recipe, entry = _recipe(options)
+            recipe, _entry = _recipe(options)
             req = pkg_resources.Requirement.parse(recipe)
             sig = _dists_sig(pkg_resources.working_set.resolve([req]))
             options['__buildout_signature__'] = ' '.join(sig)
@@ -1620,9 +1618,8 @@ class Buildout(DictMixin):
     def _read_installed_part_options(self) -> tuple[dict[str, Options | dict[str, str]], bool]:
         old = self['buildout']['installed']
         if old and os.path.isfile(old):
-            fp = open(old)
-            sections = zc.buildout.configparser.parse(fp, old)
-            fp.close()
+            with open(old) as fp:
+                sections = zc.buildout.configparser.parse(fp, old)
             result: dict[str, Options | dict[str, str]] = {}
             for section, options in sections.items():
                 for option, value in options.items():
@@ -1681,12 +1678,11 @@ class Buildout(DictMixin):
         installed = self['buildout']['installed']
         if not installed:
             return
-        f = open(installed, 'w')
-        _save_options('buildout', installed_options['buildout'], f)
-        for part in installed_options['buildout']['parts'].split():
-            print_(file=f)
-            _save_options(part, installed_options[part], f)
-        f.close()
+        with open(installed, 'w') as f:
+            _save_options('buildout', installed_options['buildout'], f)
+            for part in installed_options['buildout']['parts'].split():
+                print_(file=f)
+                _save_options(part, installed_options[part], f)
 
     def _error(self, message: str, *args: Any) -> NoReturn:
         raise zc.buildout.UserError(message % args)
@@ -1834,12 +1830,11 @@ class Buildout(DictMixin):
             if os.path.exists(self.update_versions_file):
                 output[:1] = [
                     '',
-                    f'# Added by buildout at {datetime.datetime.now()}'
+                    f'# Added by buildout at {datetime.datetime.now()}'  # noqa: DTZ005 - naive local time is the pinned format
                 ]
             output.append('')
-            f = open(self.update_versions_file, 'a')
-            f.write('\n'.join(output))
-            f.close()
+            with open(self.update_versions_file, 'a') as f:
+                f.write('\n'.join(output))
             print_("Picked versions have been written to " +
                    self.update_versions_file)
 
@@ -2475,9 +2470,9 @@ def _open_config_file(
     filename, base, needs_download = _resolve_config_location(base, filename)
     if needs_download:
         downloaded_filename, is_temp = download(filename)
-        fp = open(downloaded_filename)
+        fp = open(downloaded_filename)  # noqa: SIM115 - returned to caller
     else:
-        fp = open(filename)
+        fp = open(filename)  # noqa: SIM115 - returned to caller
     downloaded.add(filename)
 
     if filename in seen:
@@ -2640,7 +2635,7 @@ def _dir_hash(dir: str) -> str:
     for (dirpath, dirnames, filenames) in os.walk(dir):
         dirnames[:] = sorted(n for n in dirnames if n not in ignore_directories)
         filenames[:] = sorted(f for f in filenames
-                              if (not (f.endswith('pyc') or f.endswith('pyo'))
+                              if (not (f.endswith(('pyc', 'pyo')))
                                   and os.path.exists(os.path.join(dirpath, f)))
                           )
         for_hash = ' '.join(dirnames + filenames)
@@ -2650,20 +2645,19 @@ def _dir_hash(dir: str) -> str:
         for name in filenames:
             path = os.path.join(dirpath, name)
             if name == 'entry_points.txt':
-                f = open(path)
                 # Entry points aren't written in stable order. :(
                 try:
-                    sections = zc.buildout.configparser.parse(f, path)
+                    with open(path) as f:
+                        sections = zc.buildout.configparser.parse(f, path)
+                except Exception:
+                    with open(path, 'rb') as f:
+                        data = f.read()
+                else:
                     data = repr([(sname, sorted(sections[sname].items()))
                                  for sname in sorted(sections)]).encode('utf-8')
-                except Exception:
-                    f.close()
-                    f = open(path, 'rb')
-                    data = f.read()
             else:
-                f = open(path, 'rb')
-                data = f.read()
-            f.close()
+                with open(path, 'rb') as f:
+                    data = f.read()
             hash.update(data)
     _dir_hashes[dir] = dir_hash = hash.hexdigest()
     return dir_hash
@@ -2723,10 +2717,10 @@ def _update_verbose(s1: dict[str, SectionKey], s2: dict[str, SectionKey]) -> Non
 
 def _update(in1: dict[str, dict[str, SectionKey] | dict[Any, Any]], d2: dict[str, dict[str, SectionKey] | dict[Any, Any]]) -> dict[str, dict[str, SectionKey] | dict[Any, Any]]:
     d1 = copy.deepcopy(in1)
-    for section in d2:
+    for section, options2 in d2.items():
         if section in d1:
-            d1[section] = _update_section(d1[section], d2[section])
-        elif '<' not in d2[section].keys():
+            d1[section] = _update_section(d1[section], options2)
+        elif '<' not in options2:
             # Skip sections that extend in other sections (macros), as we don't
             # have all the data (these will be processed when the section is
             # extended)
@@ -3030,7 +3024,7 @@ def _handle_buildout_error(debug: bool) -> NoReturn:
     v = sys.exc_info()[1]
     _doing()
     exc_info = sys.exc_info()
-    import pdb
+    import pdb  # noqa: T100 - the --debug flag's documented entry point
     import traceback
     if debug:
         traceback.print_exception(*exc_info)

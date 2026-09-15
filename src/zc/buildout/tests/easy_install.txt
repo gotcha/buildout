@@ -598,11 +598,10 @@ The bin directory now contains a generated script:
 The return value is a list of the scripts generated:
 
     >>> import os, sys
-    >>> if sys.platform == 'win32':
-    ...     scripts == [os.path.join(bin, 'demo.exe'),
-    ...                 os.path.join(bin, 'demo-script.py')]
-    ... else:
-    ...     scripts == [os.path.join(bin, 'demo')]
+    >>> scripts == ([os.path.join(bin, 'demo.exe'),
+    ...              os.path.join(bin, 'demo-script.py')]
+    ...             if sys.platform == 'win32'
+    ...             else [os.path.join(bin, 'demo')])
     True
 
 Note that in Windows, 2 files are generated for each script.  A script
@@ -680,14 +679,13 @@ run other scripts with the path set on the working set:
     -  demo
     -  py
 
-    >>> if sys.platform == 'win32':
-    ...     scripts == [os.path.join(bin, 'demo.exe'),
-    ...                 os.path.join(bin, 'demo-script.py'),
-    ...                 os.path.join(bin, 'py.exe'),
-    ...                 os.path.join(bin, 'py-script.py')]
-    ... else:
-    ...     scripts == [os.path.join(bin, 'demo'),
-    ...                 os.path.join(bin, 'py')]
+    >>> scripts == ([os.path.join(bin, 'demo.exe'),
+    ...              os.path.join(bin, 'demo-script.py'),
+    ...              os.path.join(bin, 'py.exe'),
+    ...              os.path.join(bin, 'py-script.py')]
+    ...             if sys.platform == 'win32'
+    ...             else [os.path.join(bin, 'demo'),
+    ...                   os.path.join(bin, 'py')])
     True
 
 The py script simply runs the Python interactive interpreter with
@@ -784,11 +782,10 @@ original script names to new script names.
     >>> scripts = zc.buildout.easy_install.scripts(
     ...     ['demo'], ws, sys.executable, bin, {'demo': 'run'})
 
-    >>> if sys.platform == 'win32':
-    ...     scripts == [os.path.join(bin, 'run.exe'),
-    ...                 os.path.join(bin, 'run-script.py')]
-    ... else:
-    ...     scripts == [os.path.join(bin, 'run')]
+    >>> scripts == ([os.path.join(bin, 'run.exe'),
+    ...              os.path.join(bin, 'run-script.py')]
+    ...             if sys.platform == 'win32'
+    ...             else [os.path.join(bin, 'run')])
     True
     >>> ls(bin)
     -  run
@@ -1384,7 +1381,7 @@ egg link:
 And that the source directory contains the compiled extension:
 
     >>> contents = os.listdir(extdemo)
-    >>> bool([f for f in contents if f.endswith('.so') or f.endswith('.pyd')])
+    >>> bool([f for f in contents if f.endswith(('.so', '.pyd'))])
     True
 
 Download cache
@@ -1564,15 +1561,9 @@ Environment markers
     ...         demo_version = egg.version
     >>> demo_version is not None
     True
-    >>> if (sys.version_info.minor < 10):
-    ...     demo_version
-    ... else:
-    ...     '0.1'
+    >>> demo_version if (sys.version_info < (3, 10)) else '0.1'
     '0.1'
-    >>> if (sys.version_info.minor >= 10):
-    ...     demo_version
-    ... else:
-    ...     '0.2'
+    >>> demo_version if (sys.version_info >= (3, 10)) else '0.2'
     '0.2'
 
 

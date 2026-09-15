@@ -82,19 +82,19 @@ from pkg_resources import (
 from setuptools.wheel import Wheel
 
 EGG_FRAGMENT = re.compile(r'^egg=([-A-Za-z0-9_.+!]+)$')
-HREF = re.compile(r"""href\s*=\s*['"]?([^'"> ]+)""", re.I)
+HREF = re.compile(r"""href\s*=\s*['"]?([^'"> ]+)""", re.IGNORECASE)
 PYPI_MD5 = re.compile(
     r'<a href="([^"#]+)">([^<]+)</a>\n\s+\(<a (?:title="MD5 hash"\n\s+)'
     r'href="[^?]+\?:action=show_md5&amp;digest=([0-9a-f]{32})">md5</a>\)'
 )
-URL_SCHEME = re.compile('([-+.a-z0-9]{2,}):', re.I).match
-EXTENSIONS = ".tar.gz .tar.bz2 .tar .zip .tgz".split()
+URL_SCHEME = re.compile('([-+.a-z0-9]{2,}):', re.IGNORECASE).match
+EXTENSIONS = [".tar.gz", ".tar.bz2", ".tar", ".zip", ".tgz"]
 
 __all__ = [
     'PackageIndex',
     'distros_for_url',
-    'parse_bdist_wininst',
     'interpret_distro_name',
+    'parse_bdist_wininst',
 ]
 
 _SOCKET_TIMEOUT = 15
@@ -387,7 +387,7 @@ def unique_values(func: Callable) -> Callable:
     return wrapper
 
 
-REL = re.compile(r"""<([^>]*\srel\s{0,10}=\s{0,10}['"]?([^'" >]+)[^>]*)>""", re.I)
+REL = re.compile(r"""<([^>]*\srel\s{0,10}=\s{0,10}['"]?([^'" >]+)[^>]*)>""", re.IGNORECASE)
 """
 Regex for an HTML tag with 'rel="val"' attributes.
 """
@@ -507,7 +507,7 @@ class PackageIndex(Environment):
         return super().add(dist)
 
     # FIXME: 'PackageIndex.process_url' is too complex (14)
-    def process_url(self, url: str, retrieve: bool = False) -> None:  # noqa: C901
+    def process_url(self, url: str, retrieve: bool = False) -> None:
         """Evaluate a URL as a possible download, and maybe retrieve it
 
         BEWARE: this method is patched by zc.buildout in patches.py.
@@ -806,7 +806,7 @@ class PackageIndex(Environment):
         # only pass URL/file specs, which never reach this branch.
         return cast(str, getattr(self.fetch_distribution(spec, tmpdir), 'location', None))
 
-    def fetch_distribution(  # noqa: C901  # is too complex (14)  # FIXME
+    def fetch_distribution(  # is too complex (14)  # FIXME
         self,
         requirement: Requirement,
         tmpdir: str,
@@ -993,7 +993,7 @@ class PackageIndex(Environment):
         pass  # no-op
 
     # FIXME:
-    def open_url(self, url: str, warning: str | None=None) -> http.client.HTTPResponse | urllib.response.addinfourl | urllib.error.HTTPError | None:  # noqa: C901  # is too complex (12)
+    def open_url(self, url: str, warning: str | None=None) -> http.client.HTTPResponse | urllib.response.addinfourl | urllib.error.HTTPError | None:  # is too complex (12)
         if url.startswith('file:'):
             return local_open(url)
         try:

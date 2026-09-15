@@ -88,7 +88,7 @@ class Eggs:
         return orig_distributions, ws
 
     def install(self):
-        reqs, ws = self.working_set()
+        _reqs, _ws = self.working_set()
         return ()
 
     update = install

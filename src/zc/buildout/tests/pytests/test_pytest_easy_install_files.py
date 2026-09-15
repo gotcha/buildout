@@ -580,11 +580,11 @@ def test_easy_install_script_generation(easy_install_env):
     # The return value is a list of the scripts generated:
     import os
     import sys
-    if sys.platform == 'win32':
-        scripts == [os.path.join(bin, 'demo.exe'),
-                    os.path.join(bin, 'demo-script.py')]
-    else:
-        scripts == [os.path.join(bin, 'demo')]
+    _val = (scripts == ([os.path.join(bin, 'demo.exe'),
+             os.path.join(bin, 'demo-script.py')]
+            if sys.platform == 'win32'
+            else [os.path.join(bin, 'demo')]))
+    assert repr(_val) == 'True' or str(_val) == 'True'
     # Note that in Windows, 2 files are generated for each script.  A script
     # file, ending in '-script.py', and an exe file that allows the script
     # to be invoked directly without having to specify the Python
@@ -654,14 +654,14 @@ if __name__ == '__main__':
 -  demo
 -  py
 """, N)
-    if sys.platform == 'win32':
-        scripts == [os.path.join(bin, 'demo.exe'),
-                    os.path.join(bin, 'demo-script.py'),
-                    os.path.join(bin, 'py.exe'),
-                    os.path.join(bin, 'py-script.py')]
-    else:
-        scripts == [os.path.join(bin, 'demo'),
-                    os.path.join(bin, 'py')]
+    _val = (scripts == ([os.path.join(bin, 'demo.exe'),
+             os.path.join(bin, 'demo-script.py'),
+             os.path.join(bin, 'py.exe'),
+             os.path.join(bin, 'py-script.py')]
+            if sys.platform == 'win32'
+            else [os.path.join(bin, 'demo'),
+                  os.path.join(bin, 'py')]))
+    assert repr(_val) == 'True' or str(_val) == 'True'
     # The py script simply runs the Python interactive interpreter with
     # the path set:
     assert_output(capture_print(cat, bin, 'py'), """
@@ -745,11 +745,11 @@ sys.path[0:0] = [
     bin = tmpdir('bin2')
     scripts = zc.buildout.easy_install.scripts(
         ['demo'], ws, sys.executable, bin, {'demo': 'run'})
-    if sys.platform == 'win32':
-        scripts == [os.path.join(bin, 'run.exe'),
-                    os.path.join(bin, 'run-script.py')]
-    else:
-        scripts == [os.path.join(bin, 'run')]
+    _val = (scripts == ([os.path.join(bin, 'run.exe'),
+             os.path.join(bin, 'run-script.py')]
+            if sys.platform == 'win32'
+            else [os.path.join(bin, 'run')]))
+    assert repr(_val) == 'True' or str(_val) == 'True'
     assert_output(capture_print(ls, bin), '-  run', N)
     assert_output(system(os.path.join(bin, 'run')), '3 1', N)
     # The scripts that are generated are made executable:
@@ -1409,7 +1409,7 @@ d  extdemo-1.4-py2.4-unix-i686.egg
 """, N)
     # And that the source directory contains the compiled extension:
     contents = os.listdir(extdemo)
-    _val = (bool([f for f in contents if f.endswith('.so') or f.endswith('.pyd')]))
+    _val = (bool([f for f in contents if f.endswith(('.so', '.pyd'))]))
     assert repr(_val) == 'True' or str(_val) == 'True'
 
 
@@ -1577,14 +1577,10 @@ d  demoneeded-1.1-py2.4.egg
             demo_version = egg.version
     _val = (demo_version is not None)
     assert repr(_val) == 'True' or str(_val) == 'True'
-    if (sys.version_info.minor < 10):
-        demo_version
-    else:
-        '0.1'
-    if (sys.version_info.minor >= 10):
-        demo_version
-    else:
-        '0.2'
+    _val = (demo_version if (sys.version_info < (3, 10)) else '0.1')
+    assert repr(_val) == "'0.1'" or str(_val) == "'0.1'"
+    _val = (demo_version if (sys.version_info >= (3, 10)) else '0.2')
+    assert repr(_val) == "'0.2'" or str(_val) == "'0.2'"
     # Conflicts properly with version spec.
     try:
         ws = zc.buildout.easy_install.install(
@@ -2706,9 +2702,8 @@ def test_download(easy_install_env):
     # requires text files to be treated as binary to avoid implicit line-ending
     # conversions:
     text = 'First line of text.\r\nSecond line.\r\n'
-    f = open(join(server_data, 'foo.txt'), 'wb')
-    _ = f.write(text.encode())
-    f.close()
+    with open(join(server_data, 'foo.txt'), 'wb') as f:
+        _ = f.write(text.encode())
     path, is_temp = Download()(server_url+'foo.txt',
                                md5(text.encode()).hexdigest())
     remove(path)

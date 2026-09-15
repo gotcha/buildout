@@ -381,9 +381,9 @@ def test_resolve_extra_requirements_missing_extra_warns_and_intersects(
 def test_resolve_extra_requirements_missing_extra_rejected(tmp_path, caplog):
     req = pkg_resources.Requirement.parse('demo[nothere]')
     dist = _make_dist(tmp_path)
-    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
-        with pytest.raises(zc.buildout.UserError):
-            _resolve_extra_requirements(req, dist, False)
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'), \
+            pytest.raises(zc.buildout.UserError):
+        _resolve_extra_requirements(req, dist, False)
     assert "does not provide the extra 'nothere'" in caplog.text
 
 
@@ -1488,11 +1488,11 @@ def test_move_dist_into_place_rename_failure_reraises_when_newloc_missing(
         raise OSError('boom')
 
     monkeypatch.setattr(os, 'rename', fail_rename)
-    with caplog.at_level(logging.ERROR, logger='zc.buildout.easy_install'):
-        with pytest.raises(OSError):
-            _move_dist_into_place(
-                _env_dist('1.0'), str(tmp_path / 'demo-1.0.egg'),
-                str(tmp_path / 'eggs'))
+    with caplog.at_level(logging.ERROR, logger='zc.buildout.easy_install'), \
+            pytest.raises(OSError):
+        _move_dist_into_place(
+            _env_dist('1.0'), str(tmp_path / 'demo-1.0.egg'),
+            str(tmp_path / 'eggs'))
     assert 'Moving/renaming egg for demo 1.0' in caplog.text
     assert 'does not exist' in caplog.text
 
@@ -1531,11 +1531,11 @@ def test_move_dist_into_place_reraises_for_wrong_package_at_newloc(
         easy_install, '_get_matching_dist_in_location',
         lambda dist, location: None)
 
-    with caplog.at_level(logging.ERROR, logger='zc.buildout.easy_install'):
-        with pytest.raises(OSError):
-            _move_dist_into_place(
-                _env_dist('1.0'), str(tmp_path / 'tmp' / 'demo-1.0.egg'),
-                str(dest))
+    with caplog.at_level(logging.ERROR, logger='zc.buildout.easy_install'), \
+            pytest.raises(OSError):
+        _move_dist_into_place(
+            _env_dist('1.0'), str(tmp_path / 'tmp' / 'demo-1.0.egg'),
+            str(dest))
     assert 'exists, but has no distribution for demo 1.0' in caplog.text
 
 

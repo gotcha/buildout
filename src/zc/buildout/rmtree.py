@@ -72,7 +72,8 @@ def rmtree (path: str) -> None:
         else:
             # tried 10 times without success, thus
             # finally rethrow the last exception
-            raise
+            raise  # noqa: PLE0704 - rethrows the removal error: shutil.rmtree
+            # invokes this callback from inside its own except handler
 
     # onexc replaces onerror in 3.12+, but the floor here is 3.9.
     shutil.rmtree (path, onerror = retry_writeable)  # ty: ignore[deprecated]

@@ -105,24 +105,23 @@ def rmdir(*path):
 
 def write(dir, *args):
     path = os.path.join(dir, *(args[:-1]))
-    f = open(path, 'w')
-    f.write(args[-1])
-    f.flush()
-    fsync(f.fileno())
-    f.close()
+    with open(path, 'w') as f:
+        f.write(args[-1])
+        f.flush()
+        fsync(f.fileno())
 
 def clean_up_pyc(*path):
     base, filename = os.path.join(*path[:-1]), path[-1]
     if filename.endswith('.py'):
         filename += 'c' # .py -> .pyc
-    for path in (
+    for candidate in (
         os.path.join(base, filename),
         os.path.join(base, '__pycache__'),
         ):
-        if os.path.isdir(path):
-            rmdir(path)
-        elif os.path.exists(path):
-            remove(path)
+        if os.path.isdir(candidate):
+            rmdir(candidate)
+        elif os.path.exists(candidate):
+            remove(candidate)
 
 ## FIXME - check for other platforms
 MUST_CLOSE_FDS = not sys.platform.startswith('win')
@@ -488,9 +487,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(out)))
             if path.endswith('.egg'):
                 self.send_header('Content-Type', 'application/zip')
-            elif path.endswith('.gz'):
-                self.send_header('Content-Type', 'application/x-gzip')
-            elif path.endswith('.zip'):
+            elif path.endswith(('.gz', '.zip')):
                 self.send_header('Content-Type', 'application/x-gzip')
             elif path.endswith('.whl'):
                 self.send_header('Content-Type', 'application/octet-stream')
@@ -540,7 +537,8 @@ def start_server(tree):
 def stop_server(url, thread=None):
     try:
         urlopen(url+'__stop__')
-    except Exception:
+    except Exception:  # noqa: S110 - best-effort stop: the server may
+        # already be gone
         pass
     if thread is not None:
         thread.join() # wait for thread to stop
@@ -567,7 +565,9 @@ def wait(port, up):
                 break
     else:
         if up:
-            raise
+            raise  # noqa: PLE0704 - pre-existing retry-exhaustion rethrow;
+            # no active exception here, so this surfaces RuntimeError today.
+            # Changing the raised type is behavior work, out of burndown scope.
         else:
             raise SystemError("Couldn't stop server")
 
@@ -613,8 +613,7 @@ def _normalize_path(match):
     path = match.group(1)
     if os.path.sep == '\\':
         path = path.replace('\\\\', '/')
-        if path.startswith('\\'):
-            path = path[1:]
+        path = path.removeprefix('\\')
     return '/' + path.replace(os.path.sep, '/')
 
 normalize_path = (
@@ -694,8 +693,9 @@ def run_buildout(command):
     buildout(args[1:])
 
 def run_from_process(target, *args, **kw):
-    sys.stdout = sys.stderr = open('out', 'w')
-    target(*args, **kw)
+    with open('out', 'w') as out:
+        sys.stdout = sys.stderr = out
+        target(*args, **kw)
 
 def run_in_process(*args, **kwargs):
     try:

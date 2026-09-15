@@ -247,7 +247,7 @@ def test_handle_option_line_collects_parsing_error():
     result = _handle_option_line(
         'bogus line\n', sect, 'opt', False, True, 'file.cfg', 7, None)
     assert result is not None
-    optname, blockmode, error = result
+    optname, _blockmode, error = result
     assert optname == 'opt'
     assert isinstance(error, ParsingError)
     assert error.errors == [(7, "'bogus line\\n'")]
@@ -258,7 +258,7 @@ def test_handle_option_line_appends_to_existing_error():
     result = _handle_option_line(
         'bogus line\n', {}, 'opt', False, True, 'file.cfg', 8, existing)
     assert result is not None
-    optname, blockmode, error = result
+    _optname, _blockmode, error = result
     assert error is existing
     assert error.errors == [(8, "'bogus line\\n'")]
 

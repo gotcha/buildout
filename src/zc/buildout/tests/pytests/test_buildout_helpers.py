@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-import pdb
+import pdb  # noqa: T100 - pdb behavior is under test (monkeypatched below)
 import sys
 from io import StringIO
 
@@ -1383,7 +1383,8 @@ def test_open_config_file_removes_temp_download_on_recursion(
 def test_parse_config_file_parses_and_closes(tmp_path):
     cfg = tmp_path / 'buildout.cfg'
     cfg.write_text('[buildout]\nparts =\n')
-    fp = open(str(cfg))
+    fp = open(str(cfg))  # noqa: SIM115 - the assertion below checks that
+    # _parse_config_file itself closes the passed file object
     result = _parse_config_file(fp, str(cfg), None, False)
     assert result == {'buildout': {'parts': ''}}
     assert fp.closed
@@ -1393,7 +1394,8 @@ def test_parse_config_file_parses_and_closes(tmp_path):
 def test_parse_config_file_removes_temp_download(tmp_path):
     cfg = tmp_path / 'tmp123.cfg'
     cfg.write_text('[buildout]\nparts =\n')
-    fp = open(str(cfg))
+    fp = open(str(cfg))  # noqa: SIM115 - the assertion below checks that
+    # _parse_config_file itself closes the passed file object
     result = _parse_config_file(
         fp, 'http://example.com/b.cfg', str(cfg), True)
     assert result == {'buildout': {'parts': ''}}
@@ -1552,9 +1554,9 @@ def test_upgrade_and_restart_regenerates_scripts_and_restarts(
         'directory': '/buildout-dir',
     }
     logger = logging.getLogger('zc.buildout')
-    with caplog.at_level(logging.INFO, logger='zc.buildout'):
-        with pytest.raises(SystemExit) as exc:
-            _upgrade_and_restart(options, ws, [dist], logger)
+    with caplog.at_level(logging.INFO, logger='zc.buildout'), \
+            pytest.raises(SystemExit) as exc:
+        _upgrade_and_restart(options, ws, [dist], logger)
     assert exc.value.code == 0
     assert calls == [
         ('sort', '/eggs', '/develop-eggs'),

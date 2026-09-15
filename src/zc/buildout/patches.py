@@ -46,7 +46,9 @@ def patch_Distribution() -> None:
             )
             return result
 
-    setattr(Distribution, 'hashcmp', property(hashcmp))
+    # Dynamic monkeypatch on a foreign class; setattr keeps it
+    # invisible to the type checker.
+    setattr(Distribution, 'hashcmp', property(hashcmp))  # noqa: B010
 
 
 # patch_Distribution()
@@ -210,7 +212,7 @@ def patch_PackageIndex() -> None:
         if url.startswith(self.index_url) and getattr(f, 'code', None) != 404:
             page = self.process_index(url, page)
 
-    setattr(PackageIndex, 'process_url', process_url)
+    PackageIndex.process_url = process_url
 
 
 patch_PackageIndex()

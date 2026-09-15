@@ -129,7 +129,9 @@ class Download:
                     _, is_temp = self.download(url, md5sum, cached_path)
                 except ChecksumError:
                     raise
-                except Exception:
+                except Exception:  # noqa: S110 - deliberately silent:
+                    # a failed re-download leaves the stale cache entry
+                    # in place for the fallback below.
                     pass
 
             if not check_md5sum(cached_path, md5sum):
@@ -176,7 +178,7 @@ class Download:
         handle, tmp_path = tempfile.mkstemp(prefix='buildout-')
         os.close(handle)
         try:
-            tmp_path, headers = urlretrieve(url, tmp_path)
+            tmp_path, _headers = urlretrieve(url, tmp_path)
             if not check_md5sum(tmp_path, md5sum):
                 raise ChecksumError(
                     f'MD5 checksum mismatch downloading {url!r}')
@@ -232,16 +234,13 @@ def check_md5sum(path: str, md5sum: str | None) -> bool:
     if md5sum is None:
         return True
 
-    f = open(path, 'rb')
-    checksum = md5()
-    try:
+    with open(path, 'rb') as f:
+        checksum = md5()
         chunk = f.read(2**16)
         while chunk:
             checksum.update(chunk)
             chunk = f.read(2**16)
         return checksum.hexdigest() == md5sum
-    finally:
-        f.close()
 
 
 def remove(path: str) -> None:

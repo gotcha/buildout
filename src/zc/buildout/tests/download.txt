@@ -547,9 +547,8 @@ requires text files to be treated as binary to avoid implicit line-ending
 conversions:
 
 >>> text = 'First line of text.\r\nSecond line.\r\n'
->>> f = open(join(server_data, 'foo.txt'), 'wb')
->>> _ = f.write(text.encode())
->>> f.close()
+>>> with open(join(server_data, 'foo.txt'), 'wb') as f:
+...     _ = f.write(text.encode())
 >>> path, is_temp = Download()(server_url+'foo.txt',
 ...                            md5(text.encode()).hexdigest())
 >>> remove(path)

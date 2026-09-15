@@ -104,7 +104,7 @@ NORMALIZERS_BUILDOUT = [
     # Loosely match any interpreter path, like the doctest suite does:
     # the exact sys.executable string need not appear in subprocess output
     # (on Windows e.g. python3.exe vs python.exe).
-    (re.compile(r'executable = [\S ]+python\S*', re.I),
+    (re.compile(r'executable = [\S ]+python\S*', re.IGNORECASE),
      'executable = python'),
     (re.compile(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}'),
      'YYYY-MM-DD hh:mm:ss.dddddd'),

@@ -144,8 +144,7 @@ def _merge_option(cursect: dict[str, str], optname: str, optval: str) -> None:
         if opt_op == '=':
             for suffix in '+-':
                 tempname = f"{optname} {suffix}"
-                if tempname in cursect:
-                    del cursect[tempname]
+                cursect.pop(tempname, None)
         cursect[optname] = optval
 
 
@@ -181,10 +180,8 @@ def _append_continuation(cursect: dict[str, str], optname: str, line: str, block
 
 def _finalize_sections(sections: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
     """Dedent and right-strip multi-line option values in place."""
-    for sectname in sections:
-        section = sections[sectname]
-        for name in section:
-            value = section[name]
+    for sectname, section in sections.items():
+        for name, value in section.items():
             if value[:1].isspace():
                 section[name] = leading_blank_lines.sub(
                     '', textwrap.dedent(value.rstrip()))

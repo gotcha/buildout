@@ -27,7 +27,7 @@ try:
 except ImportError:
     pass
 
-import pip  # NOQA
+import pip
 
 import warnings
 from pkg_resources import PkgResourcesDeprecationWarning
@@ -39,7 +39,7 @@ import sys
 from collections.abc import Iterator
 from typing import Any
 
-import zc.buildout.patches  # NOQA
+import zc.buildout.patches
 
 WINDOWS = sys.platform.startswith('win')
 
@@ -65,6 +65,8 @@ def _activity(message: str, *args: Any) -> Iterator[None]:
     try:
         yield
     except BaseException as e:
-        setattr(e, '_zc_doing',
+        # Dynamic marker attribute on foreign exception objects;
+        # setattr keeps it invisible to the type checker.
+        setattr(e, '_zc_doing',  # noqa: B010
                 getattr(e, '_zc_doing', []) + [(message, args)])
         raise

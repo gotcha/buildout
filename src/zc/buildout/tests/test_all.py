@@ -130,7 +130,7 @@ class TestEasyInstall(unittest.TestCase):
         # https://github.com/buildout/buildout/pull/452
         # An egg built with the version '3.3' should match a distribution
         # looking for '3.3.0'
-        dist, location = self._get_distro_and_egg_path()
+        dist, _location = self._get_distro_and_egg_path()
 
         result = zc.buildout.easy_install._get_matching_dist_in_location(
             dist,
@@ -3064,10 +3064,8 @@ def test_distutils_scripts_using_import_are_properly_parsed():
 
     >>> from zc.buildout.easy_install import _distutils_script
     >>> generated = _distutils_script('\\'/path/test/\\'', 'bin/pyflint', pyflint_script, '', '')
-    >>> if sys.platform == 'win32':
-    ...     generated == ['bin/pyflint.exe', 'bin/pyflint-script.py']
-    ... else:
-    ...     generated == ['bin/pyflint']
+    >>> generated == (['bin/pyflint.exe', 'bin/pyflint-script.py']
+    ...               if sys.platform == 'win32' else ['bin/pyflint'])
     True
     >>> if sys.platform == 'win32':
     ...     cat('bin/pyflint-script.py')
@@ -3106,10 +3104,8 @@ def test_distutils_scripts_using_from_are_properly_parsed():
 
     >>> from zc.buildout.easy_install import _distutils_script
     >>> generated = _distutils_script('\\'/path/test/\\'', 'bin/pyflint', pyflint_script, '', '')
-    >>> if sys.platform == 'win32':
-    ...     generated == ['bin/pyflint.exe', 'bin/pyflint-script.py']
-    ... else:
-    ...     generated == ['bin/pyflint']
+    >>> generated == (['bin/pyflint.exe', 'bin/pyflint-script.py']
+    ...               if sys.platform == 'win32' else ['bin/pyflint'])
     True
     >>> if sys.platform == 'win32':
     ...     cat('bin/pyflint-script.py')
@@ -3354,7 +3350,8 @@ def test_buildout_doesnt_keep_adding_itself_to_versions():
     Subsequent runs didn't add additional text:
 
     >>> with open('versions.cfg') as f:
-    ...     versions == f.read()
+    ...     reread = f.read()
+    >>> versions == reread
     True
     """
 
@@ -3436,7 +3433,9 @@ def _build_in_isolated_env(distribution, source_dir, dest_dir):
 
 egg_parse = re.compile(r'([0-9a-zA-Z_.]+)-([0-9a-zA-Z_.]+)-py(\d[.]\d+)$'
                        ).match
-def makeNewRelease(project, ws, dest, versions=['91.0', '99.99']):
+def makeNewRelease(project, ws, dest, versions=None):
+    if versions is None:
+        versions = ['91.0', '99.99']
     """Make a new release for a project.
 
     Theoretically this can work for various projects, but currently we are
@@ -3536,7 +3535,7 @@ def test_suite():
                     # (re.compile(r"Installing 'zc.buildout >=\S+"), ''),
                     (re.compile(r'__buildout_signature__ = recipes-\S+'),
                      '__buildout_signature__ = recipes-SSSSSSSSSSS'),
-                    (re.compile(r'executable = [\S ]+python\S*', re.I),
+                    (re.compile(r'executable = [\S ]+python\S*', re.IGNORECASE),
                      'executable = python'),
                     (re.compile(r'[-d]  (setuptools|setuptools)-\S+[.]egg'),
                      'setuptools.egg'),

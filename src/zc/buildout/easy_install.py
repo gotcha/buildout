@@ -43,7 +43,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import cached_property
 from importlib import metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pkg_resources
 import setuptools.archive_util
@@ -108,7 +108,7 @@ setuptools_path = buildout_and_setuptools_path
 pip_path = buildout_and_setuptools_path
 logger.debug('before restricting versions: pip_path %r', pip_path)
 
-FILE_SCHEME = re.compile('file://', re.I).match
+FILE_SCHEME = re.compile('file://', re.IGNORECASE).match
 DUNDER_FILE_PATTERN = re.compile(r"__file__ = '(?P<filename>.+)'$")
 
 
@@ -262,7 +262,6 @@ class AllowHostsPackageIndex(EnvironmentMixin, _package_index.PackageIndex):
     This class had its own url_ok method, but we merged this into
     _package_index.py.
     """
-    pass
 
 
 _indexes = {}
@@ -274,8 +273,7 @@ def _get_index(index_url: str | None, find_links: list[str], allow_hosts: tuple[
 
     if index_url is None:
         index_url = default_index_url
-    if index_url.startswith('file://'):
-        index_url = index_url[7:]
+    index_url = index_url.removeprefix('file://')
     index = AllowHostsPackageIndex(index_url, hosts=allow_hosts)
 
     if find_links:
@@ -308,7 +306,8 @@ else:
 
 def call_subprocess(args: Sequence[str | Path], **kw: Any) -> None:
     if subprocess.call(args, **kw) != 0:
-        raise Exception(
+        raise Exception(  # noqa: TRY002 - legacy error contract: callers
+            # catch broad Exception; the message text is the pinned surface
             f"Failed to run command:\n{repr(args)[1:-1]}")
 
 
@@ -317,6 +316,7 @@ def get_subprocess_output(args: list[str], **kw: Any) -> str:
         args, **kw,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        check=False,
     )
     stdout = result.stdout.decode("utf-8")
     if result.returncode:
@@ -324,7 +324,7 @@ def get_subprocess_output(args: list[str], **kw: Any) -> str:
         msg = f"Failed to run command:\n{cmd}"
         logger.error(msg + "\nError output follows:")
         print(stdout)
-        raise Exception(msg)
+        raise Exception(msg)  # noqa: TRY002 - legacy error contract
     return stdout
 
 
@@ -794,17 +794,18 @@ def _write_build_ext_config(base: str, build_ext: dict[str, str]) -> None:
     """Create ``setup.cfg`` in ``base`` if missing and set ``build_ext``."""
     setup_cfg = os.path.join(base, 'setup.cfg')
     if not os.path.exists(setup_cfg):
-        f = open(setup_cfg, 'w')
-        f.close()
+        with open(setup_cfg, 'w'):
+            pass  # create the empty file that edit_config expects
     setuptools.command.setopt.edit_config(
         setup_cfg, {'build_ext': build_ext})
 
 
 class Installer:
 
-    _versions = {}
-    _required_by = {}
-    _picked_versions = {}
+    _versions = {}  # noqa: RUF012 - class-level default, deliberately
+    # shadowed per instance in __init__ when versions are given
+    _required_by: ClassVar[dict] = {}
+    _picked_versions: ClassVar[dict] = {}
     _download_cache = None
     _install_from_cache = False
     _prefer_final = True
@@ -812,7 +813,7 @@ class Installer:
     _allow_picked_versions = True
     _store_required_by = False
     _allow_unknown_extras = False
-    _namespace_packages = {}
+    _namespace_packages: ClassVar[dict] = {}
     _index_url = None
 
     def __init__(self,
@@ -1271,10 +1272,10 @@ class Installer:
 
     def _fix_file_links(self, links: tuple[str, ...] | list[str]) -> Iterator[str]:
         for link in links:
-            if link.startswith('file://') and link[-1] != '/':
-                if os.path.isdir(link[7:]):
-                    # work around excessive restriction in setuptools:
-                    link += '/'
+            if link.startswith('file://') and link[-1] != '/' and os.path.isdir(
+                    link[7:]):
+                # work around excessive restriction in setuptools:
+                link += '/'
             yield link
 
     def _log_requirement(self, ws: pkg_resources.WorkingSet, req: pkg_resources.Requirement) -> None:
@@ -1611,8 +1612,8 @@ def develop(setup: str, dest: str,
                     os.rename(setup_cfg+'-develop-aside', setup_cfg)
                 undo.append(restore_old_setup)
             else:
-                f = open(setup_cfg, 'w')
-                f.close()
+                with open(setup_cfg, 'w'):
+                    pass  # create the empty file that edit_config expects
                 undo.append(lambda: os.remove(setup_cfg))
             setuptools.command.setopt.edit_config(
                 setup_cfg, {'build_ext': build_ext})
@@ -1984,7 +1985,7 @@ def _distutils_script(path: str, dest: str, script_content: str, initialization:
     for line_number, line in enumerate(lines):
         if 'import' not in line:
             continue
-        if not (line.startswith('import') or line.startswith('from')):
+        if not line.startswith(('import', 'from')):
             continue
         if '__future__' in line:
             continue
@@ -2025,8 +2026,7 @@ def _create_script(contents: str, dest: str) -> list[str]:
     if is_win32:
         # generate exe file and give the script a magic name:
         win32_exe = os.path.splitext(dest)[0] # remove ".py"
-        if win32_exe.endswith('-script'):
-            win32_exe = win32_exe[:-7] # remove "-script"
+        win32_exe = win32_exe.removesuffix('-script') # remove "-script"
         win32_exe = win32_exe + '.exe' # add ".exe"
         new_data = get_win_launcher('cli')
 
@@ -2229,7 +2229,7 @@ class MissingDistribution(zc.buildout.UserError):
         self.data = req, sorted_dists
 
     def __str__(self) -> str:
-        req, ws = self.data
+        req, _ws = self.data
         return f"Couldn't find a distribution for {str(req)!r}."
 
 def _is_url(value: str) -> bool:
@@ -2340,7 +2340,9 @@ def _scan_editable_install(
 
 def _dist_info_dirname(split_entries: list[tuple[str, str]]) -> str:
     """Return the ``.dist-info`` directory name among pip's output entries."""
-    return [
+    # IndexError on no match is the tested contract
+    # (test_dist_info_dirname_raises_without_match):
+    return [  # noqa: RUF015
         base + ext for base, ext in split_entries if ext == ".dist-info"
     ][0]
 
@@ -2477,7 +2479,7 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> str | list[s
 def _namespace_candidate_lines(ns_file: str | Path) -> list[str]:
     """Return the non-empty, non-comment lines of ``ns_file``."""
     with open(ns_file, 'r') as myfile:
-        return [line for line in myfile.readlines() if line.strip() and not line.strip().startswith('#')]
+        return [line for line in myfile if line.strip() and not line.strip().startswith('#')]
 
 
 def _lines_declare_namespace(contents: list[str]) -> bool:
@@ -2595,7 +2597,7 @@ def _read_top_levels(
         with open(top_level_file, encoding='utf-8', errors="replace") as f:
             top_levels: Iterable[str] = filter(
                 (lambda x: len(x) != 0),
-                [line.strip() for line in f.readlines()]
+                [line.strip() for line in f]
                 )
     else:
         top_levels = ()
@@ -2662,7 +2664,7 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> list[str]:
     project_name = _read_project_name(dest, distinfo_dir)
 
     # Make properly named new egg dir
-    distro = list(pkg_resources.find_distributions(dest))[0]
+    distro = next(iter(pkg_resources.find_distributions(dest)))
     if project_name:
         distro.project_name = project_name
     base = f"{distro.egg_name()}-{pkg_resources.get_supported_platform()}"

@@ -11,6 +11,10 @@ from dagger import dag, function, object_type
 
 from .jobs import FAMILIES, FAMILY_MINUTES, Job, _find_job, _select_jobs
 
+
+class JobFailures(Exception):
+    """One or more CI jobs failed; the message carries the run summary."""
+
 Source = Annotated[
     dagger.Directory,
     DefaultPath("."),
@@ -144,7 +148,7 @@ class BuildoutCi:
         results = await asyncio.gather(*(run(job) for job in selected))
         summary = "\n".join(results)
         if any(result.startswith("FAIL") for result in results):
-            raise Exception(summary)
+            raise JobFailures(summary)
         return summary
 
     @function
@@ -187,7 +191,7 @@ class BuildoutCi:
                 results.append(f"PASS {name}")
         summary = "\n".join(results)
         if any(result.startswith("FAIL") for result in results):
-            raise Exception(summary)
+            raise JobFailures(summary)
         return summary
 
     def _base(self, source: dagger.Directory, job: Job) -> dagger.Container:

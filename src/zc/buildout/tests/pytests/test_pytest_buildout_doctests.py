@@ -1817,10 +1817,9 @@ def test_distutils_scripts_using_import_are_properly_parsed(easy_install_env):
     sys.executable = 'python'
     from zc.buildout.easy_install import _distutils_script
     generated = _distutils_script("'/path/test/'", 'bin/pyflint', pyflint_script, '', '')
-    if sys.platform == 'win32':
-        generated == ['bin/pyflint.exe', 'bin/pyflint-script.py']
-    else:
-        generated == ['bin/pyflint']
+    _val = (generated == (['bin/pyflint.exe', 'bin/pyflint-script.py']
+              if sys.platform == 'win32' else ['bin/pyflint']))
+    assert repr(_val) == 'True' or str(_val) == 'True'
     if sys.platform == 'win32':
         cat('bin/pyflint-script.py')
     else:
@@ -1842,10 +1841,9 @@ def test_distutils_scripts_using_from_are_properly_parsed(easy_install_env):
     sys.executable = 'python'
     from zc.buildout.easy_install import _distutils_script
     generated = _distutils_script("'/path/test/'", 'bin/pyflint', pyflint_script, '', '')
-    if sys.platform == 'win32':
-        generated == ['bin/pyflint.exe', 'bin/pyflint-script.py']
-    else:
-        generated == ['bin/pyflint']
+    _val = (generated == (['bin/pyflint.exe', 'bin/pyflint-script.py']
+              if sys.platform == 'win32' else ['bin/pyflint']))
+    assert repr(_val) == 'True' or str(_val) == 'True'
     if sys.platform == 'win32':
         cat('bin/pyflint-script.py')
     else:
@@ -2040,4 +2038,6 @@ def test_buildout_doesnt_keep_adding_itself_to_versions(easy_install_env):
     _ = system(join('bin', 'buildout'))
     # Subsequent runs didn't add additional text:
     with open('versions.cfg') as f:
-        versions == f.read()
+        reread = f.read()
+    _val = (versions == reread)
+    assert repr(_val) == 'True' or str(_val) == 'True'
