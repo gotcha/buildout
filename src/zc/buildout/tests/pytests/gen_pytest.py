@@ -13,12 +13,13 @@ Usage (.txt file):
                          --normalizer NORMALIZERS_BUILDOUT \
                          --output src/zc/buildout/tests/test_pytest_buildout_files.py
 """
+from __future__ import annotations
+
 import ast
 import doctest
 import re
 import textwrap
 from pathlib import Path
-from typing import Union
 
 ENV_NAMES = frozenset({
     'sample_buildout', 'ls', 'cat', 'mkdir', 'rmdir', 'remove', 'tmpdir',
@@ -62,7 +63,7 @@ class _UsageVisitor(ast.NodeVisitor):
         else:
             self._note(node.id, node.lineno, self.first_bind)
 
-    def _note_import(self, node: Union[ast.Import, ast.ImportFrom]) -> None:
+    def _note_import(self, node: ast.Import | ast.ImportFrom) -> None:
         for alias in node.names:
             name = alias.asname or alias.name.split('.')[0]
             self._note(name, node.lineno, self.first_bind)
@@ -75,7 +76,7 @@ class _UsageVisitor(ast.NodeVisitor):
 
     def _note_def(
         self,
-        node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef],
+        node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
     ) -> None:
         self._note(node.name, node.lineno, self.first_bind)
         self.generic_visit(node)

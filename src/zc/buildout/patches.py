@@ -12,7 +12,9 @@
 #
 ##############################################################################
 
-from typing import Any, Optional
+from __future__ import annotations
+
+from typing import Any
 
 
 def patch_Distribution() -> None:
@@ -302,7 +304,7 @@ def patch_pkg_resources_working_set_find() -> None:
     except ImportError:
         return
 
-    def find(self: WorkingSet, req: Requirement) -> Optional[Distribution]:
+    def find(self: WorkingSet, req: Requirement) -> Distribution | None:
         """Find a distribution matching requirement `req`
 
         Note: I removed the type hints, because they failed on Python 3.9:

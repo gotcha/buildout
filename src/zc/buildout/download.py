@@ -13,6 +13,8 @@
 ##############################################################################
 """Buildout download infrastructure"""
 
+from __future__ import annotations
+
 from hashlib import md5
 from urllib.request import urlretrieve
 from urllib.parse import urlparse
@@ -26,8 +28,6 @@ import shutil
 import sys
 import tempfile
 import zc.buildout
-from typing import Optional, Union
-
 
 class ChecksumError(zc.buildout.UserError):
     pass
@@ -50,12 +50,12 @@ class Download:
 
     """
 
-    def __init__(self, options: Optional[dict[str, str]]=None, cache: Optional[Union[str, int]]=-1, namespace: Optional[str]=None,
-                 offline: Union[int, bool]=-1, fallback: bool=False, hash_name: bool=False, logger: Optional[logging.Logger]=None) -> None:
+    def __init__(self, options: dict[str, str] | None=None, cache: str | int | None=-1, namespace: str | None=None,
+                 offline: int | bool=-1, fallback: bool=False, hash_name: bool=False, logger: logging.Logger | None=None) -> None:
         if options is None:
             options = {}
         self.directory = options.get('directory', '')
-        self.cache: Optional[str]
+        self.cache: str | None
         if cache == -1:
             self.cache = options.get('download-cache')
         elif isinstance(cache, str):
@@ -72,16 +72,16 @@ class Download:
         self.logger = logger or logging.getLogger('zc.buildout')
 
     @property
-    def download_cache(self) -> Optional[str]:
+    def download_cache(self) -> str | None:
         if self.cache is not None:
             return realpath(os.path.join(self.directory, self.cache))
 
     @property
-    def cache_dir(self) -> Optional[str]:
+    def cache_dir(self) -> str | None:
         if self.download_cache is not None:
             return os.path.join(self.download_cache, self.namespace or '')
 
-    def __call__(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> tuple[str, bool]:
+    def __call__(self, url: str, md5sum: str | None=None, path: str | None=None) -> tuple[str, bool]:
         """Download a file according to the utility's configuration.
 
         url: URL to download
@@ -98,7 +98,7 @@ class Download:
 
         return locate_at(local_path, path), is_temp
 
-    def download_cached(self, url: str, md5sum: Optional[str]=None) -> tuple[str, bool]:
+    def download_cached(self, url: str, md5sum: str | None=None) -> tuple[str, bool]:
         """Download a file from a URL using the cache.
 
         This method assumes that the cache has been configured. Optionally, it
@@ -144,7 +144,7 @@ class Download:
 
         return cached_path, is_temp
 
-    def download(self, url: str, md5sum: Optional[str]=None, path: Optional[str]=None) -> tuple[str, bool]:
+    def download(self, url: str, md5sum: str | None=None, path: str | None=None) -> tuple[str, bool]:
         """Download a file from a URL to a given or temporary path.
 
         An online resource is always downloaded to a temporary file and moved
@@ -223,7 +223,7 @@ class Download:
             return '%s:%s' % (url_host, url_port)
 
 
-def check_md5sum(path: str, md5sum: Optional[str]) -> bool:
+def check_md5sum(path: str, md5sum: str | None) -> bool:
     """Tell whether the MD5 checksum of the file at path matches.
 
     No checksum being given is considered a match.
@@ -249,7 +249,7 @@ def remove(path: str) -> None:
         os.remove(path)
 
 
-def locate_at(source: str, dest: Optional[str]) -> str:
+def locate_at(source: str, dest: str | None) -> str:
     if dest is None or realpath(dest) == realpath(source):
         return source
 

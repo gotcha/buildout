@@ -12,6 +12,8 @@
 #
 ##############################################################################
 
+from __future__ import annotations
+
 # The following copied from Python 2 config parser because:
 # - The py3 configparser isn't backward compatible
 # - Both strip option values in undesirable ways
@@ -23,7 +25,7 @@ import logging
 
 from packaging import markers
 from io import StringIO, TextIOWrapper
-from typing import Any, Optional, Union
+from typing import Any
 from collections.abc import Callable
 
 
@@ -191,7 +193,7 @@ def _finalize_sections(sections: dict[str, dict[str, str]]) -> dict[str, dict[st
 
 
 def _handle_continuation(
-        line: str, cursect: Optional[dict[str, str]], optname: Optional[str],
+        line: str, cursect: dict[str, str] | None, optname: str | None,
         section_condition: bool, blockmode: bool) -> bool:
     """Handle a continuation line of the current option value.
 
@@ -228,7 +230,7 @@ def _expression_context(context: list[Any], exp_globals: Callable) -> Any:
 def _start_section(
         header: re.Match, sections: dict[str, dict[str, str]],
         context: list[Any], exp_globals: Callable,
-        ) -> tuple[Optional[dict[str, str]], bool]:
+        ) -> tuple[dict[str, str] | None, bool]:
     """Start the section named by a section header match.
 
     Return ``(cursect, section_condition)``; the condition is reset to
@@ -269,10 +271,10 @@ def _handle_preamble_line(line: str, fpname: str, lineno: int) -> None:
 
 
 def _handle_option_line(
-        line: str, cursect: dict[str, str], optname: Optional[str],
+        line: str, cursect: dict[str, str], optname: str | None,
         blockmode: bool, section_condition: bool, fpname: str,
-        lineno: int, error: Optional[ParsingError],
-        ) -> Optional[tuple[Optional[str], bool, Optional[ParsingError]]]:
+        lineno: int, error: ParsingError | None,
+        ) -> tuple[str | None, bool, ParsingError | None] | None:
     """Process an option or bogus line within a section.
 
     Return None when the line must be skipped: an option filtered out
@@ -304,7 +306,7 @@ def _handle_option_line(
     return optname, blockmode, error
 
 
-def parse(fp: Union[StringIO, TextIOWrapper], fpname: str, exp_globals: Union[type[dict], Callable]=dict) -> dict[str, dict[str, str]]:
+def parse(fp: StringIO | TextIOWrapper, fpname: str, exp_globals: type[dict] | Callable=dict) -> dict[str, dict[str, str]]:
     """Parse a sectioned setup file.
 
     The sections in setup files contain a title line at the top,

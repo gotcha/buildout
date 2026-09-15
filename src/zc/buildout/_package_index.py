@@ -53,7 +53,7 @@ import urllib.parse
 import urllib.request
 from fnmatch import translate
 from functools import wraps
-from typing import Any, BinaryIO, NoReturn, Optional, Union, NamedTuple, cast
+from typing import Any, BinaryIO, NoReturn, NamedTuple, cast
 from collections.abc import Callable, Iterable, Iterator
 
 import setuptools
@@ -136,7 +136,7 @@ except ImportError:
         #       The question comes to mind mainly because of sdists that have been produced
         #       by old versions of setuptools and published to PyPI...
 
-    def _read_utf8_with_fallback(file: str, fallback_encoding: Optional[str]=LOCALE_ENCODING) -> str:
+    def _read_utf8_with_fallback(file: str, fallback_encoding: str | None=LOCALE_ENCODING) -> str:
         """
         First try to read the file with UTF-8, if there is an error fallback to a
         different encoding ("locale" by default). Returns the content of the file.
@@ -152,7 +152,7 @@ except ImportError:
                 return f.read()
 
     def _cfg_read_utf8_with_fallback(
-        cfg: RawConfigParser, file: str, fallback_encoding: Optional[str]=LOCALE_ENCODING
+        cfg: RawConfigParser, file: str, fallback_encoding: str | None=LOCALE_ENCODING
     ) -> None:
         """Same idea as :func:`_read_utf8_with_fallback`, but for the
         :meth:`RawConfigParser.read` method.
@@ -167,7 +167,7 @@ except ImportError:
             cfg.read(file, encoding=fallback_encoding)
 
 
-def unique_everseen(iterable: Iterable[Any], key: Optional[Callable[[Any], Any]]=None) -> Iterator[Any]:
+def unique_everseen(iterable: Iterable[Any], key: Callable[[Any], Any] | None=None) -> Iterator[Any]:
     """Yield unique elements, preserving order.
 
     This function is copied from `more_itertools` 10.7.0.  I did not want to
@@ -224,7 +224,7 @@ def parse_requirement_arg(spec: str) -> Requirement:
         ) from e
 
 
-def parse_bdist_wininst(name: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def parse_bdist_wininst(name: str) -> tuple[str | None, str | None, str | None]:
     """Return (base,pyversion) or (None,None) for possible .exe name"""
 
     lower = name.lower()
@@ -259,7 +259,7 @@ def egg_info_for_url(url: str) -> tuple[str, str]:
     return base, fragment
 
 
-def distros_for_url(url: str, metadata: Optional[Any]=None) -> Iterator[Distribution]:
+def distros_for_url(url: str, metadata: Any | None=None) -> Iterator[Distribution]:
     """Yield egg or source distribution objects that might be found at a URL"""
     base, fragment = egg_info_for_url(url)
     yield from distros_for_location(url, base, metadata)
@@ -271,7 +271,7 @@ def distros_for_url(url: str, metadata: Optional[Any]=None) -> Iterator[Distribu
             )
 
 
-def distros_for_location(location: str, basename: str, metadata: Optional[Any]=None) -> Iterable[Distribution]:
+def distros_for_location(location: str, basename: str, metadata: Any | None=None) -> Iterable[Distribution]:
     """Yield egg or source distribution objects based on basename"""
     if basename.endswith('.egg.zip'):
         basename = basename[:-4]  # strip the .zip
@@ -306,7 +306,7 @@ def distros_for_location(location: str, basename: str, metadata: Optional[Any]=N
     return []  # no extension matched
 
 
-def distros_for_filename(filename: str, metadata: Optional[Any]=None) -> Iterable[Distribution]:
+def distros_for_filename(filename: str, metadata: Any | None=None) -> Iterable[Distribution]:
     """Yield possible egg or source distribution objects based on a filename"""
     return distros_for_location(
         normalize_path(filename), os.path.basename(filename), metadata
@@ -314,7 +314,7 @@ def distros_for_filename(filename: str, metadata: Optional[Any]=None) -> Iterabl
 
 
 def interpret_distro_name(
-    location: str, basename: str, metadata: Any, py_version: Optional[str]=None, precedence: int=SOURCE_DIST, platform: Optional[str]=None
+    location: str, basename: str, metadata: Any, py_version: str | None=None, precedence: int=SOURCE_DIST, platform: str | None=None
 ) -> Iterator[Distribution]:
     """Generate the interpretation of a source distro name
 
@@ -413,7 +413,7 @@ class ContentChecker:
 
     # Only HashChecker sets these; check_hash reaches them through the
     # ContentChecker interface, with is_valid() gating their use.
-    hash: 'hashlib._Hash'
+    hash: hashlib._Hash
     hash_name: str
 
     def feed(self, block: bytes) -> None:
@@ -476,7 +476,7 @@ class PackageIndex(Environment):
         self,
         index_url: str = "https://pypi.org/simple/",
         hosts: tuple[str, ...]=('*',),
-        ca_bundle: Optional[str]=None,
+        ca_bundle: str | None=None,
         verify_ssl: bool = True,
         *args: Any,
         **kw: Any,
@@ -489,7 +489,7 @@ class PackageIndex(Environment):
         self.package_pages: dict[str, dict[str, bool]] = {}
         self.allows = re.compile('|'.join(map(translate, hosts))).match
         # None once prescan() has run: from then on, scan immediately.
-        self.to_scan: Optional[list] = []
+        self.to_scan: list | None = []
         self.opener = urllib.request.urlopen
 
     def add(self, dist: Distribution) -> None:
@@ -619,7 +619,7 @@ class PackageIndex(Environment):
             dist.precedence = SOURCE_DIST
             self.add(dist)
 
-    def _scan(self, link: str) -> Union[tuple[str, str], tuple[None, None]]:
+    def _scan(self, link: str) -> tuple[str, str] | tuple[None, None]:
         # Process a URL to see if it's for a package page
         NO_MATCH_SENTINEL = None, None
         if not link.startswith(self.index_url):
@@ -671,7 +671,7 @@ class PackageIndex(Environment):
             url,
         )
 
-    def scan_all(self, msg: Optional[str]=None, *args: Any) -> None:
+    def scan_all(self, msg: str | None=None, *args: Any) -> None:
         if self.index_url not in self.fetched_urls:
             if msg:
                 self.warn(msg, *args)
@@ -711,8 +711,8 @@ class PackageIndex(Environment):
     def obtain(  # ty: ignore[invalid-method-override]  # Environment.obtain's strict-installer overload promises the installer's own return type; PackageIndex returns an environment dist or None instead (same shape as setuptools' PackageIndex.obtain)
         self,
         requirement: Requirement,
-        installer: Optional[Callable[[Requirement], Optional[Distribution]]] = None,
-    ) -> Optional[Distribution]:
+        installer: Callable[[Requirement], Distribution | None] | None = None,
+    ) -> Distribution | None:
         self.prescan()
         self.find_packages(requirement)
         for dist in self[requirement.key]:
@@ -763,7 +763,7 @@ class PackageIndex(Environment):
         meth(msg, requirement.unsafe_name)
         self.scan_all()
 
-    def download(self, spec: Union[str, Requirement], tmpdir: str) -> str:
+    def download(self, spec: str | Requirement, tmpdir: str) -> str:
         """Locate and/or download `spec` to `tmpdir`, returning a local path
 
         `spec` may be a ``Requirement`` object, or a string containing a URL,
@@ -807,7 +807,7 @@ class PackageIndex(Environment):
         force_scan: bool = False,
         source: bool = False,
         develop_ok: bool = False,
-        local_index: Optional[Environment]=None,
+        local_index: Environment | None=None,
     ) -> Distribution | None:
         """Obtain a distribution suitable for fulfilling `requirement`
 
@@ -987,7 +987,7 @@ class PackageIndex(Environment):
         pass  # no-op
 
     # FIXME:
-    def open_url(self, url: str, warning: Optional[str]=None) -> Optional[Union[http.client.HTTPResponse, urllib.response.addinfourl, urllib.error.HTTPError]]:  # noqa: C901  # is too complex (12)
+    def open_url(self, url: str, warning: str | None=None) -> http.client.HTTPResponse | urllib.response.addinfourl | urllib.error.HTTPError | None:  # noqa: C901  # is too complex (12)
         if url.startswith('file:'):
             return local_open(url)
         try:
@@ -1075,7 +1075,7 @@ class PackageIndex(Environment):
         return self._download_vcs(url, filename) or self._download_other(url, filename)
 
     @staticmethod
-    def _resolve_vcs(url: str) -> Optional[str]:
+    def _resolve_vcs(url: str) -> str | None:
         """
         >>> rvcs = PackageIndex._resolve_vcs
         >>> rvcs('git+http://foo/bar')
@@ -1093,7 +1093,7 @@ class PackageIndex(Environment):
         allowed = set(['svn', 'git'] + ['hg'] * bool(sep))
         return next(iter({pre} & allowed), None)
 
-    def _download_vcs(self, url: str, spec_filename: str) -> Optional[str]:
+    def _download_vcs(self, url: str, spec_filename: str) -> str | None:
         vcs = self._resolve_vcs(url)
         if not vcs:
             return None
@@ -1144,7 +1144,7 @@ class PackageIndex(Environment):
         raise DistutilsError(f"Unexpected HTML page found at {url}")
 
     @staticmethod
-    def _vcs_split_rev_from_url(url: str) -> tuple[str, Optional[str]]:
+    def _vcs_split_rev_from_url(url: str) -> tuple[str, str | None]:
         """
         Given a possible VCS URL, return a clean URL and resolved revision if any.
 
@@ -1288,7 +1288,7 @@ class PyPIConfig(configparser.RawConfigParser):
             self.get(section, 'password').strip(),
         )
 
-    def find_credential(self, url: str) -> Optional[Credential]:
+    def find_credential(self, url: str) -> Credential | None:
         """
         If the URL indicated appears to be a repository defined in this
         config, return the credential for that repository.
@@ -1347,7 +1347,7 @@ def open_with_auth(url: str, opener: Callable[..., Any]=urllib.request.urlopen) 
 
 # copy of urllib.parse._splituser from Python 3.8
 # See https://github.com/python/cpython/issues/80072.
-def _splituser(host: str) -> tuple[Optional[str], str]:
+def _splituser(host: str) -> tuple[str | None, str]:
     """splituser('user[:passwd]@host[:port]')
     --> 'user[:passwd]', 'host[:port]'."""
     user, delim, host = host.rpartition('@')
@@ -1362,7 +1362,7 @@ def fix_sf_url(url: str) -> str:
     return url  # backward compatibility
 
 
-def local_open(url: str) -> Union[urllib.response.addinfourl, urllib.error.HTTPError]:
+def local_open(url: str) -> urllib.response.addinfourl | urllib.error.HTTPError:
     """Read a local path, with special support for directories"""
     _scheme, _server, path, _param, _query, _frag = urllib.parse.urlparse(url)
     filename = urllib.request.url2pathname(path)

@@ -18,6 +18,8 @@ It doesn't install scripts.  It uses setuptools and requires it to be
 installed.
 """
 
+from __future__ import annotations
+
 import copy
 import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import email
@@ -55,7 +57,7 @@ from zc.buildout.utils import normalize_name
 import warnings
 import csv
 from packaging.version import Version
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 from collections.abc import Callable, Iterator
 
 
@@ -130,7 +132,7 @@ class EnvironmentMixin:
 
         def can_add(self, dist: pkg_resources.Distribution) -> bool: ...
 
-    def __getitem__(self, project_name: str) -> list[Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, Any, pkg_resources.Distribution]]:
+    def __getitem__(self, project_name: str) -> list[pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution | Any | pkg_resources.Distribution]:
         """Return a newest-to-oldest list of distributions for `project_name`
 
         Uses case-insensitive `project_name` comparison, assuming all the
@@ -141,7 +143,7 @@ class EnvironmentMixin:
         distribution_key = normalize_name(project_name)
         return self._distmap.get(distribution_key, [])
 
-    def add(self, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> None:
+    def add(self, dist: pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution | pkg_resources.Distribution) -> None:
         """Add `dist` if we ``can_add()`` it and it has not already been added
         """
         if self.can_add(dist) and dist.has_version():
@@ -265,7 +267,7 @@ class AllowHostsPackageIndex(EnvironmentMixin, _package_index.PackageIndex):
 
 
 _indexes = {}
-def _get_index(index_url: Optional[str], find_links: list[str], allow_hosts: tuple[str, ...]=('*',)) -> AllowHostsPackageIndex:
+def _get_index(index_url: str | None, find_links: list[str], allow_hosts: tuple[str, ...]=('*',)) -> AllowHostsPackageIndex:
     key = index_url, tuple(find_links)
     index = _indexes.get(key)
     if index is not None:
@@ -305,7 +307,7 @@ else:
     get_win_launcher = None
 
 
-def call_subprocess(args: Sequence[Union[str, Path]], **kw: Any) -> None:
+def call_subprocess(args: Sequence[str | Path], **kw: Any) -> None:
     if subprocess.call(args, **kw) != 0:
         raise Exception(
             "Failed to run command:\n%s"
@@ -348,7 +350,7 @@ def get_namespace_package_paths(dist: pkg_resources.Distribution) -> Iterator[st
     for namespace in dist.get_metadata_lines('namespace_packages.txt'):
         yield os.path.join(*(base + namespace.split('.') + init))
 
-def namespace_packages_need_pkg_resources(dist: Union[pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> bool:
+def namespace_packages_need_pkg_resources(dist: pkg_resources.EggInfoDistribution | pkg_resources.Distribution) -> bool:
     if os.path.isfile(_dist_location(dist)):
         # Zipped egg, with namespaces, surely needs setuptools
         return True
@@ -364,7 +366,7 @@ def namespace_packages_need_pkg_resources(dist: Union[pkg_resources.EggInfoDistr
                     return True
     return False
 
-def dist_needs_pkg_resources(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> bool:
+def dist_needs_pkg_resources(dist: pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution | pkg_resources.Distribution) -> bool:
     """
     A distribution needs setuptools/pkg_resources added as requirement if:
 
@@ -412,7 +414,7 @@ def _constrained_requirement(constraint: str, requirement: pkg_resources.Require
 
 
 def _parse_requirements(
-        specs: Union[tuple[str, ...], list[str]],
+        specs: tuple[str, ...] | list[str],
         constrain: Callable[[pkg_resources.Requirement],
                             pkg_resources.Requirement],
         ) -> list[pkg_resources.Requirement]:
@@ -431,7 +433,7 @@ def _parse_requirements(
 
 
 def _working_set_or_default(
-        working_set: Optional[pkg_resources.WorkingSet],
+        working_set: pkg_resources.WorkingSet | None,
         ) -> pkg_resources.WorkingSet:
     """Return ``working_set``, or a fresh empty one when none was given."""
     if working_set is None:
@@ -443,7 +445,7 @@ def _resolve_extra_requirements(
         req: pkg_resources.Requirement,
         dist: pkg_resources.Distribution,
         allow_unknown_extras: bool,
-        ) -> Union[list[str], list[pkg_resources.Requirement]]:
+        ) -> list[str] | list[pkg_resources.Requirement]:
     """Return the requirements to follow from ``dist`` for ``req``.
 
     Extras requested by ``req`` but not provided by ``dist`` are warned
@@ -485,7 +487,7 @@ def _matching_dists(
 
 def _develop_dist(
         dists: list[pkg_resources.Distribution],
-        ) -> Optional[pkg_resources.Distribution]:
+        ) -> pkg_resources.Distribution | None:
     """Return the first develop dist in ``dists``, if there is one."""
     for dist in dists:
         if dist.precedence == pkg_resources.DEVELOP_DIST:
@@ -519,7 +521,7 @@ def _select_newer_dist(
         best_available: pkg_resources.Distribution,
         prefer_final: bool,
         final_version: Callable[[Version], bool],
-        ) -> Optional[pkg_resources.Distribution]:
+        ) -> pkg_resources.Distribution | None:
     """Return ``best_available`` when it should replace ``best_we_have``.
 
     ``None`` means ``best_we_have`` stays.  When ``prefer_final`` is set, a
@@ -556,8 +558,8 @@ def _select_newer_dist(
 def _available_dists(
         index: AllowHostsPackageIndex,
         requirement: pkg_resources.Requirement,
-        source: Optional[int],
-        ) -> Optional[list[pkg_resources.Distribution]]:
+        source: int | None,
+        ) -> list[pkg_resources.Distribution] | None:
     """Return the dists in ``index`` matching ``requirement`` and ``source``.
 
     ``None`` means the index has nothing available for the requirement.
@@ -596,7 +598,7 @@ def _best_version_dists(
 
 def _select_from_best(
         best: list[pkg_resources.Distribution],
-        download_cache: Optional[str],
+        download_cache: str | None,
         ) -> pkg_resources.Distribution:
     """Return one of the ``best`` dists, all tied for the highest version.
 
@@ -635,7 +637,7 @@ def _best_matching_dist(
         ws: pkg_resources.WorkingSet,
         current_requirement: pkg_resources.Requirement,
         for_buildout_run: bool,
-        ) -> Optional[pkg_resources.Distribution]:
+        ) -> pkg_resources.Distribution | None:
     """Return the best dist picked so far for ``req``, or the
     environment's best match.
 
@@ -665,16 +667,16 @@ def _best_matching_dist(
 
 def _fetch_new_dists(
         requirement: pkg_resources.Requirement,
-        avail: Optional[pkg_resources.Distribution],
+        avail: pkg_resources.Distribution | None,
         ws: pkg_resources.WorkingSet,
-        dest: Optional[str],
-        download_cache: Optional[str],
+        dest: str | None,
+        download_cache: str | None,
         fetch: Callable[
-            [pkg_resources.Distribution, str, Optional[str]],
-            Optional[pkg_resources.Distribution]],
+            [pkg_resources.Distribution, str, str | None],
+            pkg_resources.Distribution | None],
         env: pkg_resources.Environment,
         rescan_dest: Callable[[], None],
-        ) -> list[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]:
+        ) -> list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]:
     """Download, install and register a distribution for ``requirement``.
 
     Called when no installed dist satisfies the requirement: fetches
@@ -728,10 +730,10 @@ def _fetch_new_dists(
 
 def _cache_links_and_index(
         install_from_cache: bool,
-        download_cache: Optional[str],
-        links: Union[tuple[str, ...], list[str]],
-        index: Optional[str],
-        ) -> tuple[Union[tuple[str, ...], list[str]], Optional[str]]:
+        download_cache: str | None,
+        links: tuple[str, ...] | list[str],
+        index: str | None,
+        ) -> tuple[tuple[str, ...] | list[str], str | None]:
     """Return the links and index forced by install-from-cache mode.
 
     In install-from-cache mode no remote location is consulted: the
@@ -747,10 +749,10 @@ def _cache_links_and_index(
 
 
 def _prepare_links(
-        links: Union[tuple[str, ...], list[str]],
-        download_cache: Optional[str],
+        links: tuple[str, ...] | list[str],
+        download_cache: str | None,
         fix_file_links: Callable[
-            [Union[tuple[str, ...], list[str]]], Iterator[str]],
+            [tuple[str, ...] | list[str]], Iterator[str]],
         ) -> list[str]:
     """Return the fixed-up find links, with the download cache first."""
     prepared = list(fix_file_links(links))
@@ -759,7 +761,7 @@ def _prepare_links(
     return prepared
 
 
-def _initial_path(path: Optional[list[str]]) -> list[str]:
+def _initial_path(path: list[str] | None) -> list[str]:
     """Return a copy of ``path`` plus the buildout/setuptools locations."""
     # ``path[:]`` copies: later mutations of the argument must not leak in.
     return (path and path[:] or []) + buildout_and_setuptools_path
@@ -818,15 +820,15 @@ class Installer:
     _index_url = None
 
     def __init__(self,
-                 dest: Optional[str]=None,
-                 links: Union[tuple[str, ...], list[str]]=(),
-                 index: Optional[str]=None,
+                 dest: str | None=None,
+                 links: tuple[str, ...] | list[str]=(),
+                 index: str | None=None,
                  executable: str=sys.executable,
-                 always_unzip: Optional[bool]=None, # Backward compat :/
-                 path: Optional[list[str]]=None,
+                 always_unzip: bool | None=None, # Backward compat :/
+                 path: list[str] | None=None,
                  newest: bool=True,
-                 versions: Optional[Mapping[str, str]]=None,
-                 use_dependency_links: Optional[bool]=None,
+                 versions: Mapping[str, str] | None=None,
+                 use_dependency_links: bool | None=None,
                  allow_hosts: tuple[str, ...]=('*',),
                  check_picked: bool=True,
                  allow_unknown_extras: bool=False,
@@ -882,7 +884,7 @@ class Installer:
         return list(set(eggs + dists))
 
     @staticmethod
-    def _eggify_env_dest_dists(env: Environment, dest: Optional[str]) -> None:
+    def _eggify_env_dest_dists(env: Environment, dest: str | None) -> None:
         """
         Make sure everything found under `dest` is seen as an egg, even if it's
         some other kind of dist.
@@ -909,7 +911,7 @@ class Installer:
                    if name.lower() in line.lower()]
         return '\n  '.join(output)
 
-    def _satisfied(self, req: pkg_resources.Requirement, source: Optional[int]=None) -> tuple[Optional[pkg_resources.Distribution], Optional[pkg_resources.Distribution]]:
+    def _satisfied(self, req: pkg_resources.Requirement, source: int | None=None) -> tuple[pkg_resources.Distribution | None, pkg_resources.Distribution | None]:
         dists = _matching_dists(self._env, req)
         if not dists:
             logger.debug('We have no distributions for %s that satisfies %r.',
@@ -968,7 +970,7 @@ class Installer:
             str(req))
         return best_we_have, None
 
-    def _call_pip_install(self, spec: str, dest: str, dist: pkg_resources.Distribution) -> list[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]]:
+    def _call_pip_install(self, spec: str, dest: str, dist: pkg_resources.Distribution) -> list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution]:
 
         tmp = tempfile.mkdtemp(dir=dest)
         try:
@@ -1011,7 +1013,7 @@ class Installer:
         finally:
             zc.buildout.rmtree.rmtree(tmp)
 
-    def _obtain(self, requirement: pkg_resources.Requirement, source: Optional[int]=None) -> Optional[pkg_resources.Distribution]:
+    def _obtain(self, requirement: pkg_resources.Requirement, source: int | None=None) -> pkg_resources.Distribution | None:
         dists = _available_dists(self._index, requirement, source)
         if dists is None:
             # Nothing is available.
@@ -1029,7 +1031,7 @@ class Installer:
 
         return _select_from_best(best, self._download_cache)
 
-    def _fetch(self, dist: pkg_resources.Distribution, tmp: str, download_cache: Optional[str]) -> pkg_resources.Distribution:
+    def _fetch(self, dist: pkg_resources.Distribution, tmp: str, download_cache: str | None) -> pkg_resources.Distribution:
         if (download_cache
             and (realpath(os.path.dirname(_dist_location(dist))) == download_cache)
             ):
@@ -1049,7 +1051,7 @@ class Installer:
 
         return dist.clone(location=new_location)
 
-    def _get_dist(self, requirement: pkg_resources.Requirement, ws: pkg_resources.WorkingSet) -> list[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]:
+    def _get_dist(self, requirement: pkg_resources.Requirement, ws: pkg_resources.WorkingSet) -> list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]:
         with zc.buildout._activity('Getting distribution for %r.',
                                    str(requirement)):
 
@@ -1079,7 +1081,7 @@ class Installer:
 
             return dists
 
-    def _add_dependency_links_from_dists(self, dists: list[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]) -> None:
+    def _add_dependency_links_from_dists(self, dists: list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]) -> None:
         reindex = False
         links = self._links
         for dist in dists:
@@ -1094,7 +1096,7 @@ class Installer:
         if reindex:
             self._index = _get_index(self._index_url, links, self._allow_hosts)
 
-    def _check_picked_requirement_versions(self, requirement: pkg_resources.Requirement, dists: list[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]) -> None:
+    def _check_picked_requirement_versions(self, requirement: pkg_resources.Requirement, dists: list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]) -> None:
         """ Check whether we picked a version and, if we did, report it """
         for dist in dists:
             if not (dist.precedence == pkg_resources.DEVELOP_DIST
@@ -1114,7 +1116,7 @@ class Installer:
                     )
                     raise zc.buildout.UserError(msg)
 
-    def _maybe_add_setuptools(self, ws: pkg_resources.WorkingSet, dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution, pkg_resources.Distribution]) -> None:
+    def _maybe_add_setuptools(self, ws: pkg_resources.WorkingSet, dist: pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution | pkg_resources.Distribution) -> None:
         if dist_needs_pkg_resources(dist):
             # We have a namespace package but no requirement for setuptools
             if dist.precedence == pkg_resources.DEVELOP_DIST:
@@ -1155,7 +1157,7 @@ class Installer:
 
         return requirement
 
-    def install(self, specs: Union[tuple[str, ...], list[str]], working_set: Optional[pkg_resources.WorkingSet]=None) -> pkg_resources.WorkingSet:
+    def install(self, specs: tuple[str, ...] | list[str], working_set: pkg_resources.WorkingSet | None=None) -> pkg_resources.WorkingSet:
 
         logger.debug('Installing %s.', repr(specs)[1:-1])
         self._requirements_and_constraints.append(
@@ -1273,7 +1275,7 @@ class Installer:
             if tmp != self._download_cache:
                 zc.buildout.rmtree.rmtree(tmp)
 
-    def _fix_file_links(self, links: Union[tuple[str, ...], list[str]]) -> Iterator[str]:
+    def _fix_file_links(self, links: tuple[str, ...] | list[str]) -> Iterator[str]:
         for link in links:
             if link.startswith('file://') and link[-1] != '/':
                 if os.path.isdir(link[7:]):
@@ -1315,13 +1317,13 @@ def normalize_versions(versions: Mapping[str, str]) -> dict[str, str]:
     return dict([(canonicalize_name(k), v) for (k, v) in versions.items()])
 
 
-def default_versions(versions: Optional[Mapping[str, str]]=None) -> dict[str, str]:
+def default_versions(versions: Mapping[str, str] | None=None) -> dict[str, str]:
     old = Installer._versions
     if versions is not None:
         Installer._versions = normalize_versions(versions)
     return old
 
-def download_cache(path: Optional[Union[str, int]]=-1) -> Optional[str]:
+def download_cache(path: str | int | None=-1) -> str | None:
     old = Installer._download_cache
     if path != -1:
         if path:
@@ -1332,37 +1334,37 @@ def download_cache(path: Optional[Union[str, int]]=-1) -> Optional[str]:
         Installer._download_cache = path
     return old
 
-def install_from_cache(setting: Optional[bool]=None) -> bool:
+def install_from_cache(setting: bool | None=None) -> bool:
     old = Installer._install_from_cache
     if setting is not None:
         Installer._install_from_cache = bool(setting)
     return old
 
-def prefer_final(setting: Optional[bool]=None) -> bool:
+def prefer_final(setting: bool | None=None) -> bool:
     old = Installer._prefer_final
     if setting is not None:
         Installer._prefer_final = bool(setting)
     return old
 
-def use_dependency_links(setting: Optional[bool]=None) -> bool:
+def use_dependency_links(setting: bool | None=None) -> bool:
     old = Installer._use_dependency_links
     if setting is not None:
         Installer._use_dependency_links = bool(setting)
     return old
 
-def index_url(setting: Optional[str]=None) -> Optional[str]:
+def index_url(setting: str | None=None) -> str | None:
     old = Installer._index_url
     if setting is not None:
         Installer._index_url = setting
     return old
 
-def allow_picked_versions(setting: Optional[bool]=None) -> bool:
+def allow_picked_versions(setting: bool | None=None) -> bool:
     old = Installer._allow_picked_versions
     if setting is not None:
         Installer._allow_picked_versions = bool(setting)
     return old
 
-def store_required_by(setting: Optional[Union[str, bool]]=None) -> bool:
+def store_required_by(setting: str | bool | None=None) -> bool:
     old = Installer._store_required_by
     if setting is not None:
         Installer._store_required_by = bool(setting)
@@ -1376,12 +1378,12 @@ def get_picked_versions() -> tuple[list[tuple[str, str]], dict[str, set[str]]]:
 def get_namespace_packages() -> list[tuple[str, str]]:
     return sorted(Installer._namespace_packages.items())
 
-def install(specs: Union[tuple[str, ...], list[str]], dest: Optional[str],
-            links: Union[tuple[str, ...], list[str]]=(), index: Optional[str]=None,
+def install(specs: tuple[str, ...] | list[str], dest: str | None,
+            links: tuple[str, ...] | list[str]=(), index: str | None=None,
             executable: str=sys.executable,
-            always_unzip: Optional[bool]=None, # Backward compat :/
-            path: Optional[list[str]]=None, working_set: Optional[pkg_resources.WorkingSet]=None, newest: bool=True, versions: Optional[Mapping[str, str]]=None,
-            use_dependency_links: Optional[bool]=None, allow_hosts: tuple[str, ...]=('*',),
+            always_unzip: bool | None=None, # Backward compat :/
+            path: list[str] | None=None, working_set: pkg_resources.WorkingSet | None=None, newest: bool=True, versions: Mapping[str, str] | None=None,
+            use_dependency_links: bool | None=None, allow_hosts: tuple[str, ...]=('*',),
             check_picked: bool=True,
             allow_unknown_extras: bool=False,
             ) -> pkg_resources.WorkingSet:
@@ -1409,10 +1411,10 @@ setuptools_path = pip_path
 setuptools_pythonpath = pip_pythonpath
 
 
-def build(spec: str, dest: Optional[str], build_ext: dict[str, str],
-          links: Union[tuple[str, ...], list[str]]=(), index: Optional[str]=None,
+def build(spec: str, dest: str | None, build_ext: dict[str, str],
+          links: tuple[str, ...] | list[str]=(), index: str | None=None,
           executable: str=sys.executable,
-          path: Optional[list[str]]=None, newest: bool=True, versions: Optional[dict[str, str]]=None, allow_hosts: tuple[str, ...]=('*',)) -> list[str]:
+          path: list[str] | None=None, newest: bool=True, versions: dict[str, str] | None=None, allow_hosts: tuple[str, ...]=('*',)) -> list[str]:
     assert executable == sys.executable, (executable, sys.executable)
     installer = Installer(dest, links, index, executable,
                           True, path, newest,
@@ -1468,7 +1470,7 @@ def _create_egg_link(directory: Path, dest: str, egg_name: str) -> str:
     return egg_link
 
 
-def _copyeggs(src: str, dest: str, suffix: str, undo: list[Callable]) -> Optional[str]:
+def _copyeggs(src: str, dest: str, suffix: str, undo: list[Callable]) -> str | None:
     """Copy eggs.
 
     Expected is:
@@ -1567,8 +1569,8 @@ def _detect_distutils_scripts(directory: str) -> None:
 
 
 def develop(setup: str, dest: str,
-            build_ext: Optional[dict[str, str]]=None,
-            executable: str=sys.executable) -> Optional[str]:
+            build_ext: dict[str, str] | None=None,
+            executable: str=sys.executable) -> str | None:
     """Make a development/editable install of a package.
 
     This expects to get a path to a directory or a file as the first argument.
@@ -1657,7 +1659,7 @@ def develop(setup: str, dest: str,
         [f() for f in undo]
 
 
-def working_set(specs: tuple[str, ...], executable: str, path: Optional[list[str]]=None,
+def working_set(specs: tuple[str, ...], executable: str, path: list[str] | None=None,
                 ) -> pkg_resources.WorkingSet:
     # Backward compat:
     if path is None:
@@ -1673,7 +1675,7 @@ def working_set(specs: tuple[str, ...], executable: str, path: Optional[list[str
 
 def _script_paths(
         working_set: pkg_resources.WorkingSet,
-        extra_paths: Union[tuple[str, ...], list[str]],
+        extra_paths: tuple[str, ...] | list[str],
         ) -> list[str]:
     path = [_dist_location(dist) for dist in working_set]
     path.extend(extra_paths)
@@ -1688,7 +1690,7 @@ def _script_paths(
 def _find_req_dist(
         req: str,
         working_set: pkg_resources.WorkingSet,
-        ) -> Optional[pkg_resources.Distribution]:
+        ) -> pkg_resources.Distribution | None:
     """Resolve a requirement string to a dist of the working set.
 
     Returns ``None`` when the requirement's environment marker excludes
@@ -1769,7 +1771,7 @@ def _dist_distutils_scripts(
 
 
 def _collect_req_scripts(
-        reqs: list[Union[tuple[str, str, str], str]],
+        reqs: list[tuple[str, str, str] | str],
         working_set: pkg_resources.WorkingSet,
         ) -> tuple[list[tuple[str, str, str]], list[tuple[str, str]]]:
     """Collect entry points and distutils scripts from requirements."""
@@ -1790,11 +1792,11 @@ def _collect_req_scripts(
 
 def _script_target(
         name: str,
-        scripts: Optional[dict[str, str]],
-        dest: Optional[str],
+        scripts: dict[str, str] | None,
+        dest: str | None,
         path: list[str],
-        relative_paths: Union[str, bool],
-        ) -> Optional[tuple[str, str, str]]:
+        relative_paths: str | bool,
+        ) -> tuple[str, str, str] | None:
     """Resolve a script name to its destination and path setup.
 
     Returns ``None`` when a ``scripts`` mapping was given that does not
@@ -1815,7 +1817,7 @@ def _script_target(
 
 
 def _warn_missing_scripts(
-        scripts: Optional[dict[str, str]],
+        scripts: dict[str, str] | None,
         entry_points_names: list[str],
         ) -> None:
     # warn when a script name passed in 'scripts' argument
@@ -1832,13 +1834,13 @@ def _warn_missing_scripts(
                     "'%s' is not defined in the egg entry points.", name, target)
 
 
-def scripts(reqs: list[Union[tuple[str, str, str], str]], working_set: pkg_resources.WorkingSet, executable: str, dest: Optional[str]=None,
-            scripts: Optional[dict[str, str]]=None,
-            extra_paths: Union[tuple[str, ...], list[str]]=(),
+def scripts(reqs: list[tuple[str, str, str] | str], working_set: pkg_resources.WorkingSet, executable: str, dest: str | None=None,
+            scripts: dict[str, str] | None=None,
+            extra_paths: tuple[str, ...] | list[str]=(),
             arguments: str='',
-            interpreter: Optional[str]=None,
+            interpreter: str | None=None,
             initialization: str='',
-            relative_paths: Union[str, bool]=False,
+            relative_paths: str | bool=False,
             ) -> list[str]:
     assert executable == sys.executable, (executable, sys.executable)
 
@@ -1889,7 +1891,7 @@ def scripts(reqs: list[Union[tuple[str, str, str], str]], working_set: pkg_resou
     return generated
 
 
-def _relative_path_and_setup(sname: str, path: list[str], relative_paths: Union[str, bool]) -> tuple[str, str]:
+def _relative_path_and_setup(sname: str, path: list[str], relative_paths: str | bool) -> tuple[str, str]:
     if relative_paths:
         # Callers pass either a falsy value or a base path string; a bare
         # ``True`` is not supported.
@@ -2245,7 +2247,7 @@ def _is_url(value: str) -> bool:
 
 
 def _pip_install_args(spec: str, dest: str, editable: bool,
-                      package_index_url: Optional[str],
+                      package_index_url: str | None,
                       log_level: int) -> list[str]:
     """Assemble the ``pip install`` argument list for ``call_pip_install``.
 
@@ -2257,7 +2259,7 @@ def _pip_install_args(spec: str, dest: str, editable: bool,
     """
     args = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', dest]
     if package_index_url:
-        url: Optional[str] = package_index_url
+        url: str | None = package_index_url
         if not _is_url(url):
             # pip 25+ does not accept a directory as index, which buildout
             # does support.
@@ -2305,7 +2307,7 @@ def _run_pip(args: list[str], env: dict[str, str], dest: str, level: int) -> str
 
 
 def _scan_editable_install(
-        split_entries: list[tuple[str, str]]) -> tuple[str, Optional[str]]:
+        split_entries: list[tuple[str, str]]) -> tuple[str, str | None]:
     """Scan pip install output entries for egg-link / nspkg.pth markers.
 
     ``split_entries`` holds ``os.path.splitext`` results for the files pip
@@ -2347,7 +2349,7 @@ def _dist_info_dirname(split_entries: list[tuple[str, str]]) -> str:
     ][0]
 
 
-def _installed_dist_name(full_distinfo_dir: str) -> Optional[str]:
+def _installed_dist_name(full_distinfo_dir: str) -> str | None:
     """Read the package name from an installed ``.dist-info`` directory."""
     distrib = metadata.Distribution.at(full_distinfo_dir)
     # On Python 3.10 we could use `distrib.name`.
@@ -2377,7 +2379,7 @@ def _maybe_add_no_python_version_warning(args: list[str]) -> None:
 
 
 def _editable_scan_result(
-        split_entries: list[tuple[str, str]], spec: str) -> Optional[str]:
+        split_entries: list[tuple[str, str]], spec: str) -> str | None:
     """Handle an editable install's egg-link / -nspkg.pth scan results.
 
     Return the package name when an egg-link file was created
@@ -2411,7 +2413,7 @@ def _editable_scan_result(
     return None
 
 
-def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, list[str]]:
+def call_pip_install(spec: str, dest: str, editable: bool=False) -> str | list[str]:
     """
     Call `pip install` from a subprocess to install a
     distribution specified by `spec` into `dest`.
@@ -2476,7 +2478,7 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, l
     return name
 
 
-def _namespace_candidate_lines(ns_file: Union[str, Path]) -> list[str]:
+def _namespace_candidate_lines(ns_file: str | Path) -> list[str]:
     """Return the non-empty, non-comment lines of ``ns_file``."""
     with open(ns_file, 'r') as myfile:
         return [line for line in myfile.readlines() if line.strip() and not line.strip().startswith('#')]
@@ -2497,7 +2499,7 @@ def _lines_declare_namespace(contents: list[str]) -> bool:
     return False
 
 
-def check_namespace_init_file(ns_file: Union[str, Path]) -> bool:
+def check_namespace_init_file(ns_file: str | Path) -> bool:
     """Look for namespace declaration in file.
 
     This can be spelled in different ways.  It can be a one-liner:
@@ -2530,7 +2532,7 @@ def check_namespace_init_file(ns_file: Union[str, Path]) -> bool:
     return False
 
 
-def find_namespace_init_files(directory: Union[str, Path]) -> list[str]:
+def find_namespace_init_files(directory: str | Path) -> list[str]:
     logger.debug("Searching for namespace __init__.py files in %s", directory)
     found_files = []
     for root, dirs, files in os.walk(directory):
@@ -2577,7 +2579,7 @@ def _remove_pip_bin_dir(dest: str, distinfo_dir: str) -> None:
                     shutil.rmtree(bin_dir)
 
 
-def _read_project_name(dest: str, distinfo_dir: str) -> Optional[str]:
+def _read_project_name(dest: str, distinfo_dir: str) -> str | None:
     # Get actual project name from dist-info directory.
     metadata_path = posixpath.join(dest, distinfo_dir, "METADATA")
     # The encoding and errors arguments can be needed on Windows.
@@ -2719,7 +2721,7 @@ UNPACKERS = {
 }
 
 
-def _get_matching_dist_in_location(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], location: str) -> Optional[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]]:
+def _get_matching_dist_in_location(dist: pkg_resources.DistInfoDistribution | pkg_resources.Distribution, location: str) -> pkg_resources.Distribution | pkg_resources.DistInfoDistribution | None:
     """
     Check if `locations` contain only the one intended dist.
     Return the dist with metadata in the new location.
@@ -2744,7 +2746,7 @@ class BuildoutWheel(Wheel):
     # from the wheel filename, which is invisible to static analysis.
     project_name: str
 
-    def get_project_name(self) -> Optional[str]:
+    def get_project_name(self) -> str | None:
         """Get project name by looking in the .dist-info of the wheel.
 
         This is adapted from the Wheel.install_as_egg method and the methods
@@ -2762,7 +2764,7 @@ class BuildoutWheel(Wheel):
             return metadata.get("Name")
 
 
-def _maybe_copy_and_rename_wheel(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], dest: str) -> Optional[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]]:
+def _maybe_copy_and_rename_wheel(dist: pkg_resources.DistInfoDistribution | pkg_resources.Distribution, dest: str) -> pkg_resources.Distribution | pkg_resources.DistInfoDistribution | None:
     """Maybe copy and rename wheel.
 
     Return the new dist or None.
@@ -2859,7 +2861,7 @@ def _ensure_dest_dir(dest: str) -> None:
             raise
 
 
-def _unpack_dist_to_tmp(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], tmp_dest: str) -> str:
+def _unpack_dist_to_tmp(dist: pkg_resources.DistInfoDistribution | pkg_resources.Distribution, tmp_dest: str) -> str:
     """Copy or unpack ``dist`` into ``tmp_dest``; return its location there.
 
     A pre-built directory is copied as-is.  An archive is unpacked with
@@ -2903,7 +2905,7 @@ def _unpack_dist_to_tmp(dist: Union[pkg_resources.DistInfoDistribution, pkg_reso
     return tmp_loc
 
 
-def _move_dist_into_place(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], tmp_loc: str, dest: str) -> Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]:
+def _move_dist_into_place(dist: pkg_resources.DistInfoDistribution | pkg_resources.Distribution, tmp_loc: str, dest: str) -> pkg_resources.Distribution | pkg_resources.DistInfoDistribution:
     """Rename the unpacked dist into ``dest``; return the new dist.
 
     The rename can lose a race against a buildout running in parallel:
@@ -2953,7 +2955,7 @@ def _move_dist_into_place(dist: Union[pkg_resources.DistInfoDistribution, pkg_re
     return newdist
 
 
-def _move_to_eggs_dir_and_compile(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], dest: str) -> Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]:
+def _move_to_eggs_dir_and_compile(dist: pkg_resources.DistInfoDistribution | pkg_resources.Distribution, dest: str) -> pkg_resources.Distribution | pkg_resources.DistInfoDistribution:
     """Move distribution to the eggs destination directory.
 
     Originally we compiled the py files if we actually moved the dist.

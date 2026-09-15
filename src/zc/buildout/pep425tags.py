@@ -1,16 +1,17 @@
 """Generate and work with PEP 425 Compatibility Tags."""
 
+from __future__ import annotations
+
 import sys
 import warnings
 
 import sysconfig
 import distutils.util  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 
-from typing import Optional
 from collections.abc import Callable
 
 
-def get_config_var(var: str) -> Optional[str]:
+def get_config_var(var: str) -> str | None:
     try:
         return sysconfig.get_config_var(var)
     except OSError as e:  # pip Issue #1074
@@ -62,7 +63,7 @@ def get_flag(var: str, fallback: Callable[[], bool], expected: object=True, warn
     return val == expected
 
 
-def get_abi_tag() -> Optional[str]:
+def get_abi_tag() -> str | None:
     """Return the ABI tag based on SOABI (if available) or emulate SOABI
     (CPython 2, PyPy)."""
     soabi = get_config_var('SOABI')

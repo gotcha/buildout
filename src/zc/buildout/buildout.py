@@ -14,6 +14,8 @@
 """Buildout main script
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping, MutableMapping, MutableMapping as DictMixin
 from functools import partial
 from hashlib import md5 as md5_original
@@ -41,7 +43,7 @@ import tempfile
 import zc.buildout
 from zc.buildout import _activity
 import zc.buildout.download
-from typing import Any, ClassVar, NoReturn, Optional, TextIO, TypeVar, Union, overload
+from typing import Any, ClassVar, NoReturn, TextIO, TypeVar, overload
 from collections.abc import Callable, Iterator, Sequence
 
 
@@ -58,14 +60,14 @@ def command(method: Callable) -> Callable:
     return method
 
 
-def commands(cls: type['Buildout']) -> type['Buildout']:
+def commands(cls: type[Buildout]) -> type[Buildout]:
     for name, method in cls.__dict__.items():
         if hasattr(method, "buildout_command"):
             cls.COMMANDS.add(name)
     return cls
 
 
-def _print_options(sep: str=' ', end: str='\n', file: Optional[TextIO]=None) -> tuple[str, str, Optional[TextIO]]:
+def _print_options(sep: str=' ', end: str='\n', file: TextIO | None=None) -> tuple[str, str, TextIO | None]:
     return sep, end, file
 
 def print_(*args: Any, **kw: Any) -> None:
@@ -90,7 +92,7 @@ class MissingSection(zc.buildout.UserError, KeyError):
         return "The referenced section, %r, was not defined." % self.args[0]
 
 
-def _annotate_section(section: dict[str, Any], source: str) -> dict[str, 'SectionKey']:
+def _annotate_section(section: dict[str, Any], source: str) -> dict[str, SectionKey]:
     for key in section:
         section[key] = SectionKey(section[key], source)
     return section
@@ -106,7 +108,7 @@ class SectionKey:
     def source(self) -> str:
         return self.history[-1].source
 
-    def overrideValue(self, sectionkey: "SectionKey") -> None:
+    def overrideValue(self, sectionkey: SectionKey) -> None:
         self.value = sectionkey.value
         if sectionkey.history[-1].operation not in ['ADD', 'REMOVE']:
             self.addToHistory("OVERRIDE", sectionkey.value, sectionkey.source)
@@ -231,10 +233,10 @@ class HistoryItem:
 
 # Annotated configuration data: maps section names to sections whose values
 # are SectionKey objects once annotated (plain dicts while still raw).
-ConfigData = dict[str, Union[dict[str, SectionKey], dict[Any, Any]]]
+ConfigData = dict[str, dict[str, SectionKey] | dict[Any, Any]]
 
 
-def _annotate(data: dict[str, Union[dict[str, str], dict[Any, Any]]], note: str) -> dict[str, Union[dict[str, SectionKey], dict[Any, Any]]]:
+def _annotate(data: dict[str, dict[str, str] | dict[Any, Any]], note: str) -> dict[str, dict[str, SectionKey] | dict[Any, Any]]:
     for key in data:
         data[key] = _annotate_section(data[key], note)
     return data
@@ -367,11 +369,11 @@ def _new_develop_eggs(dest: str, old_files: list[str]) -> str:
 
 
 def _resolve_config_file(
-        config_file: Optional[str],
-        command: Optional[str],
-        args: Union[tuple[str, ...], list[str]],
-        init_config: Callable[[str, Union[tuple[str, ...], list[str]]], None],
-        ) -> tuple[Optional[str], Optional[SectionKey]]:
+        config_file: str | None,
+        command: str | None,
+        args: tuple[str, ...] | list[str],
+        init_config: Callable[[str, tuple[str, ...] | list[str]], None],
+        ) -> tuple[str | None, SectionKey | None]:
     """Resolve a local ``config_file`` path for opening.
 
     Return the possibly rewritten ``config_file`` along with the
@@ -507,7 +509,7 @@ def _pin_buildout_version(versions: dict[str, SectionKey]) -> None:
 
 def _default_versions(
         data: ConfigData,
-        ) -> tuple[str, Union[dict[str, SectionKey], dict[Any, Any]]]:
+        ) -> tuple[str, dict[str, SectionKey] | dict[Any, Any]]:
     """Ensure ``data`` has a versions section with default pins.
 
     Return the versions section name and the versions mapping.
@@ -521,7 +523,7 @@ def _default_versions(
 
     # Default versions:
     versions_section_name = data['buildout']['versions'].value
-    versions: Union[dict[str, SectionKey], dict[Any, Any]]
+    versions: dict[str, SectionKey] | dict[Any, Any]
     if versions_section_name:
         versions = data[versions_section_name]
     else:
@@ -592,7 +594,7 @@ def _absolutize_cache_dirs(data: ConfigData, buildout_dir: str) -> None:
 def _links_and_hosts(
         links: str,
         allow_hosts: str,
-        ) -> tuple[Union[list[str], tuple[str, ...]], tuple[str, ...]]:
+        ) -> tuple[list[str] | tuple[str, ...], tuple[str, ...]]:
     """Compute the legacy ``_links`` and ``_allow_hosts`` attribute
     values from the ``find-links`` and ``allow-hosts`` settings."""
     # ty over-widens the and/or idiom with an impossible falsy-str case.
@@ -613,7 +615,7 @@ def _absolutize_standard_dirs(
         section[name+'-directory'] = d
 
 
-def _version_eggs_directory(options: Union['Options', dict[str, str]]) -> None:
+def _version_eggs_directory(options: Options | dict[str, str]) -> None:
     """Join the eggs-directory version and ABI tag into
     ``options['eggs-directory']``, in place."""
     # Since zc.buildout version 5 we maintain separate directories for each
@@ -644,7 +646,7 @@ def _version_eggs_directory(options: Union['Options', dict[str, str]]) -> None:
 
 def _create_cache_dirs(
         directory: str,
-        caches: list[Optional[str]],
+        caches: list[str | None],
         logger: logging.Logger,
         ) -> None:
     """Create each cache directory (relative to ``directory``) if missing."""
@@ -656,7 +658,7 @@ def _create_cache_dirs(
                 os.makedirs(cache)
 
 
-def _setup_download_cache(download_cache: Optional[str]) -> None:
+def _setup_download_cache(download_cache: str | None) -> None:
     """Create the download cache and point easy_install at it."""
     if download_cache:
         # Actually, we want to use a subdirectory in there called 'dist'.
@@ -667,7 +669,7 @@ def _setup_download_cache(download_cache: Optional[str]) -> None:
 
 
 def _check_install_from_cache(
-        options: Union['Options', dict[str, str]],
+        options: Options | dict[str, str],
         offline: bool,
         ) -> None:
     """Enable install-from-cache, refusing the offline-mode combination."""
@@ -694,8 +696,8 @@ def _split_parts(parts: str) -> list[str]:
 
 
 def _print_configuration_data(
-        data: Mapping[str, Union['Options', dict[str, str]]],
-        get_options: Callable[[str], Union['Options', dict[str, str]]],
+        data: Mapping[str, Options | dict[str, str]],
+        get_options: Callable[[str], Options | dict[str, str]],
         ) -> None:
     """Print the full configuration data (quiet log levels only)."""
     print_()
@@ -752,14 +754,14 @@ def _log_part_option_changes(
 def _uninstall_stale_parts(
         install_parts: Sequence[str],
         installed_parts: list[str],
-        installed_part_options: dict[str, Union['Options', dict[str, str]]],
+        installed_part_options: dict[str, Options | dict[str, str]],
         uninstall_missing: bool,
         installed_exists: bool,
-        get_options: Callable[[str], Optional[Mapping[str, str]]],
+        get_options: Callable[[str], Mapping[str, str] | None],
         buildout_path: Callable[[str], str],
         logger: logging.Logger,
         uninstall_part: Callable[
-            [str, dict[str, Union['Options', dict[str, str]]]], None],
+            [str, dict[str, Options | dict[str, str]]], None],
         update_installed: Callable[..., None],
         ) -> list[str]:
     """Uninstall the parts that are no longer used or whose configuration
@@ -812,7 +814,7 @@ def _update_recipe_callable(
 
 
 def _merged_updated_files(
-        installed_files: Optional[Union[tuple[str, ...], str, list[str]]],
+        installed_files: tuple[str, ...] | str | list[str] | None,
         old_installed_files: str,
         ) -> tuple[list[str], list[str]]:
     """Merge an update result with the previously installed files.
@@ -838,8 +840,8 @@ def _update_part(
         part: str,
         recipe: Any,
         call: Callable[
-            [Callable], Optional[Union[tuple[str, ...], str, list[str]]]],
-        installed_part_options: dict[str, Union['Options', dict[str, str]]],
+            [Callable], tuple[str, ...] | str | list[str] | None],
+        installed_part_options: dict[str, Options | dict[str, str]],
         installed_parts: list[str],
         installed_exists: bool,
         logger: logging.Logger,
@@ -867,10 +869,10 @@ def _update_part(
 
 
 def _normalize_installed_files(
-        installed_files: Optional[Union[tuple[str, ...], str, list[str]]],
+        installed_files: tuple[str, ...] | str | list[str] | None,
         part: str,
         logger: logging.Logger,
-        ) -> Union[list[str], tuple[str, ...]]:
+        ) -> list[str] | tuple[str, ...]:
     """Normalize a recipe install result to a list of paths.
 
     A ``None`` result is a recipe bug: warn and use the empty tuple,
@@ -891,9 +893,9 @@ def _record_installed_part(
         part: str,
         signature: str,
         saved_options: dict[str, str],
-        installed_files: Union[list[str], tuple[str, ...]],
+        installed_files: list[str] | tuple[str, ...],
         installed_parts: list[str],
-        installed_part_options: dict[str, Union['Options', dict[str, str]]],
+        installed_part_options: dict[str, Options | dict[str, str]],
         ) -> list[str]:
     """Record the part's final options and move it to the end of the
     installed parts list; return the updated list."""
@@ -907,12 +909,12 @@ def _record_installed_part(
 
 
 def _save_or_update_installed(
-        need_to_save_installed: Union[bool, list[str]],
+        need_to_save_installed: bool | list[str],
         installed_exists: bool,
         installed_parts: list[str],
-        installed_part_options: dict[str, Union['Options', dict[str, str]]],
+        installed_part_options: dict[str, Options | dict[str, str]],
         save_installed_options: Callable[
-            [Mapping[str, Union['Options', dict[str, str]]]], None],
+            [Mapping[str, Options | dict[str, str]]], None],
         update_installed: Callable[..., None],
         ) -> bool:
     """Persist the installed options after a part install/update;
@@ -931,10 +933,10 @@ def _finalize_installed_options(
         installed_develop_eggs: str,
         installed_exists: bool,
         installed_parts: list[str],
-        installed_part_options: dict[str, Union['Options', dict[str, str]]],
-        buildout_options: Union['Options', dict[str, str]],
+        installed_part_options: dict[str, Options | dict[str, str]],
+        buildout_options: Options | dict[str, str],
         save_installed_options: Callable[
-            [Mapping[str, Union['Options', dict[str, str]]]], None],
+            [Mapping[str, Options | dict[str, str]]], None],
         ) -> None:
     """Persist the installed options when only develop eggs changed, or
     drop the installed file when no parts remain."""
@@ -980,7 +982,7 @@ def _find_upgraded_dists(
 
 
 def _upgrade_and_restart(
-        options: Union['Options', dict[str, str]],
+        options: Options | dict[str, str],
         ws: pkg_resources.WorkingSet,
         upgraded: list[pkg_resources.Distribution],
         logger: logging.Logger,
@@ -1054,7 +1056,7 @@ def _split_query_option(arg: str) -> tuple[str, str]:
     return section, option
 
 
-def _parse_query_args(args: Optional[list[str]]) -> tuple[str, str, bool]:
+def _parse_query_args(args: list[str] | None) -> tuple[str, str, bool]:
     """Parse the query command arguments into ``(section, option,
     interpolated)``."""
     interpolated = bool(args) and '--interpolated' in args
@@ -1086,11 +1088,11 @@ class Buildout(DictMixin):
     COMMANDS = set()
     # Bound further below, where the Options class is defined
     # (``Buildout.Options = Options``).
-    Options: ClassVar[type['Options']]
+    Options: ClassVar[type[Options]]
 
-    def __init__(self, config_file: Optional[str], cloptions: list[tuple[str, str, str]],
+    def __init__(self, config_file: str | None, cloptions: list[tuple[str, str, str]],
                  use_user_defaults: bool=True,
-                 command: Optional[str]=None, args: Union[tuple[str, ...], list[str]]=()) -> None:
+                 command: str | None=None, args: tuple[str, ...] | list[str]=()) -> None:
 
         with _activity('Initializing.'):
 
@@ -1241,7 +1243,7 @@ class Buildout(DictMixin):
         return os.path.join(self._buildout_dir, name)
 
     @command
-    def bootstrap(self, args: Union[list[str], tuple[str, ...]]) -> None:
+    def bootstrap(self, args: list[str] | tuple[str, ...]) -> None:
         with _activity('Bootstrapping.'):
 
             if os.path.exists(self['buildout']['develop-eggs-directory']):
@@ -1294,7 +1296,7 @@ class Buildout(DictMixin):
                     or ''),
                 )
 
-    def _init_config(self, config_file: str, args: Union[tuple[str, ...], list[str]]) -> None:
+    def _init_config(self, config_file: str, args: tuple[str, ...] | list[str]) -> None:
         print_('Creating %r.' % config_file)
         f = open(config_file, 'w')
         sep = re.compile(r'[\\/]')
@@ -1331,7 +1333,7 @@ class Buildout(DictMixin):
             self.install(())
 
     @command
-    def install(self, install_args: Union[list[str], tuple[str, ...]]) -> None:
+    def install(self, install_args: list[str] | tuple[str, ...]) -> None:
         with _activity('Installing.'):
 
             self._load_extensions()
@@ -1447,7 +1449,7 @@ class Buildout(DictMixin):
             _save_option(option, value, f)
         f.close()
 
-    def _uninstall_part(self, part: str, installed_part_options: dict[str, Union['Options', dict[str, str]]]) -> None:
+    def _uninstall_part(self, part: str, installed_part_options: dict[str, Options | dict[str, str]]) -> None:
         # uninstall part
         with _activity('Uninstalling %s.', part):
             self._logger.info('Uninstalling %s.', part)
@@ -1618,13 +1620,13 @@ class Buildout(DictMixin):
             sig = _dists_sig(pkg_resources.working_set.resolve([req]))
             options['__buildout_signature__'] = ' '.join(sig)
 
-    def _read_installed_part_options(self) -> tuple[dict[str, Union['Options', dict[str, str]]], bool]:
+    def _read_installed_part_options(self) -> tuple[dict[str, Options | dict[str, str]], bool]:
         old = self['buildout']['installed']
         if old and os.path.isfile(old):
             fp = open(old)
             sections = zc.buildout.configparser.parse(fp, old)
             fp.close()
-            result: dict[str, Union['Options', dict[str, str]]] = {}
+            result: dict[str, Options | dict[str, str]] = {}
             for section, options in sections.items():
                 for option, value in options.items():
                     if '%(' in value:
@@ -1678,7 +1680,7 @@ class Buildout(DictMixin):
         return ' '.join(installed)
 
 
-    def _save_installed_options(self, installed_options: Mapping[str, Union['Options', dict[str, str]]]) -> None:
+    def _save_installed_options(self, installed_options: Mapping[str, Options | dict[str, str]]) -> None:
         installed = self['buildout']['installed']
         if not installed:
             return
@@ -1900,7 +1902,7 @@ The following list shows the affected packages and their namespaces:
         self.setup(args)
 
     @command
-    def query(self, args: Optional[list[str]]=None) -> None:
+    def query(self, args: list[str] | None=None) -> None:
         section, option, interpolated = _parse_query_args(args)
         verbose = self['buildout'].get('verbosity', 0) != 0
         if verbose:
@@ -1911,7 +1913,7 @@ The following list shows the affected packages and their namespaces:
         print_(value)
 
     @command
-    def annotate(self, args: Optional[list[str]]=None) -> None:
+    def annotate(self, args: list[str] | None=None) -> None:
         verbose = self['buildout'].get('verbosity', 0) != 0
         if args is None:
             sections = []
@@ -1935,7 +1937,7 @@ The following list shows the affected packages and their namespaces:
                     sectionkey.value = value
         return data
 
-    def print_options(self, base_path: Optional[str]=None) -> None:
+    def print_options(self, base_path: str | None=None) -> None:
         for section in sorted(self._data):
             if section == 'buildout' or section == self['buildout']['versions']:
                 continue
@@ -1950,7 +1952,7 @@ The following list shows the affected packages and their namespaces:
                     v = v.replace(os.getcwd(), base_path)
                 print_("%s =%s" % (k, v))
 
-    def __getitem__(self, section: str) -> "Options":
+    def __getitem__(self, section: str) -> Options:
         with _activity('Getting section %s.', section):
             try:
                 return self._data[section]
@@ -2062,7 +2064,7 @@ class Options(DictMixin):
         self._data = {}
         # Only holds a value while a recipe is installing (see _call);
         # declared here so its type is known in created().
-        self._created: Optional[list[str]]
+        self._created: list[str] | None
 
     def _initialize(self) -> None:
         name = self.name
@@ -2137,10 +2139,10 @@ class Options(DictMixin):
     # parameter is typed ``Any`` to stay compatible with ``Mapping.get``,
     # whose key type is not narrowed by this class.
     @overload
-    def get(self, key: Any) -> Optional[str]: ...
+    def get(self, key: Any) -> str | None: ...
     @overload
-    def get(self, key: Any, default: _T, seen: Optional[list[tuple[str, str]]]=None) -> Union[str, _T]: ...
-    def get(self, key: Any, default: Optional[Union[str, int, bool]]=None, seen: Optional[list[tuple[str, str]]]=None) -> Optional[Union[str, int, bool]]:
+    def get(self, key: Any, default: _T, seen: list[tuple[str, str]] | None=None) -> str | _T: ...
+    def get(self, key: Any, default: str | int | bool | None=None, seen: list[tuple[str, str]] | None=None) -> str | int | bool | None:
         try:
             return self._data[key]
         except KeyError:
@@ -2258,7 +2260,7 @@ class Options(DictMixin):
         result.update(self._data)
         return result
 
-    def _call(self, f: Callable) -> Optional[Union[tuple[str, ...], str, list[str]]]:
+    def _call(self, f: Callable) -> tuple[str, ...] | str | list[str] | None:
         buildout_directory = self.buildout['buildout']['directory']
         self._created = []
         try:
@@ -2334,7 +2336,7 @@ def _save_option(option: str, value: str, f: TextIO) -> None:
         value = value[:-2] + '%(__buildout_space_n__)s'
     print_(option, '=', value, file=f)
 
-def _save_options(section: str, options: Union[Options, dict[str, str]], f: TextIO) -> None:
+def _save_options(section: str, options: Options | dict[str, str], f: TextIO) -> None:
     print_('[%s]' % section, file=f)
     items = list(options.items())
     items.sort()
@@ -2423,7 +2425,7 @@ def _default_globals() -> dict[str, Any]:
 
 variable_template_split = re.compile('([$]{[^}]*})').split
 
-def _validated_extends_cache(raw_download_options: dict[str, str]) -> Optional[str]:
+def _validated_extends_cache(raw_download_options: dict[str, str]) -> str | None:
     """Return the extends-cache option, rejecting variable substitutions."""
     extends_cache = raw_download_options.get('extends-cache')
     if extends_cache and variable_template_split(extends_cache)[1::2]:
@@ -2449,7 +2451,7 @@ def _resolve_config_location(base: str, filename: str) -> tuple[str, str, bool]:
     filename = os.path.join(base, filename)
     return filename, os.path.dirname(filename), False
 
-def _filename_for_logging(filename: str, downloaded_filename: Optional[str]) -> str:
+def _filename_for_logging(filename: str, downloaded_filename: str | None) -> str:
     if downloaded_filename:
         return '%s (downloaded as %s)' % (filename, downloaded_filename)
     return filename
@@ -2467,7 +2469,7 @@ def _open_config_file(
         seen: list[str],
         download: zc.buildout.download.Download,
         downloaded: set[str],
-        ) -> tuple[str, str, TextIOWrapper, bool, Optional[str]]:
+        ) -> tuple[str, str, TextIOWrapper, bool, str | None]:
     """Resolve ``filename`` against ``base`` and open it, downloading
     first when it is a URL.
 
@@ -2495,9 +2497,9 @@ def _open_config_file(
     return filename, base, fp, is_temp, downloaded_filename
 
 def _parse_config_file(
-        fp: Union[StringIO, TextIOWrapper],
+        fp: StringIO | TextIOWrapper,
         filename: str,
-        downloaded_filename: Optional[str],
+        downloaded_filename: str | None,
         is_temp: bool,
         ) -> dict[str, dict[str, str]]:
     """Parse the open config file ``fp``, close it, and remove any
@@ -2514,7 +2516,7 @@ def _parse_config_file(
 
 def _extends_results(
         base: str,
-        extends: Optional[str],
+        extends: str | None,
         seen: list[str],
         download_options: dict[str, SectionKey],
         override: dict[str, SectionKey],
@@ -2546,7 +2548,7 @@ def _extends_results(
 
 def _optional_extends_results(
         base: str,
-        optional_extends: Optional[SectionKey],
+        optional_extends: SectionKey | None,
         seen: list[str],
         download_options: dict[str, SectionKey],
         override: dict[str, SectionKey],
@@ -2575,7 +2577,7 @@ def _optional_extends_results(
 def _open(
         base: str, filename: str, seen: list[str], download_options: dict[str, SectionKey],
         override: dict[str, SectionKey], downloaded: set[str], user_defaults: dict[str, dict[str, SectionKey]]
-        ) -> Union[tuple[ConfigData, dict[str, dict[str, SectionKey]]], tuple[list[ConfigData], dict[str, dict[str, SectionKey]]]]:
+        ) -> tuple[ConfigData, dict[str, dict[str, SectionKey]]] | tuple[list[ConfigData], dict[str, dict[str, SectionKey]]]:
     """Open a configuration file and return the result as a dictionary,
 
     Recursively open other files based on buildout options found.
@@ -2727,7 +2729,7 @@ def _update_verbose(s1: dict[str, SectionKey], s2: dict[str, SectionKey]) -> Non
         else:
             s1[key] = copy.deepcopy(v2)
 
-def _update(in1: dict[str, Union[dict[str, SectionKey], dict[Any, Any]]], d2: dict[str, Union[dict[str, SectionKey], dict[Any, Any]]]) -> dict[str, Union[dict[str, SectionKey], dict[Any, Any]]]:
+def _update(in1: dict[str, dict[str, SectionKey] | dict[Any, Any]], d2: dict[str, dict[str, SectionKey] | dict[Any, Any]]) -> dict[str, dict[str, SectionKey] | dict[Any, Any]]:
     d1 = copy.deepcopy(in1)
     for section in d2:
         if section in d1:
@@ -2760,7 +2762,7 @@ def _update(in1: dict[str, Union[dict[str, SectionKey], dict[Any, Any]]], d2: di
 
     return d1
 
-def _recipe(options: Union[Options, dict[str, str]]) -> tuple[str, str]:
+def _recipe(options: Options | dict[str, str]) -> tuple[str, str]:
     recipe = options['recipe']
     if ':' in recipe:
         recipe, entry = recipe.split(':')
@@ -3071,7 +3073,7 @@ def _consume_letter_flags(
     return op, verbosity, use_user_defaults, debug
 
 
-def main(args: Optional[list[str]]=None) -> None:
+def main(args: list[str] | None=None) -> None:
     if args is None:
         args = sys.argv[1:]
 
@@ -3122,7 +3124,7 @@ def main(args: Optional[list[str]]=None) -> None:
 
 
 _bool_names = {'true': True, 'false': False, True: True, False: False}
-def bool_option(options: Union[Options, dict[str, str]], name: str, default: Optional[Union[str, bool]]=None) -> bool:
+def bool_option(options: Options | dict[str, str], name: str, default: str | bool | None=None) -> bool:
     value = options.get(name, default)
     if value is None:
         raise KeyError(name)
