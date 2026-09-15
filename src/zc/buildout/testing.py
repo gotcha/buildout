@@ -57,7 +57,8 @@ def cat(dir, *names):
         print_(f.read(), end='')
 
 def eqs(a, *b):
-    a = set(a); b = set(b)
+    a = set(a)
+    b = set(b)
     return None if a == b else (a - b, b - a)
 
 def clear_here():

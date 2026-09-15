@@ -466,7 +466,8 @@ spam = 2
 Picked versions have been written to my_versions.cfg
 """, N)
     # The versions file now contains the extra pin:
-    with open('my_versions.cfg') as f: print_(f.read())
+    with open('my_versions.cfg') as f:
+        print_(f.read())
     # TODO assert: '\n...\n# Added by buildout at YYYY-MM-DD hh:mm:ss.dddddd\nspam '
     # And re-running buildout doesn't report any picked versions anymore:
     _val = ('picked' in system(buildout))
@@ -498,7 +499,8 @@ recipe v2
 Picked versions have been written to my_versions.cfg
 """, N)
     # The versions file contains the extra pin:
-    with open('my_versions.cfg') as f: print_(f.read())
+    with open('my_versions.cfg') as f:
+        print_(f.read())
     # TODO assert: '\n[versions]\n...\n\n# Added by buildout at YYYY-MM-DD hh:mm:ss.'
     # Because buildout now includes buildout-versions' (and part of the older
     # buildout.dumppickedversions') functionality, it warns if these extensions are

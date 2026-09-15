@@ -21,20 +21,12 @@ consider_namespace_packages = true
 target-version = "py39"
 
 [tool.ruff.lint]
-# Pragmatic baseline for a legacy tree: the classic ruff default set
-# (pyflakes F + pycodestyle E4/E7/E9) minus the rules the existing code
-# violates wholesale. Everything else stays enforced for new code —
-# tighten by removing entries from `ignore` as the code gets cleaned.
+# The classic ruff default set (pyflakes F + pycodestyle E4/E7/E9),
+# fully enforced: the burndown is done, the ignore list is empty.
 # (ruff >= 0.16 defaults to a much wider set; pin the baseline here so
 # `make lint` means the same thing across ruff versions.)
 select = ["E4", "E7", "E9", "F"]
-ignore = [
-    "E701",  # multiple statements on one line (colon)
-    "E702",  # multiple statements on one line (semicolon)
-    "E731",  # assign a lambda expression
-    "E722",  # bare except
-    "E741",  # ambiguous variable name (l, O, ...)
-]
+ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 # Ported doctest writes a buildout.cfg containing `${...}` substitutions

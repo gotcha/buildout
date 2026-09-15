@@ -202,12 +202,13 @@ def emit_example(ex, fixture_var):
 
     if not want.strip():
         fixed = dedent_strings(src_raw)
-        for l in (fixed if fixed is not None else textwrap.dedent(src_raw)).split('\n'):
-            lines.append('    ' + l)
+        for line in (fixed if fixed is not None else textwrap.dedent(src_raw)).split('\n'):
+            lines.append('    ' + line)
         return lines
 
     want_stripped = want.rstrip('\n')
-    want_lines = ['' if l == '<BLANKLINE>' else l for l in want_stripped.split('\n')]
+    want_lines = ['' if line == '<BLANKLINE>' else line
+                  for line in want_stripped.split('\n')]
     expected = '\n'.join(want_lines)
 
     if stripped.startswith('print_('):
@@ -233,8 +234,8 @@ def emit_example(ex, fixture_var):
         last_line = expected.strip().split('\n')[-1]
         exc_type = last_line.split(':')[0].strip()
         lines.append('    try:')
-        for l in stripped.split('\n'):
-            lines.append('        ' + l)
+        for line in stripped.split('\n'):
+            lines.append('        ' + line)
         lines.append('        assert False, "Expected %s not raised"' % exc_type)
         lines.append('    except Exception as _exc:')
         lines.append(
@@ -249,8 +250,8 @@ def emit_example(ex, fixture_var):
                     '    assert repr(_val) == %r or str(_val) == %r' % (expected, expected))
             except SyntaxError:
                 fixed = dedent_strings(src_raw)
-                for l in (fixed or textwrap.dedent(src_raw)).split('\n'):
-                    lines.append('    ' + l)
+                for line in (fixed or textwrap.dedent(src_raw)).split('\n'):
+                    lines.append('    ' + line)
         else:
             try:
                 ast.parse(stripped, mode='eval')
@@ -258,8 +259,8 @@ def emit_example(ex, fixture_var):
                     '    assert_output(capture_print(lambda: %s), %r, N)' % (stripped, expected))
             except SyntaxError:
                 fixed = dedent_strings(src_raw)
-                for l in (fixed or textwrap.dedent(src_raw)).split('\n'):
-                    lines.append('    ' + l)
+                for line in (fixed or textwrap.dedent(src_raw)).split('\n'):
+                    lines.append('    ' + line)
                 lines.append('    # TODO assert: ' + repr(expected[:80]))
 
     return lines

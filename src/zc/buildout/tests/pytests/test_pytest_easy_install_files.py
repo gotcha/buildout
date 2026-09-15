@@ -2356,9 +2356,12 @@ def test_download(easy_install_env):
     # We are responsible for cleaning up temporary files behind us:
     remove(path)
     # When trying to access a file that doesn't exist, we'll get an exception:
-    try: download(server_url+'not-there') # doctest: +ELLIPSIS
-    except: print_('download error')
-    else: print_('woops')
+    try:
+        download(server_url+'not-there') # doctest: +ELLIPSIS
+    except Exception:
+        print_('download error')
+    else:
+        print_('woops')
     # TODO assert: 'download error'
     # Downloading a local file doesn't produce a temporary file but simply returns
     # the local file itself:
@@ -2606,9 +2609,12 @@ def test_download(easy_install_env):
     assert repr(_val) == 'False' or str(_val) == 'False'
     # If the file cannot be served, the cached copy will be used:
     remove(server_data, 'foo.txt')
-    try: Download()(server_url+'foo.txt') # doctest: +ELLIPSIS
-    except: print_('download error')
-    else: print_('woops')
+    try:
+        Download()(server_url+'foo.txt') # doctest: +ELLIPSIS
+    except Exception:
+        print_('download error')
+    else:
+        print_('woops')
     # TODO assert: 'download error'
     path, is_temp = download(server_url+'foo.txt')
     assert_output(capture_print(cat, path), 'This is a foo text.', N)

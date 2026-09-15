@@ -430,7 +430,8 @@ at the end.
 
 The versions file now contains the extra pin:
 
-    >>> with open('my_versions.cfg') as f: print_(f.read()) # doctest: +ELLIPSIS
+    >>> with open('my_versions.cfg') as f:
+    ...     print_(f.read()) # doctest: +ELLIPSIS
     <BLANKLINE>
     ...
     # Added by buildout at YYYY-MM-DD hh:mm:ss.dddddd
@@ -471,7 +472,8 @@ printing them to the console):
 
 The versions file contains the extra pin:
 
-    >>> with open('my_versions.cfg') as f: print_(f.read()) # doctest: +ELLIPSIS
+    >>> with open('my_versions.cfg') as f:
+    ...     print_(f.read()) # doctest: +ELLIPSIS
     <BLANKLINE>
     [versions]
     ...

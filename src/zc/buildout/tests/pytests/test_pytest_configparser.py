@@ -642,7 +642,8 @@ long = a
 [s2:len(platform.uname()) > 0]  # a comment: this expression is likely always true, so this section will be kept
 long = b
 """
-    globs = lambda: {"platform": platform, "sys": sys}
+    def globs():
+        return {"platform": platform, "sys": sys}
     assert parse(text, exp_globals=globs) == {"s1": {"a": "1"}, "s2": {"long": "b"}}
 
 

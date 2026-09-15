@@ -1598,16 +1598,16 @@ def test_wont_downgrade_due_to_prefer_final(easy_install_env):
     # isn't specified using a versions entry, then buildout's version
     # requirement gets set to >=CURRENT_VERSION.
     write('buildout.cfg', '\n[buildout]\nparts =\n')
-    [v] = [l.split('= >=', 1)[1].strip() for l in system(buildout + ' -vv').split('\n') if l.startswith('zc.buildout = >=')]
+    [v] = [line.split('= >=', 1)[1].strip() for line in system(buildout + ' -vv').split('\n') if line.startswith('zc.buildout = >=')]
     _dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse('zc.buildout'))
     assert _dist is not None
     _val = (v == _dist.version)
     assert repr(_val) == 'True' or str(_val) == 'True'
     write('buildout.cfg', '\n[buildout]\nparts =\n[versions]\nzc.buildout = >0.1\n')
-    _val = ([str(l.split('= >', 1)[1].strip())
-       for l in system(buildout+' -vv').split('\n')
-       if l.startswith('zc.buildout =')])
+    _val = ([str(line.split('= >', 1)[1].strip())
+       for line in system(buildout+' -vv').split('\n')
+       if line.startswith('zc.buildout =')])
     assert repr(_val) == "['0.1']" or str(_val) == "['0.1']"
     write('buildout.cfg', '\n[buildout]\nparts =\nversions = versions\n[versions]\nzc.buildout = 43\n')
     assert_output(system(buildout), """

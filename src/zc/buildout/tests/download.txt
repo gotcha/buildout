@@ -58,9 +58,12 @@ We are responsible for cleaning up temporary files behind us:
 
 When trying to access a file that doesn't exist, we'll get an exception:
 
->>> try: download(server_url+'not-there') # doctest: +ELLIPSIS
-... except: print_('download error')
-... else: print_('woops')
+>>> try:
+...     download(server_url+'not-there') # doctest: +ELLIPSIS
+... except Exception:
+...     print_('download error')
+... else:
+...     print_('woops')
 download error
 
 Downloading a local file doesn't produce a temporary file but simply returns
@@ -410,9 +413,12 @@ False
 If the file cannot be served, the cached copy will be used:
 
 >>> remove(server_data, 'foo.txt')
->>> try: Download()(server_url+'foo.txt') # doctest: +ELLIPSIS
-... except: print_('download error')
-... else: print_('woops')
+>>> try:
+...     Download()(server_url+'foo.txt') # doctest: +ELLIPSIS
+... except Exception:
+...     print_('download error')
+... else:
+...     print_('woops')
 download error
 >>> path, is_temp = download(server_url+'foo.txt')
 >>> cat(path)

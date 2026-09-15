@@ -110,8 +110,8 @@ def find_assert_output_string_spans(src: str):
                         continue
                     # Compute byte offsets in src
                     lines = src.splitlines(keepends=True)
-                    start_offset = sum(len(l) for l in lines[:tok_str.start[0] - 1]) + tok_str.start[1]
-                    end_offset = sum(len(l) for l in lines[:tok_str.end[0] - 1]) + tok_str.end[1]
+                    start_offset = sum(len(line) for line in lines[:tok_str.start[0] - 1]) + tok_str.start[1]
+                    end_offset = sum(len(line) for line in lines[:tok_str.end[0] - 1]) + tok_str.end[1]
                     results.append((start_offset, end_offset, value, tok_str.start[1]))
             i = j
         i += 1

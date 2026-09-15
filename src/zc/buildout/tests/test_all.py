@@ -2673,9 +2673,9 @@ def wont_downgrade_due_to_prefer_final():
     ... parts =
     ... ''')
 
-    >>> [v] = [l.split('= >=', 1)[1].strip()
-    ...        for l in system(buildout+' -vv').split('\n')
-    ...        if l.startswith('zc.buildout = >=')]
+    >>> [v] = [line.split('= >=', 1)[1].strip()
+    ...        for line in system(buildout+' -vv').split('\n')
+    ...        if line.startswith('zc.buildout = >=')]
     >>> _dist = pkg_resources.working_set.find(
     ...         pkg_resources.Requirement.parse('zc.buildout'))
     >>> assert _dist is not None
@@ -2689,9 +2689,9 @@ def wont_downgrade_due_to_prefer_final():
     ... [versions]
     ... zc.buildout = >0.1
     ... ''')
-    >>> [str(l.split('= >', 1)[1].strip())
-    ...        for l in system(buildout+' -vv').split('\n')
-    ...        if l.startswith('zc.buildout =')]
+    >>> [str(line.split('= >', 1)[1].strip())
+    ...        for line in system(buildout+' -vv').split('\n')
+    ...        if line.startswith('zc.buildout =')]
     ['0.1']
 
     >>> write('buildout.cfg',
