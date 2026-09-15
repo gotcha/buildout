@@ -20,6 +20,7 @@ from zc.buildout.easy_install import (
     _dist_entry_points,
     _dist_info_dirname,
     _editable_scan_result,
+    _ensure_dest_dir,
     _fetch_new_dists,
     _fetch_requested_dists,
     _final_dists,
@@ -29,6 +30,7 @@ from zc.buildout.easy_install import (
     _is_url,
     _matching_dists,
     _maybe_add_no_python_version_warning,
+    _move_dist_into_place,
     _move_record_leftovers,
     _move_top_levels,
     _parse_requirements,
@@ -45,6 +47,7 @@ from zc.buildout.easy_install import (
     _script_paths,
     _script_target,
     _select_from_best,
+    _unpack_dist_to_tmp,
     _select_newer_dist,
     _warn_missing_scripts,
     _working_set_or_default,
@@ -1349,3 +1352,179 @@ def test_initial_path_copies_the_given_path():
     result = _initial_path(path)
     path.append('/y')
     assert '/y' not in result
+
+
+def test_ensure_dest_dir_creates_nested_directories(tmp_path):
+    dest = str(tmp_path / 'a' / 'b')
+    _ensure_dest_dir(dest)
+    assert os.path.isdir(dest)
+
+
+def test_ensure_dest_dir_accepts_existing_directory(tmp_path):
+    _ensure_dest_dir(str(tmp_path))
+    assert os.path.isdir(str(tmp_path))
+
+
+def test_ensure_dest_dir_reraises_when_directory_still_missing(
+        tmp_path, monkeypatch):
+    def fail_makedirs(path):
+        raise OSError('boom')
+
+    monkeypatch.setattr(os, 'makedirs', fail_makedirs)
+    with pytest.raises(OSError):
+        _ensure_dest_dir(str(tmp_path / 'missing'))
+
+
+def test_ensure_dest_dir_swallows_error_for_existing_directory(
+        tmp_path, monkeypatch):
+    def fail_makedirs(path):
+        raise OSError('File exists')
+
+    monkeypatch.setattr(os, 'makedirs', fail_makedirs)
+    _ensure_dest_dir(str(tmp_path))  # no raise
+
+
+def test_unpack_dist_to_tmp_copies_prebuilt_directory(tmp_path):
+    location = tmp_path / 'demo-1.0.egg'
+    location.mkdir()
+    (location / 'marker').write_text('x')
+    tmp_dest = tmp_path / 'tmp'
+    tmp_dest.mkdir()
+    dist = _env_dist('1.0')
+    dist.location = str(location)
+
+    tmp_loc = _unpack_dist_to_tmp(dist, str(tmp_dest))
+
+    assert tmp_loc == str(tmp_dest / 'demo-1.0.egg')
+    assert (tmp_dest / 'demo-1.0.egg' / 'marker').read_text() == 'x'
+
+
+def test_unpack_dist_to_tmp_uses_registered_unpacker(
+        tmp_path, monkeypatch, caplog):
+    unpacked = []
+
+    def fake_unpacker(location, tmp_loc):
+        unpacked.append((location, tmp_loc))
+        os.mkdir(tmp_loc)
+
+    monkeypatch.setitem(easy_install.UNPACKERS, '.gz', fake_unpacker)
+    dist = _env_dist('1.0')
+    dist.location = '/x/demo-1.0.tar.gz'
+
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        tmp_loc = _unpack_dist_to_tmp(dist, str(tmp_path))
+
+    assert tmp_loc == str(tmp_path / 'demo-1.0.egg')  # .tar.gz suffix trimmed
+    assert unpacked == [('/x/demo-1.0.tar.gz', tmp_loc)]
+    assert 'Calling unpacker for .gz' in caplog.text
+
+
+def test_unpack_dist_to_tmp_falls_back_to_pip(tmp_path, monkeypatch, caplog):
+    installed = []
+
+    def fake_pip_install(location, tmp_dest):
+        installed.append((location, tmp_dest))
+        return [os.path.join(tmp_dest, 'demo-1.0.egg')]
+
+    monkeypatch.setattr(easy_install, 'call_pip_install', fake_pip_install)
+    dist = _env_dist('1.0')
+    dist.location = '/x/demo-1.0.zip'
+
+    with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
+        tmp_loc = _unpack_dist_to_tmp(dist, str(tmp_path))
+
+    assert tmp_loc == str(tmp_path / 'demo-1.0.egg')
+    assert installed == [('/x/demo-1.0.zip', str(tmp_path))]
+    assert 'Calling pip install for .zip' in caplog.text
+
+
+def test_move_dist_into_place_renames_and_returns_new_dist(
+        tmp_path, monkeypatch):
+    tmp_loc = tmp_path / 'tmp' / 'demo-1.0.egg'
+    tmp_loc.mkdir(parents=True)
+    dest = tmp_path / 'eggs'
+    dest.mkdir()
+    newdist = _env_dist('1.0')
+    looked_up = []
+    monkeypatch.setattr(
+        easy_install, '_get_matching_dist_in_location',
+        lambda dist, location: looked_up.append(location) or newdist)
+
+    result = _move_dist_into_place(_env_dist('1.0'), str(tmp_loc), str(dest))
+
+    assert result is newdist
+    assert looked_up == [str(dest / 'demo-1.0.egg')]
+    assert not tmp_loc.exists()
+    assert (dest / 'demo-1.0.egg').is_dir()
+
+
+def test_move_dist_into_place_without_matching_dist_raises(
+        tmp_path, monkeypatch):
+    tmp_loc = tmp_path / 'tmp' / 'demo-1.0.egg'
+    tmp_loc.mkdir(parents=True)
+    dest = tmp_path / 'eggs'
+    dest.mkdir()
+    monkeypatch.setattr(
+        easy_install, '_get_matching_dist_in_location',
+        lambda dist, location: None)
+
+    with pytest.raises(AssertionError) as exc:
+        _move_dist_into_place(_env_dist('1.0'), str(tmp_loc), str(dest))
+    assert 'has no distribution for demo 1.0' in str(exc.value)
+
+
+def test_move_dist_into_place_rename_failure_reraises_when_newloc_missing(
+        tmp_path, monkeypatch, caplog):
+    def fail_rename(src, dst):
+        raise OSError('boom')
+
+    monkeypatch.setattr(os, 'rename', fail_rename)
+    with caplog.at_level(logging.ERROR, logger='zc.buildout.easy_install'):
+        with pytest.raises(OSError):
+            _move_dist_into_place(
+                _env_dist('1.0'), str(tmp_path / 'demo-1.0.egg'),
+                str(tmp_path / 'eggs'))
+    assert 'Moving/renaming egg for demo 1.0' in caplog.text
+    assert 'does not exist' in caplog.text
+
+
+def test_move_dist_into_place_accepts_dist_added_in_parallel(
+        tmp_path, monkeypatch, caplog):
+    def fail_rename(src, dst):
+        raise OSError('boom')
+
+    dest = tmp_path / 'eggs'
+    (dest / 'demo-1.0.egg').mkdir(parents=True)
+    newdist = _env_dist('1.0')
+    monkeypatch.setattr(os, 'rename', fail_rename)
+    monkeypatch.setattr(
+        easy_install, '_get_matching_dist_in_location',
+        lambda dist, location: newdist)
+
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        result = _move_dist_into_place(
+            _env_dist('1.0'), str(tmp_path / 'tmp' / 'demo-1.0.egg'),
+            str(dest))
+
+    assert result is newdist
+    assert 'unexpectedly already exists' in caplog.text
+
+
+def test_move_dist_into_place_reraises_for_wrong_package_at_newloc(
+        tmp_path, monkeypatch, caplog):
+    def fail_rename(src, dst):
+        raise OSError('boom')
+
+    dest = tmp_path / 'eggs'
+    (dest / 'demo-1.0.egg').mkdir(parents=True)
+    monkeypatch.setattr(os, 'rename', fail_rename)
+    monkeypatch.setattr(
+        easy_install, '_get_matching_dist_in_location',
+        lambda dist, location: None)
+
+    with caplog.at_level(logging.ERROR, logger='zc.buildout.easy_install'):
+        with pytest.raises(OSError):
+            _move_dist_into_place(
+                _env_dist('1.0'), str(tmp_path / 'tmp' / 'demo-1.0.egg'),
+                str(dest))
+    assert 'exists, but has no distribution for demo 1.0' in caplog.text

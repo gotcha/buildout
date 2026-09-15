@@ -2811,6 +2811,116 @@ def _maybe_copy_and_rename_wheel(dist: Union[pkg_resources.DistInfoDistribution,
         zc.buildout.rmtree.rmtree(tmp_wheeldir)
 
 
+def _ensure_dest_dir(dest: str) -> None:
+    """Make sure the destination directory exists.
+
+    This could suffer from a race condition: if we check that it does
+    not exist, and we then create it, it will fail when a second
+    buildout is doing the same thing.  So we create it unconditionally
+    and only propagate the error when the directory is still missing.
+    """
+    try:
+        os.makedirs(dest)
+    except OSError:
+        if not os.path.isdir(dest):
+            # Unknown reason.  Reraise original error.
+            raise
+
+
+def _unpack_dist_to_tmp(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], tmp_dest: str) -> str:
+    """Copy or unpack ``dist`` into ``tmp_dest``; return its location there.
+
+    A pre-built directory is copied as-is.  An archive is unpacked with
+    the registered unpacker for its extension, or installed by pip.
+    """
+    if (os.path.isdir(_dist_location(dist)) and
+            dist.precedence >= pkg_resources.BINARY_DIST):
+        # We got a pre-built directory. It must have been obtained locally.
+        # Just copy it.
+        logger.debug("dist is pre-built directory.")
+        # TODO Can we still support this?  Do we need to?  Maybe warn, or let pip install this.
+        tmp_loc = os.path.join(tmp_dest, os.path.basename(_dist_location(dist)))
+        shutil.copytree(_dist_location(dist), tmp_loc)
+    else:
+        # It is an archive of some sort.
+        # Figure out how to unpack it, or fall back to easy_install.
+        basename, ext = os.path.splitext(_dist_location(dist))
+        if ext == ".gz" and basename.endswith(".tar"):
+            basename = basename[:-4]
+        # Set new location with name ending in '.experimental'.
+        # XXX TODO some our code or tests expects '.egg' at the end.
+        # tmp_loc = os.path.join(tmp_dest, os.path.basename(basename) + ".experimental")
+        tmp_loc = os.path.join(tmp_dest, os.path.basename(basename) + ".egg")
+        if ext in UNPACKERS:
+            # TODO Maybe simply always call pip install for all dists, without
+            # checking for unpackers.
+            # TODO Maybe never rename a wheel or other dist anymore.
+            # if ext == '.whl':
+            #     logger.debug("Checking if wheel needs to be renamed.")
+            #     new_dist = _maybe_copy_and_rename_wheel(dist, dest)
+            #     if new_dist is not None:
+            #         logger.debug("Found dist after renaming wheel: %s", new_dist)
+            #         return new_dist
+            #     logger.debug("Renaming wheel was not needed or did not help.")
+            unpacker = UNPACKERS[ext]
+            logger.debug("Calling unpacker for %s on %s", ext, dist.location)
+            unpacker(_dist_location(dist), tmp_loc)
+        else:
+            logger.debug("Calling pip install for %s on %s", ext, dist.location)
+            [tmp_loc] = call_pip_install(_dist_location(dist), tmp_dest)
+    return tmp_loc
+
+
+def _move_dist_into_place(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], tmp_loc: str, dest: str) -> Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]:
+    """Rename the unpacked dist into ``dest``; return the new dist.
+
+    The rename can lose a race against a buildout running in parallel:
+    when the new location already exists and contains the distribution,
+    accept it with a warning.
+    """
+    newloc = os.path.join(dest, os.path.basename(tmp_loc))
+    try:
+        os.rename(tmp_loc, newloc)
+    except OSError:
+        logger.error(
+            "Moving/renaming egg for %s (%s) to %s failed.",
+            dist, dist.location, newloc,
+        )
+        # Might be for various reasons.  If it is because newloc already
+        # exists, we can investigate.
+        if not os.path.exists(newloc):
+            # No, it is a different reason.  Give up.
+            logger.error("New location %s does not exist.", newloc)
+            raise
+        # Try to use it as environment and check if our project is in it.
+        newdist = _get_matching_dist_in_location(dist, newloc)
+        if newdist is None:
+            # Path exists, but is not our package.  We could
+            # try something, but it seems safer to bail out
+            # with the original error.
+            logger.error(
+                "New location %s exists, but has no distribution for %s",
+                newloc, dist)
+            raise
+        # newloc looks okay to use.
+        # This may happen more often on Mac, and is the reason why we
+        # override Environment.can_add, see above.
+        # Do print a warning.
+        logger.warning(
+            "Path %s unexpectedly already exists.\n"
+            "It contains the expected distribution for %s.\n"
+            "Maybe a buildout running in parallel has added it. "
+            "We will accept it.\n"
+            "If this contains a wrong package, please remove it yourself.",
+            newloc, dist)
+    else:
+        # There were no problems during the rename.
+        newdist = _get_matching_dist_in_location(dist, newloc)
+        if newdist is None:
+            raise AssertionError(f"{newloc} has no distribution for {dist}")
+    return newdist
+
+
 def _move_to_eggs_dir_and_compile(dist: Union[pkg_resources.DistInfoDistribution, pkg_resources.Distribution], dest: str) -> Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution]:
     """Move distribution to the eggs destination directory.
 
@@ -2831,96 +2941,18 @@ def _move_to_eggs_dir_and_compile(dist: Union[pkg_resources.DistInfoDistribution
     # the same kind of race condition as the rest: if we check that it does not
     # exist, and we then create it, it will fail when a second buildout is
     # doing the same thing.
-    try:
-        os.makedirs(dest)
-    except OSError:
-        if not os.path.isdir(dest):
-            # Unknown reason.  Reraise original error.
-            raise
+    _ensure_dest_dir(dest)
     logger.debug(
         "Turning dist %s (%s) into egg, and moving to eggs dir (%s).",
         dist, dist.location, dest,
     )
     tmp_dest = tempfile.mkdtemp(dir=dest)
     try:
-        if (os.path.isdir(_dist_location(dist)) and
-                dist.precedence >= pkg_resources.BINARY_DIST):
-            # We got a pre-built directory. It must have been obtained locally.
-            # Just copy it.
-            logger.debug("dist is pre-built directory.")
-            # TODO Can we still support this?  Do we need to?  Maybe warn, or let pip install this.
-            tmp_loc = os.path.join(tmp_dest, os.path.basename(_dist_location(dist)))
-            shutil.copytree(_dist_location(dist), tmp_loc)
-        else:
-            # It is an archive of some sort.
-            # Figure out how to unpack it, or fall back to easy_install.
-            basename, ext = os.path.splitext(_dist_location(dist))
-            if ext == ".gz" and basename.endswith(".tar"):
-                basename = basename[:-4]
-            # Set new location with name ending in '.experimental'.
-            # XXX TODO some our code or tests expects '.egg' at the end.
-            # tmp_loc = os.path.join(tmp_dest, os.path.basename(basename) + ".experimental")
-            tmp_loc = os.path.join(tmp_dest, os.path.basename(basename) + ".egg")
-            if ext in UNPACKERS:
-                # TODO Maybe simply always call pip install for all dists, without
-                # checking for unpackers.
-                # TODO Maybe never rename a wheel or other dist anymore.
-                # if ext == '.whl':
-                #     logger.debug("Checking if wheel needs to be renamed.")
-                #     new_dist = _maybe_copy_and_rename_wheel(dist, dest)
-                #     if new_dist is not None:
-                #         logger.debug("Found dist after renaming wheel: %s", new_dist)
-                #         return new_dist
-                #     logger.debug("Renaming wheel was not needed or did not help.")
-                unpacker = UNPACKERS[ext]
-                logger.debug("Calling unpacker for %s on %s", ext, dist.location)
-                unpacker(_dist_location(dist), tmp_loc)
-            else:
-                logger.debug("Calling pip install for %s on %s", ext, dist.location)
-                [tmp_loc] = call_pip_install(_dist_location(dist), tmp_dest)
+        tmp_loc = _unpack_dist_to_tmp(dist, tmp_dest)
 
         # We have installed the dist. Now try to rename/move it.
         logger.debug("Egg for %s installed at %s", dist, tmp_loc)
-        newloc = os.path.join(dest, os.path.basename(tmp_loc))
-        try:
-            os.rename(tmp_loc, newloc)
-        except OSError:
-            logger.error(
-                "Moving/renaming egg for %s (%s) to %s failed.",
-                dist, dist.location, newloc,
-            )
-            # Might be for various reasons.  If it is because newloc already
-            # exists, we can investigate.
-            if not os.path.exists(newloc):
-                # No, it is a different reason.  Give up.
-                logger.error("New location %s does not exist.", newloc)
-                raise
-            # Try to use it as environment and check if our project is in it.
-            newdist = _get_matching_dist_in_location(dist, newloc)
-            if newdist is None:
-                # Path exists, but is not our package.  We could
-                # try something, but it seems safer to bail out
-                # with the original error.
-                logger.error(
-                    "New location %s exists, but has no distribution for %s",
-                    newloc, dist)
-                raise
-            # newloc looks okay to use.
-            # This may happen more often on Mac, and is the reason why we
-            # override Environment.can_add, see above.
-            # Do print a warning.
-            logger.warning(
-                "Path %s unexpectedly already exists.\n"
-                "It contains the expected distribution for %s.\n"
-                "Maybe a buildout running in parallel has added it. "
-                "We will accept it.\n"
-                "If this contains a wrong package, please remove it yourself.",
-                newloc, dist)
-        else:
-            # There were no problems during the rename.
-            newdist = _get_matching_dist_in_location(dist, newloc)
-            if newdist is None:
-                raise AssertionError(f"{newloc} has no distribution for {dist}")
+        newdist = _move_dist_into_place(dist, tmp_loc, dest)
         # The new dist automatically has precedence DEVELOP_DIST, which sounds
         # wrong.  And this interferes with a check for printing picked versions.
         # So set it to EGG_DIST.  We already did this for a long time, then I
