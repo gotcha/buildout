@@ -1,0 +1,3 @@
+Extract dev-script scan helper from
+``zc.buildout.easy_install._detect_distutils_scripts`` to reduce cyclomatic
+complexity.  [gotcha]

@@ -1496,6 +1496,36 @@ def _copyeggs(src: str, dest: str, suffix: str, undo: List[Callable]) -> Optiona
 _develop_distutils_scripts = {}
 
 
+def _collect_distutils_dev_scripts(directory: str, dir_contents: List[str]) -> List[List[str]]:
+    """Scan the files in ``directory`` for develop-mode distutils scripts.
+
+    Returns ``[filename, actual script content]`` pairs for the files
+    carrying the EASY-INSTALL-DEV-SCRIPT marker.
+    """
+    marker = 'EASY-INSTALL-DEV-SCRIPT'
+    scripts_found = []
+    for filename in dir_contents:
+        if filename.endswith('.exe'):
+            continue
+        filepath = os.path.join(directory, filename)
+        if not os.path.isfile(filepath):
+            continue
+        with open(filepath) as fp:
+            dev_script_content = fp.read()
+        if marker in dev_script_content:
+            # The distutils bin script points at the actual file we need.
+            for line in dev_script_content.splitlines():
+                match = DUNDER_FILE_PATTERN.search(line)
+                if match:
+                    # The ``__file__ =`` line in the generated script points
+                    # at the actual distutils script we need.
+                    actual_script_filename = match.group('filename')
+                    with open(actual_script_filename) as fp:
+                        actual_script_content = fp.read()
+                    scripts_found.append([filename, actual_script_content])
+    return scripts_found
+
+
 def _detect_distutils_scripts(directory: str) -> None:
     """Record detected distutils scripts from develop eggs
 
@@ -1526,27 +1556,7 @@ def _detect_distutils_scripts(directory: str) -> None:
     if not egginfo_filenames:
         return
     egg_name = egginfo_filenames[0].replace('.egg-link', '')
-    marker = 'EASY-INSTALL-DEV-SCRIPT'
-    scripts_found = []
-    for filename in dir_contents:
-        if filename.endswith('.exe'):
-            continue
-        filepath = os.path.join(directory, filename)
-        if not os.path.isfile(filepath):
-            continue
-        with open(filepath) as fp:
-            dev_script_content = fp.read()
-        if marker in dev_script_content:
-            # The distutils bin script points at the actual file we need.
-            for line in dev_script_content.splitlines():
-                match = DUNDER_FILE_PATTERN.search(line)
-                if match:
-                    # The ``__file__ =`` line in the generated script points
-                    # at the actual distutils script we need.
-                    actual_script_filename = match.group('filename')
-                    with open(actual_script_filename) as fp:
-                        actual_script_content = fp.read()
-                    scripts_found.append([filename, actual_script_content])
+    scripts_found = _collect_distutils_dev_scripts(directory, dir_contents)
 
     if scripts_found:
         logger.debug(

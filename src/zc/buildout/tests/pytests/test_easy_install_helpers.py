@@ -17,6 +17,7 @@ from zc.buildout.easy_install import (
     _best_matching_dist,
     _best_version_dists,
     _cache_links_and_index,
+    _collect_distutils_dev_scripts,
     _collect_req_scripts,
     _develop_dist,
     _dist_distutils_scripts,
@@ -1700,3 +1701,90 @@ def test_lines_declare_namespace_requires_marker_order():
 def test_lines_declare_namespace_no_declaration():
     assert not _lines_declare_namespace(['import os\n', 'x = 1\n'])
     assert not _lines_declare_namespace([])
+
+
+def _marked_script(tmp_path, directory, filename, actual_name, content):
+    """Write a marked dev script pointing at an actual script file."""
+    actual = tmp_path / actual_name
+    actual.write_text(content)
+    (directory / filename).write_text(
+        "# EASY-INSTALL-DEV-SCRIPT\n__file__ = '%s'\n" % str(actual))
+
+
+def test_collect_distutils_dev_scripts_reads_actual_script(tmp_path):
+    directory = tmp_path / 'dev'
+    directory.mkdir()
+    _marked_script(tmp_path, directory, 'run', 'actual.py', 'print(1)\n')
+
+    found = _collect_distutils_dev_scripts(
+        str(directory), os.listdir(str(directory)))
+
+    assert found == [['run', 'print(1)\n']]
+
+
+def test_collect_distutils_dev_scripts_skips_exe_and_unmarked_files(tmp_path):
+    directory = tmp_path / 'dev'
+    directory.mkdir()
+    (directory / 'run.exe').write_text('EASY-INSTALL-DEV-SCRIPT')
+    (directory / 'plain').write_text('print(1)\n')
+
+    assert _collect_distutils_dev_scripts(
+        str(directory), os.listdir(str(directory))) == []
+
+
+def test_collect_distutils_dev_scripts_skips_directories(tmp_path):
+    directory = tmp_path / 'dev'
+    (directory / 'EASY-INSTALL-DEV-SCRIPT-dir').mkdir(parents=True)
+
+    assert _collect_distutils_dev_scripts(
+        str(directory), os.listdir(str(directory))) == []
+
+
+def test_collect_distutils_dev_scripts_ignores_marker_without_dunder_file(
+        tmp_path):
+    directory = tmp_path / 'dev'
+    directory.mkdir()
+    (directory / 'run').write_text('# EASY-INSTALL-DEV-SCRIPT\nprint(1)\n')
+
+    assert _collect_distutils_dev_scripts(
+        str(directory), os.listdir(str(directory))) == []
+
+
+def test_collect_distutils_dev_scripts_collects_in_dir_contents_order(
+        tmp_path):
+    directory = tmp_path / 'dev'
+    directory.mkdir()
+    _marked_script(tmp_path, directory, 'run2', 'a2.py', 'two\n')
+    _marked_script(tmp_path, directory, 'run1', 'a1.py', 'one\n')
+    contents = sorted(os.listdir(str(directory)))
+
+    found = _collect_distutils_dev_scripts(str(directory), contents)
+
+    assert found == [['run1', 'one\n'], ['run2', 'two\n']]
+
+
+def test_detect_distutils_scripts_records_scripts_when_egg_link_present(
+        tmp_path, monkeypatch):
+    scripts = {}
+    monkeypatch.setattr(easy_install, '_develop_distutils_scripts', scripts)
+    directory = tmp_path / 'dev'
+    directory.mkdir()
+    (directory / 'demo.egg-link').write_text('link\n')
+    _marked_script(tmp_path, directory, 'run', 'actual.py', 'print(1)\n')
+
+    easy_install._detect_distutils_scripts(str(directory))
+
+    assert scripts == {'demo': [['run', 'print(1)\n']]}
+
+
+def test_detect_distutils_scripts_ignores_directory_without_egg_link(
+        tmp_path, monkeypatch):
+    scripts = {}
+    monkeypatch.setattr(easy_install, '_develop_distutils_scripts', scripts)
+    directory = tmp_path / 'dev'
+    directory.mkdir()
+    _marked_script(tmp_path, directory, 'run', 'actual.py', 'print(1)\n')
+
+    easy_install._detect_distutils_scripts(str(directory))
+
+    assert scripts == {}
