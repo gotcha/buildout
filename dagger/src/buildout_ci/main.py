@@ -1,4 +1,4 @@
-"""Run the repo's .github/workflows CI jobs locally under Dagger with a devpi PyPI cache."""
+"""Run the repo's .github/workflows CI jobs locally under Dagger."""
 
 import asyncio
 import shlex
@@ -53,7 +53,7 @@ ModuleSource = Annotated[
 
 
 # Failure output signatures that mean "transient fetch/index failure,
-# safe to retry" — observed against a cold devpi on GitHub runners.
+# safe to retry" — observed on GitHub runners.
 TRANSIENT_SIGNATURES = (
     "Can't download http",
     "No matching distribution found",
@@ -68,7 +68,7 @@ TRANSIENT_SIGNATURES = (
 )
 
 # Fast cells chosen to prove the module machinery end to end (base
-# image, devpi wiring, module graft, exec layers), not repo coverage.
+# image, module graft, exec layers), not repo coverage.
 SMOKE_JOBS = ("ruff", "ty", "radon", "module-tests", "scripts-zest.releaser-py3.12")
 
 
@@ -115,12 +115,12 @@ class BuildoutCi:
     async def job(self, source: Source, module_source: ModuleSource, name: str) -> str:
         """Run a single CI job by name (see jobs for valid names)."""
         spec = _find_job(name)
-        await self._run(source, self.devpi_service(), spec, module_source)
+        await self._run(source, spec, module_source)
         return f"{name}: ok"
 
     @function
     async def ci(self, source: Source, module_source: ModuleSource, concurrency: int = 4, family: str = "") -> str:
-        """Run all CI jobs with bounded concurrency against one shared devpi cache.
+        """Run all CI jobs with bounded concurrency.
 
         Pass family to run only that family's jobs (see families).
         """
@@ -130,12 +130,11 @@ class BuildoutCi:
         # it sorts last
         selected.sort(key=lambda job: FAMILY_MINUTES.get(job.family, 0), reverse=True)
         semaphore = asyncio.Semaphore(concurrency)
-        devpi = self.devpi_service()
 
         async def run(job: Job) -> str:
             async with semaphore:
                 try:
-                    await self._run(source, devpi, job, module_source)
+                    await self._run(source, job, module_source)
                 except Exception as exc:
                     lines = [ln for ln in str(exc).splitlines() if ln.strip()]
                     return f"FAIL {job.name}: {lines[-1] if lines else exc!r}"
@@ -157,7 +156,7 @@ class BuildoutCi:
         exploring a green cell).
         """
         spec = _find_job(name)
-        ctr = self._base(source, self.devpi_service(), spec)
+        ctr = self._base(source, spec)
         if spec.family == "module":
             # mirror _run: graft the dagger/ dir in from module_source
             ctr = ctr.with_directory("/src/dagger", module_source)
@@ -176,11 +175,10 @@ class BuildoutCi:
     @function
     async def smoke(self, source: Source, module_source: ModuleSource) -> str:
         """Quick module self-check (~2 min warm): the static tier, the module harness, and one scripts cell."""
-        devpi = self.devpi_service()
         results = []
         for name in SMOKE_JOBS:
             try:
-                await self._run(source, devpi, _find_job(name), module_source)
+                await self._run(source, _find_job(name), module_source)
             except Exception as exc:
                 lines = [ln for ln in str(exc).splitlines() if ln.strip()]
                 results.append(f"FAIL {name}: {lines[-1] if lines else exc!r}")
@@ -191,29 +189,10 @@ class BuildoutCi:
             raise Exception(summary)
         return summary
 
-    @function
-    def devpi_service(self) -> dagger.Service:
-        """Return the shared devpi PyPI cache/proxy service (persistent cache volume)."""
-        return (
-            dag.container()
-            .from_("jonasal/devpi-server:6.20.1")
-            .with_env_variable("DEVPI_PASSWORD", "password")
-            .with_exposed_port(3141)
-            .with_mounted_cache("/devpi/server", dag.cache_volume("buildout-ci-devpi"))
-            .as_service(
-                args="--indexer-backend null --serverdir /devpi/server --request-timeout 60".split(),
-                use_entrypoint=True,
-            )
-        )
-
-    def _base(self, source: dagger.Directory, devpi: dagger.Service, job: Job) -> dagger.Container:
+    def _base(self, source: dagger.Directory, job: Job) -> dagger.Container:
         ctr = (
             dag.container()
             .from_(f"python:{job.python}")
-            .with_service_binding("devpi", devpi)
-            .with_env_variable("buildout_testing_index_url", "http://devpi:3141/root/pypi/+simple/")
-            .with_env_variable("PIP_INDEX_URL", "http://devpi:3141/root/pypi/+simple")
-            .with_env_variable("PIP_TRUSTED_HOST", "devpi")
             .with_env_variable("PYTHONWARNINGS", "ignore")
             .with_env_variable("USE_UV", "1")
             .with_env_variable("UV_VENV_CLEAR", "1")
@@ -225,15 +204,6 @@ class BuildoutCi:
             # can share the volume.
             .with_mounted_cache("/root/.cache/uv", dag.cache_volume(f"buildout-ci-uv-py{job.python}"))
             .with_mounted_cache("/root/.cache/pip", dag.cache_volume(f"buildout-ci-pip-py{job.python}"))
-            # A cold devpi answers 200 on / while its index is not serving
-            # yet: demand real index content, and retry the first install.
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    'until curl -sf http://devpi:3141/root/pypi/+simple/uv/ | grep -q "<a "; do sleep 1; done',
-                ]
-            )
             .with_exec(["pip", "install", "--quiet", "--retries", "10", "uv"])
         )
         # env vars participate in exec cache keys, so everything
@@ -251,11 +221,10 @@ class BuildoutCi:
     async def _run(
         self,
         source: dagger.Directory,
-        devpi: dagger.Service,
         job: Job,
         module_source: dagger.Directory,
     ) -> None:
-        ctr = self._base(source, devpi, job)
+        ctr = self._base(source, job)
         if job.family == "module":
             # Source ignores dagger/src (module edits must not bust cell
             # caches), but the harness cell needs the module source and
@@ -278,10 +247,10 @@ class BuildoutCi:
                     )
                 )
             ctr = ctr.with_exec(list(command))
-            # A cold devpi flakes in bursts: GH run 34876803047 saw one
-            # cell burn both its attempts on two different transient
-            # fetches. Give each command three attempts when the failure
-            # smells transient.
+            # Transient fetch failures flake in bursts: GH run
+            # 34876803047 saw one cell burn both its attempts on two
+            # different transient fetches. Give each command three
+            # attempts when the failure smells transient.
             attempts = 3
             while True:
                 try:
@@ -295,6 +264,7 @@ class BuildoutCi:
                     if attempts == 0 or not any(sig in output for sig in TRANSIENT_SIGNATURES):
                         raise _failure(job, command, exc) from exc
                     # execs are atomic layers: re-awaiting re-runs from the
-                    # last good layer, against a now-warmer devpi. Keep
-                    # this on the exception path: ReturnType.ANY caches
-                    # nonzero-exit results, so it could never retry.
+                    # last good layer; the pip cache volume keeps whatever
+                    # the failed attempt fetched. Keep this on the
+                    # exception path: ReturnType.ANY caches nonzero-exit
+                    # results, so it could never retry.

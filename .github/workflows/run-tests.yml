@@ -381,11 +381,11 @@ jobs:
   dagger:
     # The whole matrix above, run a second time inside containers via
     # the repo's own dagger module (dagger.json, dagger/): same job
-    # table, same make targets, with a devpi PyPI cache shared by all
-    # jobs of the run. This is the job a developer reproduces locally
-    # with `dagger call ci`. The matrix below runs one GH job per job
-    # family: the dagger module's FAMILIES plus the harness's own module
-    # family (dagger/src/buildout_ci/jobs.py); the two lists must stay in sync.
+    # table, same make targets. This is the job a developer reproduces
+    # locally with `dagger call ci`. The matrix below runs one GH job
+    # per job family: the dagger module's FAMILIES plus the harness's
+    # own module family (dagger/src/buildout_ci/jobs.py); the two lists
+    # must stay in sync.
     name: dagger ${{ matrix.family }}
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
@@ -397,9 +397,9 @@ jobs:
     steps:
     - uses: actions/checkout@v6.0.2
     - name: Free runner disk
-      # A full run keeps ~13 GB in the devpi cache plus the engine and
-      # base images; runners ship ~14 GB free. Drop preinstalled SDKs
-      # this job never uses (plain rm, no extra action).
+      # A full run keeps ~13 GB in the engine cache (base images plus
+      # committed exec layers); runners ship ~14 GB free. Drop
+      # preinstalled SDKs this job never uses (plain rm, no extra action).
       run: |
         sudo rm -rf /usr/local/lib/android /usr/share/dotnet \
           /usr/share/swift /opt/ghc /usr/local/.ghcup \

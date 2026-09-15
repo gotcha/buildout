@@ -1,5 +1,7 @@
-The dagger CI module now gives each job command three attempts when the
-failure matches a known transient index or fetch signature, up from one
-retry. A cold shared devpi cache flakes in bursts, and run 34876803047
-showed one cell burning both attempts on two different transient
-fetches. [gotcha]
+The dagger CI module gives each job command three attempts when the
+failure matches a known transient fetch or index signature (``Can't
+download``, both ``No matching distribution(s)`` wordings, connection
+resets, timeouts) — the failure mode of index flakiness on GitHub
+runners, where run 34876803047 showed one cell burning both attempts of
+the earlier single-retry scheme on two different transient fetches.
+Genuine test failures still fail fast. [gotcha]
