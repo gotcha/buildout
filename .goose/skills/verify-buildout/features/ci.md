@@ -16,8 +16,8 @@ nixpkgs revision pinned in `devenv.lock`; it also wraps
 only when the `CACHIX_CACHE_NAME` variable / `CACHIX_AUTH_TOKEN`
 secret are set — public caches pull without a token, pushing needs
 one). Everything else — Python
-3.9–3.14, uv, ruff, ty, make — comes from the devenv, so CI and a local
-`devenv shell` agree by construction.
+3.9–3.14, uv, ruff, ty, radon, make — comes from the devenv, so CI and a
+local `devenv shell` agree by construction.
 
 Per-job commands have the shape:
 
@@ -51,7 +51,8 @@ family (`setuptools`, `python`, `pip`, `scripts`, `static`,
 `coverage`) plus `module` (the module's own test harness in
 `dagger/tests/`). The two lists — workflow matrix and Job table — must
 stay in sync; the harness test `dagger/tests/test_jobs.py` fails when
-they drift.
+they drift. The `static` family runs the read-only gates: ruff
+(`make lint`), ty (`make typecheck`), and radon (`make complexity`).
 
 Verifying a change to the dagger module itself:
 

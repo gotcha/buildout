@@ -17,6 +17,11 @@ compares every function and method against the checked-in baseline
   (CC <= 10);
 - blocks that got simpler or disappeared are printed as progress.
 
+In the daggerized CI the gate runs as the `radon` cell of the `static`
+family (`dagger call job --name radon`); the cell pip-installs radon
+pinned to the devenv version, so the container gate and a local
+`make complexity` measure with the same radon.
+
 ## When it fails
 
 The gate fails on exactly two events: existing code got worse, or new

@@ -248,4 +248,5 @@ See [`features/README.md`](./features/README.md). Current coverage:
 install-and-inspect (hermetic core), configure-and-substitute,
 rerun-modes, project scaffolding (init/bootstrap, networked), the two
 repo test suites, their coverage variants (`make coverage` /
-`make coverage-pytest`), and static lint (`make lint`, ruff).
+`make coverage-pytest`), static lint (`make lint`, ruff), and the
+complexity budget gate (`make complexity`, radon).

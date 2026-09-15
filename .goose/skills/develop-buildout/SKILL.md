@@ -155,6 +155,10 @@ so CI also runs locally via `dagger call ci`. Rules for changing it:
   data (no dagger import). Every matrix edit in `run-tests.yml` must
   keep that table — and the workflow's dagger family matrix — in
   sync; `dagger/tests/test_jobs.py` fails on drift.
+- A cell whose make target needs a devenv-provided tool pip-installs
+  it pinned to the devenv version (`pip_install` on the Job row:
+  ruff, ty, radon), so the container gate matches the local gate by
+  construction.
 - The module's own harness runs via `dagger call ci --family module`
   (or plain pytest over `dagger/tests/` for the fast loop). Run it
   before committing module changes; it is also a family in the
