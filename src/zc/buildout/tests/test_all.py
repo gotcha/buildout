@@ -2772,8 +2772,8 @@ honoring our version specification.
     ... recipe = zc.recipe.egg
     ... eggs = foo
     ... '''.format_map({'wtf': '\n'.join(
-    ...     f'{d.key} = {d.version}'
-    ...     for d in zc.buildout.easy_install.buildout_and_setuptools_dists)}))
+    ...     [f'{d.key} = {d.version}'
+    ...      for d in zc.buildout.easy_install.buildout_and_setuptools_dists])}))
 
     >>> print_(system(buildout), end='')
     Installing foo.

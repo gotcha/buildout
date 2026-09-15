@@ -21,11 +21,37 @@ consider_namespace_packages = true
 target-version = "py39"
 
 [tool.ruff.lint]
-# The classic ruff default set (pyflakes F + pycodestyle E4/E7/E9),
-# fully enforced: the burndown is done, the ignore list is empty.
-# (ruff >= 0.16 defaults to a much wider set; pin the baseline here so
-# `make lint` means the same thing across ruff versions.)
-select = ["E4", "E7", "E9", "F"]
+# The burndown end state: the wide set the tree is burned clean against,
+# explicit by rule code so `make lint` means the same thing across ruff
+# versions. The ignore list is empty; deliberate patterns carry scoped
+# noqa comments with reasons, and the per-file-ignores below carry the
+# remaining boundary (probes, re-exports, load-bearing import order).
+select = [
+    # The classic ruff default set, enforced since the phase 1-3 burndown.
+    "E4", "E7", "E9", "F",
+    # Import sorting (the load-bearing dances are per-file-ignored below).
+    "I001",
+    # pyupgrade, py39 floor
+    "UP004", "UP006", "UP007", "UP008", "UP009", "UP010", "UP012",
+    "UP024", "UP030", "UP031", "UP032", "UP034", "UP035", "UP037", "UP045",
+    # Comprehensions
+    "C402", "C404", "C408",
+    # flake8-blind-except
+    "BLE001",
+    # flake8-bugbear judgment set
+    "B006", "B010", "B015", "B018",
+    # flake8-simplify judgment set
+    "SIM102", "SIM114", "SIM115", "SIM117", "SIM118", "SIM905",
+    # ruff's own judgment set
+    "RUF012", "RUF015", "RUF022", "RUF051", "RUF059", "RUF100",
+    # misc judgment sets
+    "PIE790", "PIE810",
+    "FURB129", "FURB167", "FURB188",
+    "YTT204", "T100", "S110", "DTZ005", "EXE001",
+    "PLE0704", "PLW1510", "PLR1704", "PLC0206", "TRY002",
+    # f-string conversion
+    "FLY002",
+]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
@@ -38,7 +64,7 @@ ignore = []
 # order (do-not-reorder comment in the file): the distutils-hack
 # finder removal before the pip import, warning filters before the
 # pkg_resources deprecation surfaces.
-"src/zc/buildout/__init__.py" = ["F401", "E402"]
+"src/zc/buildout/__init__.py" = ["F401", "E402", "I001"]
 "src/zc/buildout/easy_install.py" = ["F401"]
 "src/zc/buildout/patches.py" = ["F401"]
 "zc.recipe.egg_/src/zc/recipe/egg/__init__.py" = ["F401"]
