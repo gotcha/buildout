@@ -123,6 +123,7 @@ def _build_jobs() -> tuple[Job, ...]:
         Job(name="mac", python="3.10", commands=make_and_pytest, family="python"),
         Job(name="coverage-legacy", python="3.12", commands=(("make", "coverage"),), family="coverage"),
         Job(name="coverage-pytest", python="3.12", commands=(("make", "coverage-pytest"),), family="coverage"),
+        Job(name="coverage-unittests", python="3.12", commands=(("make", "coverage-unittests"),), family="coverage"),
         *(
             Job(
                 name=f"scripts-{pkg}-py{py}",

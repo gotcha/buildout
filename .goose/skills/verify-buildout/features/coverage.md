@@ -82,6 +82,13 @@ output lines that broke `allowhosts`-style tests.
   truth.
 - `coverage-pytest` — `make coverage-pytest`: pytest suite under
   coverage (~3-4 min with xdist). The fast coverage loop.
+- `coverage-unittests` — `make coverage-unittests`: only the unit
+  tests under coverage, the pytest tests that take no integration
+  fixture from the pytests conftest (`--unittests-only`; builtin
+  fixtures like tmp_path keep a test selected, the autouse
+  `reset_easy_install_globals` is not an argument). Answers "what of
+  the library do the unit tests alone execute", without the ported
+  doctests' sandbox drives.
 - `coverage-scoped` — hand runs for iteration, mirroring
   `suite-scoped`: set the same env as the Makefile (`COVERAGE_ENV`)
   and scope the suite, e.g. `bin/test -pvc -t buildout.txt` or one
@@ -89,11 +96,13 @@ output lines that broke `allowhosts`-style tests.
 
 ## How to get to it (user POV)
 
-- Repo root: `make coverage`, `make coverage-pytest`. Reports print to
-  the console; HTML lands in `htmlcov/`.
-- CI: the `coverage legacy` and `coverage pytest` jobs run in parallel
-  with the windows job and upload `htmlcov/` as artifacts
-  (`coverage-legacy-html`, `coverage-pytest-html`).
+- Repo root: `make coverage`, `make coverage-pytest`,
+  `make coverage-unittests`. Reports print to the console; HTML lands
+  in `htmlcov/`.
+- CI: the `coverage legacy`, `coverage pytest`, and `coverage
+  unittests` jobs run in parallel with the windows job and upload
+  `htmlcov/` as artifacts (`coverage-legacy-html`,
+  `coverage-pytest-html`, `coverage-unittests-html`).
 
 ## Driving it with shell
 
