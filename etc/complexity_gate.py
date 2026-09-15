@@ -55,7 +55,7 @@ def main(argv):
         BASELINE.write_text(
             json.dumps(current, indent=1, sort_keys=True) + "\n"
         )
-        print("wrote {} ({} blocks)".format(BASELINE, len(current)))
+        print(f"wrote {BASELINE} ({len(current)} blocks)")
         return 0
 
     baseline = json.loads(BASELINE.read_text())
@@ -64,24 +64,22 @@ def main(argv):
         if key in baseline:
             if cc > baseline[key]:
                 failures.append(
-                    "{}: CC {} exceeds baseline {}".format(key, cc, baseline[key])
+                    f"{key}: CC {cc} exceeds baseline {baseline[key]}"
                 )
             elif cc < baseline[key]:
-                print("improved: {} CC {} -> {} (refresh the baseline)".format(
-                    key, baseline[key], cc))
+                print(f"improved: {key} CC {baseline[key]} -> {cc} (refresh the baseline)")
         elif cc > NEW_MAX_CC:
             failures.append(
-                "{}: new code CC {} exceeds grade B ceiling {}".format(
-                    key, cc, NEW_MAX_CC))
+                f"{key}: new code CC {cc} exceeds grade B ceiling {NEW_MAX_CC}")
     for key in sorted(set(baseline) - set(current)):
-        print("gone: {} (refresh the baseline)".format(key))
+        print(f"gone: {key} (refresh the baseline)")
 
     if failures:
         print("\ncomplexity gate FAILED:", file=sys.stderr)
         for line in failures:
             print("  " + line, file=sys.stderr)
         return 1
-    print("complexity gate OK: {} blocks within budget".format(len(current)))
+    print(f"complexity gate OK: {len(current)} blocks within budget")
     return 0
 
 

@@ -12,8 +12,8 @@ from typing import Callable, Optional, Tuple
 def get_config_var(var: str) -> Optional[str]:
     try:
         return sysconfig.get_config_var(var)
-    except IOError as e:  # pip Issue #1074
-        warnings.warn("{0}".format(e), RuntimeWarning)
+    except OSError as e:  # pip Issue #1074
+        warnings.warn(f"{e}", RuntimeWarning)
         return None
 
 
@@ -55,8 +55,8 @@ def get_flag(var: str, fallback: Callable[[], bool], expected: object=True, warn
     val = get_config_var(var)
     if val is None:
         if warn:
-            warnings.warn("Config variable '{0}' is unset, Python ABI tag may "
-                          "be incorrect".format(var), RuntimeWarning, 2)
+            warnings.warn(f"Config variable '{var}' is unset, Python ABI tag may "
+                          "be incorrect", RuntimeWarning, 2)
         return fallback()
     return val == expected
 

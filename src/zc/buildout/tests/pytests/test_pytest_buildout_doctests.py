@@ -1645,7 +1645,7 @@ def test_dont_pick_setuptools_if_version_is_specified_when_required_by_src_dist(
     write('setup.py', "\nfrom setuptools import setup\nsetup(name='foo', version='1', py_modules=['foo'], zip_safe=True)\n")
     write('foo.py', '')
     _ = system(buildout + ' setup . sdist')
-    write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = dist\nversions = versions\nallow-picked-versions = false\n\n[versions]\nwtf = %s\nfoo = 1\n\n[foo]\nrecipe = zc.recipe.egg\neggs = foo\n' % '\n'.join(('%s = %s' % (d.key, d.version) for d in zc.buildout.easy_install.buildout_and_setuptools_dists)))
+    write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = dist\nversions = versions\nallow-picked-versions = false\n\n[versions]\nwtf = %s\nfoo = 1\n\n[foo]\nrecipe = zc.recipe.egg\neggs = foo\n' % '\n'.join('%s = %s' % (d.key, d.version) for d in zc.buildout.easy_install.buildout_and_setuptools_dists))
     assert_output(system(buildout), """
 Installing foo.
 Getting distribution for 'foo==1'.

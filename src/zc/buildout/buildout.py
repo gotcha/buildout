@@ -98,7 +98,7 @@ def _annotate_section(section: Dict[str, Any], source: str) -> Dict[str, 'Sectio
     return section
 
 
-class SectionKey(object):
+class SectionKey:
     def __init__(self, value: str, source: str) -> None:
         self.history = []
         self.value = value
@@ -183,7 +183,7 @@ class SectionKey(object):
             " ".join(self.value.split('\n')), self.source)
 
 
-class HistoryItem(object):
+class HistoryItem:
     def __init__(self, operation: str, value: str, source: str) -> None:
         self.operation = operation
         self.value = value
@@ -1841,7 +1841,7 @@ class Buildout(DictMixin):
                 ]
             output.append('')
             f = open(self.update_versions_file, 'a')
-            f.write(('\n'.join(output)))
+            f.write('\n'.join(output))
             f.close()
             print_("Picked versions have been written to " +
                    self.update_versions_file)

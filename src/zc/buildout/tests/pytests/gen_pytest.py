@@ -245,7 +245,11 @@ def emit_example(ex, fixture_var):
         if looks_like_python_literal(expected):
             try:
                 ast.parse(stripped, mode='eval')
-                lines.append('    _val = (%s)' % stripped)
+                if stripped.startswith('(') and stripped.endswith(')'):
+                    # Already parenthesized: another layer would trip UP034.
+                    lines.append('    _val = %s' % stripped)
+                else:
+                    lines.append('    _val = (%s)' % stripped)
                 lines.append(
                     '    assert repr(_val) == %r or str(_val) == %r' % (expected, expected))
             except SyntaxError:

@@ -110,7 +110,7 @@ FILE_SCHEME = re.compile('file://', re.I).match
 DUNDER_FILE_PATTERN = re.compile(r"__file__ = '(?P<filename>.+)'$")
 
 
-class EnvironmentMixin(object):
+class EnvironmentMixin:
     """Mixin class for Environment and PackageIndex for canonicalized names.
 
     * pkg_resources defines the Environment class
@@ -801,7 +801,7 @@ def _write_build_ext_config(base: str, build_ext: Dict[str, str]) -> None:
         setup_cfg, dict(build_ext=build_ext))
 
 
-class Installer(object):
+class Installer:
 
     _versions = {}
     _required_by = {}
@@ -2013,7 +2013,7 @@ def _file_changed(filename: str, old_contents: str, mode: str='r') -> bool:
     try:
         with open(filename, mode) as f:
             return f.read() != old_contents
-    except EnvironmentError as e:
+    except OSError as e:
         if e.errno == errno.ENOENT:
             return True
         else:
@@ -2049,7 +2049,7 @@ def _create_script(contents: str, dest: str) -> List[str]:
 
         try:
             os.chmod(dest, _execute_permission())
-        except (AttributeError, os.error):
+        except (OSError, AttributeError):
             pass
 
     generated.append(dest)
@@ -2120,7 +2120,7 @@ def _pyscript(path: str, dest: str, rsetup: str, initialization: str='') -> List
             f.write(contents)
         try:
             os.chmod(dest, _execute_permission())
-        except (AttributeError, os.error):
+        except (OSError, AttributeError):
             pass
         logger.info("Generated interpreter %r.", script)
 
@@ -2666,9 +2666,7 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> List[str]:
     distro = list(pkg_resources.find_distributions(dest))[0]
     if project_name:
         distro.project_name = project_name
-    base = "{}-{}".format(
-        distro.egg_name(), pkg_resources.get_supported_platform()
-    )
+    base = f"{distro.egg_name()}-{pkg_resources.get_supported_platform()}"
     egg_name = base + '.egg'
     new_distinfo_dir = base + '.dist-info'
     egg_dir = os.path.join(dest, egg_name)

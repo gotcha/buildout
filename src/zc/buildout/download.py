@@ -32,7 +32,7 @@ from typing import Dict, Optional, Tuple, Union
 class ChecksumError(zc.buildout.UserError):
     pass
 
-class Download(object):
+class Download:
     """Configurable download utility.
 
     Handles the download cache and offline mode.
@@ -180,7 +180,7 @@ class Download(object):
             if not check_md5sum(tmp_path, md5sum):
                 raise ChecksumError(
                     'MD5 checksum mismatch downloading %r' % url)
-        except IOError:
+        except OSError:
             e = sys.exc_info()[1]
             os.remove(tmp_path)
             raise zc.buildout.UserError("Error downloading extends for URL "

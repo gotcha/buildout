@@ -440,7 +440,7 @@ class Handler(BaseHTTPRequestHandler):
 
         def k():
             self.send_response(200)
-            out = '<html><body>k</body></html>\n'.encode()
+            out = b'<html><body>k</body></html>\n'
             self.send_header('Content-Length', str(len(out)))
             self.send_header('Content-Type', 'text/html')
             self.end_headers()
@@ -462,7 +462,7 @@ class Handler(BaseHTTPRequestHandler):
             ):
             self.send_response(404, 'Not Found')
             #self.send_response(200)
-            out = '<html><body>Not Found</body></html>'.encode()
+            out = b'<html><body>Not Found</body></html>'
             #out = '\n'.join(self.tree, self.path, path)
             self.send_header('Content-Length', str(len(out)))
             self.send_header('Content-Type', 'text/html')
@@ -520,7 +520,7 @@ def get_port():
         try:
             try:
                 s.connect(('localhost', port))
-            except socket.error:
+            except OSError:
                 return port
         finally:
             s.close()
@@ -559,7 +559,7 @@ def wait(port, up):
             s.close()
             if up:
                 break
-        except socket.error as e:
+        except OSError as e:
             if e.errno not in (errno.ECONNREFUSED, errno.ECONNRESET):
                 raise
             s.close()

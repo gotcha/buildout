@@ -24,7 +24,7 @@ import zc.buildout.easy_install
 from zc.buildout.buildout import bool_option
 
 
-class Eggs(object):
+class Eggs:
 
     _WORKING_SET_CACHE_ATTR_NAME = '_zc_recipe_egg_working_set_cache'
 
@@ -173,7 +173,7 @@ class Eggs(object):
 class Scripts(Eggs):
 
     def __init__(self, buildout, name, options):
-        super(Scripts, self).__init__(buildout, name, options)
+        super().__init__(buildout, name, options)
 
         options['bin-directory'] = buildout['buildout']['bin-directory']
         options['_b'] = options['bin-directory']  # backward compat.

@@ -2370,24 +2370,24 @@ def test_download(easy_install_env):
     # We can also have the downloaded file's MD5 sum checked:
     from hashlib import md5
     path, is_temp = download(server_url+'foo.txt',
-                             md5('This is a foo text.'.encode()).hexdigest())
+                             md5(b'This is a foo text.').hexdigest())
     _val = (is_temp)
     assert repr(_val) == 'True' or str(_val) == 'True'
     remove(path)
     try:
         download(server_url+'foo.txt',
-                 md5('The wrong text.'.encode()).hexdigest())
+                 md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
     # The error message in the event of an MD5 checksum mismatch for a local file
     # reads somewhat differently:
     _val = (download(join(server_data, 'foo.txt'),
-              md5('This is a foo text.'.encode()).hexdigest()))
+              md5(b'This is a foo text.').hexdigest()))
     assert_output(str(_val), "('/sample_files/foo.txt', False)", N)
     try:
         download(join(server_data, 'foo.txt'),
-                 md5('The wrong text.'.encode()).hexdigest())
+                 md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "MD5 checksum mismatch for local resource at '/sample_files/foo.txt'.", N)
@@ -2441,7 +2441,7 @@ def test_download(easy_install_env):
     # If we specify an MD5 checksum for a file that is already in the cache, the
     # cached copy's checksum will be verified:
     try:
-        download(server_url+'foo.txt', md5('The wrong text.'.encode()).hexdigest())
+        download(server_url+'foo.txt', md5(b'The wrong text.').hexdigest())
         assert False, "Expected from 'http not raised"
     except Exception as _exc:
         assert_output(str(_exc), "               from 'http://localhost/foo.txt' at '/download-cache/foo.txt'", N)
@@ -2491,7 +2491,7 @@ def test_download(easy_install_env):
     remove(cache, 'foo.txt')
     # However, resources with checksum mismatches will not be copied to the cache:
     try:
-        download(server_url+'foo.txt', md5('The wrong text.'.encode()).hexdigest())
+        download(server_url+'foo.txt', md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
@@ -2562,12 +2562,12 @@ def test_download(easy_install_env):
     # checksum since we don't know which port the server happens to listen at when
     # the test is run, so we don't actually know the full URL of the file. Let's
     # check that the checksum actually belongs to the particular URL used:
-    _val = ((path.lower() ==
- join(cache, md5((server_url+'foo.txt').encode()).hexdigest()).lower()))
+    _val = (path.lower() ==
+ join(cache, md5((server_url+'foo.txt').encode()).hexdigest()).lower())
     assert repr(_val) == 'True' or str(_val) == 'True'
     # The cached copy is used when downloading the file again:
     write(server_data, 'foo.txt', 'The wrong text.')
-    _val = ((path, is_temp) == download(server_url+'foo.txt'))
+    _val = (path, is_temp) == download(server_url+'foo.txt')
     assert repr(_val) == 'True' or str(_val) == 'True'
     assert_output(capture_print(cat, path), 'This is a foo text.', N)
     assert_output(capture_print(ls, cache), '- <MD5 CHECKSUM>', N)
@@ -2578,9 +2578,9 @@ def test_download(easy_install_env):
     assert_output(str(path2), '/download-cache/<MD5 CHECKSUM>', N)
     _val = (path == path2)
     assert repr(_val) == 'False' or str(_val) == 'False'
-    _val = ((path2.lower() ==
+    _val = (path2.lower() ==
  join(cache, md5((server_url+'other/foo.txt').encode()).hexdigest()
-      ).lower()))
+      ).lower())
     assert repr(_val) == 'True' or str(_val) == 'True'
     assert_output(capture_print(cat, path), 'This is a foo text.', N)
     assert_output(capture_print(cat, path2), 'The wrong text.', N)
@@ -2640,7 +2640,7 @@ def test_download(easy_install_env):
     # copy will neither be used nor overwritten:
     write(server_data, 'foo.txt', 'This is a foo text.')
     try:
-        download(server_url+'foo.txt', md5('The wrong text.'.encode()).hexdigest())
+        download(server_url+'foo.txt', md5(b'The wrong text.').hexdigest())
         assert False, "Expected ChecksumError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "MD5 checksum mismatch downloading 'http://localhost/foo.txt'", N)
