@@ -13,14 +13,14 @@
 ##############################################################################
 
 
-import shutil
-import os
 import doctest
+import os
+import shutil
 import time
 import unittest
-
-from types import TracebackType
 from collections.abc import Callable
+from types import TracebackType
+
 
 def rmtree (path: str) -> None:
     """

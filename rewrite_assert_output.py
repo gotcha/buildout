@@ -19,7 +19,6 @@ import sys
 import tokenize
 from pathlib import Path
 
-
 PYTESTS_DIR = Path(__file__).parent / 'src/zc/buildout/tests/pytests'
 
 

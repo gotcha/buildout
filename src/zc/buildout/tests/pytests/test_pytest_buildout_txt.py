@@ -2,9 +2,9 @@
 
 
 from zc.buildout.tests.pytests.conftest import (
+    NORMALIZERS_BUILDOUT_TXT,
     assert_output,
     capture_print,
-    NORMALIZERS_BUILDOUT_TXT,
 )
 
 N = NORMALIZERS_BUILDOUT_TXT
@@ -725,6 +725,7 @@ def test_configuration_file_syntax(buildout_txt_env):
     #
     # .. -> text
     from io import StringIO
+
     import zc.buildout.configparser
     text = "[foo]\nbar = 1\nbaz = a\n      b\n\n      c\n"
     _val = zc.buildout.configparser.parse(StringIO(text), 'test')

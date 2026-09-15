@@ -15,7 +15,9 @@ name = "zc.buildout"
 version = "5.2.1.dev0"
 
 import os
+
 from setuptools import setup
+
 
 def read(*rnames):
     with open(os.path.join(os.path.dirname(__file__), *rnames)) as f:

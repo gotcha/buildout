@@ -11,33 +11,35 @@
 # FOR A PARTICULAR PURPOSE.
 #
 ##############################################################################
-import unittest
-
-from zc.buildout.buildout import print_
-from zope.testing import renormalizing, setupstack
-
 import doctest
-import manuel.capture
-import manuel.doctest
-import manuel.testing
 import os
-import pkg_resources
 import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import unittest
+from pathlib import Path
+
+import manuel.capture
+import manuel.doctest
+import manuel.testing
+import pkg_resources
+from build import ProjectBuilder
+from build.env import DefaultIsolatedEnv
+from zope.testing import renormalizing, setupstack
+
 import zc.buildout.easy_install
 import zc.buildout.rmtree
 import zc.buildout.testing
-from build import ProjectBuilder
-from build.env import DefaultIsolatedEnv
-from pathlib import Path
-from zc.buildout.tests import easy_install_SetUp
-from zc.buildout.tests import normalize_bang
-from zc.buildout.tests import create_wheel
-from zc.buildout.tests import create_sample_eggs
+from zc.buildout.buildout import print_
+from zc.buildout.tests import (
+    create_sample_eggs,
+    create_wheel,
+    easy_install_SetUp,
+    normalize_bang,
+)
 
 os_path_sep = os.path.sep
 if os_path_sep == '\\':
@@ -114,7 +116,9 @@ class TestEasyInstall(unittest.TestCase):
         # Returns a distribution with a version of '3.3.0',
         # but an egg with a version of '3.3'
         self._make_egg()
-        from distutils.dist import Distribution  # ty: ignore[unresolved-import]  # runtime: setuptools hook
+        from distutils.dist import (  # ty: ignore[unresolved-import]  # runtime: setuptools hook
+            Distribution,
+        )
         dist = Distribution()
         dist.project_name = 'TheProject'
         dist.version = '3.3.0'

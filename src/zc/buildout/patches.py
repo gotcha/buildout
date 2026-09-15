@@ -19,8 +19,8 @@ from typing import Any
 
 def patch_Distribution() -> None:
     try:
-        from pkg_resources import Distribution
         from packaging import version
+        from pkg_resources import Distribution
     except ImportError:
         return
 
@@ -69,21 +69,22 @@ def patch_PackageIndex() -> None:
     try:
         import logging
         logging.getLogger('pip._internal.index.collector').setLevel(logging.ERROR)
-        from ._package_index import PackageIndex
-        from ._package_index import URL_SCHEME
-        from ._package_index import distros_for_url
+        from ._package_index import URL_SCHEME, PackageIndex, distros_for_url
 
         try:
             # pip 22.2+
             from pip._internal.index.collector import IndexContent
         except ImportError:
             # pip 22.1-
-            from pip._internal.index.collector import HTMLPage as IndexContent  # ty: ignore[unresolved-import]
+            from pip._internal.index.collector import (  # ty: ignore[unresolved-import]
+                HTMLPage as IndexContent,
+            )
+
+        from urllib.error import HTTPError
 
         from pip._internal.index.collector import parse_links
         from pip._internal.index.package_finder import _check_link_requires_python
         from pip._internal.models.target_python import TargetPython
-        from urllib.error import HTTPError
     except ImportError:
         import logging
         logger = logging.getLogger('zc.buildout.patches')
@@ -224,8 +225,8 @@ def patch_pkg_resources_requirement_contains() -> None:
     We want to compare normalized names.
     """
     try:
-        from pkg_resources import Distribution
-        from pkg_resources import Requirement
+        from pkg_resources import Distribution, Requirement
+
         from zc.buildout.utils import normalize_name
     except ImportError:
         return
@@ -284,8 +285,8 @@ def patch_pkg_resources_working_set_find() -> None:
     """
     try:
         from importlib.metadata import version
-        from packaging.version import parse
-        from packaging.version import Version
+
+        from packaging.version import Version, parse
 
         setuptools_version = parse(version("setuptools"))
         if setuptools_version >= Version("75.8.2"):
@@ -296,11 +297,13 @@ def patch_pkg_resources_working_set_find() -> None:
         return
 
     try:
-        from pkg_resources import Distribution
-        from pkg_resources import Requirement
-        from pkg_resources import safe_name
-        from pkg_resources import VersionConflict
-        from pkg_resources import WorkingSet
+        from pkg_resources import (
+            Distribution,
+            Requirement,
+            VersionConflict,
+            WorkingSet,
+            safe_name,
+        )
     except ImportError:
         return
 

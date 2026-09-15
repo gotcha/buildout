@@ -3,7 +3,6 @@ import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools 
 import logging
 import os
 import sys
-
 from pathlib import Path
 
 import pkg_resources
@@ -53,9 +52,9 @@ from zc.buildout.easy_install import (
     _script_paths,
     _script_target,
     _select_from_best,
+    _select_newer_dist,
     _unpack_dist_for_build,
     _unpack_dist_to_tmp,
-    _select_newer_dist,
     _warn_missing_scripts,
     _working_set_or_default,
     _write_build_ext_config,

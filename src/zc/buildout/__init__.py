@@ -34,12 +34,12 @@ from pkg_resources import PkgResourcesDeprecationWarning
 warnings.filterwarnings('ignore', category=PkgResourcesDeprecationWarning)
 warnings.filterwarnings('ignore', message='Setuptools is replacing distutils.')
 
-import sys
 import contextlib
-from typing import Any
+import sys
 from collections.abc import Iterator
-import zc.buildout.patches  # NOQA
+from typing import Any
 
+import zc.buildout.patches  # NOQA
 
 WINDOWS = sys.platform.startswith('win')
 

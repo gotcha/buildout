@@ -5,14 +5,14 @@ easy_install.txt is split into one test per prose section
 import sys
 
 import pkg_resources
-import zc.buildout.easy_install
-import zc.buildout.buildout
-import zc.buildout.testing
 
+import zc.buildout.buildout
+import zc.buildout.easy_install
+import zc.buildout.testing
 from zc.buildout.tests.pytests.conftest import (
+    NORMALIZERS_EASY_INSTALL,
     assert_output,
     capture_print,
-    NORMALIZERS_EASY_INSTALL,
 )
 
 N = NORMALIZERS_EASY_INSTALL
@@ -3295,8 +3295,9 @@ def test_testing_bugfix(easy_install_env):
     count = len(logging.getLogger().handlers)
     assert_output(capture_print(lambda: print(logging.getLogger().handlers)), '[<...NullHandler...>]', N)
     # After calling it, a ``logging.StreamHandler`` was added:
-    import zc.buildout.testing
     import doctest
+
+    import zc.buildout.testing
     test = doctest.DocTestParser().get_doctest(
         '>>> x', {}, 'foo', 'foo.py', 0)
     zc.buildout.testing.buildoutSetUp(test)

@@ -19,8 +19,8 @@ import logging
 import os
 import re
 import sys
-import zc.buildout.easy_install
 
+import zc.buildout.easy_install
 from zc.buildout.buildout import bool_option
 
 

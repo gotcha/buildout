@@ -14,20 +14,19 @@
 
 from __future__ import annotations
 
+import logging
+
 # The following copied from Python 2 config parser because:
 # - The py3 configparser isn't backward compatible
 # - Both strip option values in undesirable ways
 # - dict of dicts is a much simpler api
-
 import re
 import textwrap
-import logging
-
-from packaging import markers
+from collections.abc import Callable
 from io import StringIO, TextIOWrapper
 from typing import Any
-from collections.abc import Callable
 
+from packaging import markers
 
 Marker = markers.Marker
 InvalidMarker = markers.InvalidMarker

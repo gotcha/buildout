@@ -7,6 +7,7 @@ import os
 import pdb
 import sys
 from io import StringIO
+
 import pkg_resources
 import pytest
 
@@ -28,8 +29,8 @@ from zc.buildout.buildout import (
     _develop_source_dir,
     _extends_results,
     _filename_for_logging,
-    _find_upgraded_dists,
     _finalize_installed_options,
+    _find_upgraded_dists,
     _handle_buildout_error,
     _links_and_hosts,
     _load_config,
@@ -59,9 +60,9 @@ from zc.buildout.buildout import (
     _split_parts,
     _split_query_option,
     _uninstall_stale_parts,
-    _upgrade_and_restart,
     _update_part,
     _update_recipe_callable,
+    _upgrade_and_restart,
     _use_default_options,
     _validated_extends_cache,
     _valued_option,

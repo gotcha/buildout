@@ -14,15 +14,11 @@
 """Various test-support utility functions
 """
 
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.request import urlopen
-
 import errno
 import logging
 import multiprocessing
 import operator
 import os
-import pkg_resources
 import random
 import re
 import shutil
@@ -32,6 +28,10 @@ import sys
 import tempfile
 import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.request import urlopen
+
+import pkg_resources
 
 import zc.buildout.buildout
 import zc.buildout.easy_install

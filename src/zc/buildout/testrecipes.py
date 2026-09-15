@@ -1,5 +1,6 @@
 from zc.buildout.buildout import print_
 
+
 class Debug:
 
     def __init__(self, buildout, name, options):

@@ -1,8 +1,6 @@
-from pathlib import Path
-
 import tempfile
 import unittest
-
+from pathlib import Path
 
 _oneliner1 = """import__('pkg_resources').declare_namespace(__name__)"""
 _oneliner2 = """__path__ = __import__("pkgutil").extend_path(__path__, __name__)"""
@@ -36,8 +34,10 @@ class TestFunctions(unittest.TestCase):
     """Test case for some functions."""
 
     def test_check_namespace_init_file_and_find_namespace_init_files(self):
-        from zc.buildout.easy_install import check_namespace_init_file
-        from zc.buildout.easy_install import find_namespace_init_files
+        from zc.buildout.easy_install import (
+            check_namespace_init_file,
+            find_namespace_init_files,
+        )
 
         with tempfile.TemporaryDirectory() as package_dir:
             init = Path(package_dir) / "__init__.py"

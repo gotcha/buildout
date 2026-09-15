@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import sys
-import warnings
-
-import sysconfig
 import distutils.util  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
-
+import sys
+import sysconfig
+import warnings
 from collections.abc import Callable
 
 

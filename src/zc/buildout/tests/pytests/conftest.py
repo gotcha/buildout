@@ -11,7 +11,7 @@ import pytest
 
 import zc.buildout.easy_install  # ensure submodule is loaded before tests/__init__.py runs
 import zc.buildout.testing
-from zc.buildout.tests import add_source_dist, normalize_bang, create_sample_eggs
+from zc.buildout.tests import add_source_dist, create_sample_eggs, normalize_bang
 
 _TESTS_DIR = Path(__file__).parent.parent
 
@@ -174,6 +174,7 @@ class _FakeTest:
 def reset_easy_install_globals():
     """Reset easy_install module-level globals and tempfile.tempdir before each test."""
     import tempfile
+
     import zc.buildout.easy_install as _ei
     old_prefer_final = _ei.Installer._prefer_final
     old_dep_links = _ei.Installer._use_dependency_links
@@ -348,9 +349,9 @@ def buildout_txt_env(_buildout_txt_index_cache):
 @pytest.fixture
 def update_env():
     """Sandbox for update.txt: buildoutSetUp + new zc.buildout releases."""
+    import subprocess as _sp
     import tarfile
     import tempfile
-    import subprocess as _sp
 
     fake = _FakeTest()
     zc.buildout.testing.buildoutSetUp(fake)

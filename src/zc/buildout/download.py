@@ -15,11 +15,6 @@
 
 from __future__ import annotations
 
-from hashlib import md5
-from urllib.request import urlretrieve
-from urllib.parse import urlparse
-from zc.buildout.easy_install import realpath
-
 import logging
 import os
 import os.path
@@ -27,7 +22,13 @@ import re
 import shutil
 import sys
 import tempfile
+from hashlib import md5
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
+
 import zc.buildout
+from zc.buildout.easy_install import realpath
+
 
 class ChecksumError(zc.buildout.UserError):
     pass

@@ -11,11 +11,12 @@
 # FOR A PARTICULAR PURPOSE.
 #
 ##############################################################################
-import re
 import os
-import sys
+import re
 import shutil
+import sys
 import tempfile
+
 import zc.buildout
 import zc.buildout.easy_install
 import zc.buildout.testing

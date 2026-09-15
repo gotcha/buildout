@@ -5,17 +5,16 @@ import sys
 
 import pkg_resources
 import pytest
-import zc.buildout.easy_install
+
 import zc.buildout.buildout
+import zc.buildout.easy_install
 import zc.buildout.testing
-
-
+from zc.buildout.tests import create_wheel
 from zc.buildout.tests.pytests.conftest import (
+    NORMALIZERS_EASY_INSTALL,
     assert_output,
     capture_print,
-    NORMALIZERS_EASY_INSTALL,
 )
-from zc.buildout.tests import create_wheel
 
 N = NORMALIZERS_EASY_INSTALL
 
@@ -603,6 +602,7 @@ The following list shows the affected packages and their namespaces:
     # Now, if we generate a working set using the egg link, we will get a warning
     # and we will get setuptools included in the working set.
     import logging
+
     import zope.testing.loggingsupport
     handler = zope.testing.loggingsupport.InstalledHandler('zc.buildout.easy_install', level=logging.WARNING)
     logging.getLogger('zc.buildout.easy_install').propagate = False

@@ -21,6 +21,7 @@ installed.
 from __future__ import annotations
 
 import copy
+import csv
 import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import email
 import email.parser
@@ -29,38 +30,36 @@ import glob
 import logging
 import operator
 import os
-import pkg_resources
 import posixpath
 import re
-import setuptools.archive_util
-import setuptools.command.setopt
 import shutil
 import subprocess
 import sys
 import tempfile
 import urllib.parse
-import zc.buildout
-import zc.buildout.rmtree
+import warnings
 import zipfile
-from . import _package_index
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import cached_property
 from importlib import metadata
-from packaging import specifiers
-from packaging.utils import canonicalize_name
-from packaging.utils import is_normalized_name
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import pkg_resources
+import setuptools.archive_util
+import setuptools.command.setopt
+from packaging import specifiers
+from packaging.utils import canonicalize_name, is_normalized_name
+from packaging.version import Version
 from pkg_resources import Distribution
 from setuptools.wheel import Wheel
+
+import zc.buildout
+import zc.buildout.rmtree
 from zc.buildout import WINDOWS
 from zc.buildout.utils import normalize_name
-import warnings
-import csv
-from packaging.version import Version
-from typing import TYPE_CHECKING, Any
-from collections.abc import Callable, Iterator
 
-
+from . import _package_index
 
 BIN_SCRIPTS = 'Scripts' if WINDOWS else 'bin'
 

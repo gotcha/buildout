@@ -48,13 +48,19 @@ import socket
 import subprocess
 import sys
 import urllib.error
-import urllib.response
 import urllib.parse
 import urllib.request
+import urllib.response
+from collections.abc import Callable, Iterable, Iterator
+from distutils import (  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
+    log,
+)
+from distutils.errors import (  # ty: ignore[unresolved-import]  # runtime: setuptools hook
+    DistutilsError,
+)
 from fnmatch import translate
 from functools import wraps
-from typing import Any, BinaryIO, NoReturn, NamedTuple, cast
-from collections.abc import Callable, Iterable, Iterator
+from typing import Any, BinaryIO, NamedTuple, NoReturn, cast
 
 import setuptools
 from pkg_resources import (
@@ -74,9 +80,6 @@ from pkg_resources import (
     to_filename,
 )
 from setuptools.wheel import Wheel
-
-from distutils import log  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
-from distutils.errors import DistutilsError  # ty: ignore[unresolved-import]  # runtime: setuptools hook
 
 EGG_FRAGMENT = re.compile(r'^egg=([-A-Za-z0-9_.+!]+)$')
 HREF = re.compile(r"""href\s*=\s*['"]?([^'"> ]+)""", re.I)
@@ -99,11 +102,14 @@ _SOCKET_TIMEOUT = 15
 user_agent = f"setuptools/{setuptools.__version__} Python-urllib/{sys.version_info.major}.{sys.version_info.minor}"
 
 try:
-    from setuptools.unicode_utils import _cfg_read_utf8_with_fallback
-    from setuptools.unicode_utils import _read_utf8_with_fallback
+    from setuptools.unicode_utils import (
+        _cfg_read_utf8_with_fallback,
+        _read_utf8_with_fallback,
+    )
 except ImportError:
     # BBB These functions were introduced in setuptools 70.0.0.
     from configparser import RawConfigParser
+
     from setuptools import SetuptoolsDeprecationWarning
 
     # Explicitly use the ``"locale"`` encoding in versions that support it,

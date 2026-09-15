@@ -13,10 +13,11 @@
 ##############################################################################
 import doctest
 import re
+
 from zope.testing import renormalizing
+
 import zc.buildout.testing
-from zc.buildout.tests import easy_install_SetUp
-from zc.buildout.tests import normalize_bang
+from zc.buildout.tests import easy_install_SetUp, normalize_bang
 
 
 def install_extras_with_greater_than_constrains():

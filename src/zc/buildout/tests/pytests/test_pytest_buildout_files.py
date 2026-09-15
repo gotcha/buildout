@@ -2,9 +2,9 @@
 
 
 from zc.buildout.tests.pytests.conftest import (
+    NORMALIZERS_BUILDOUT,
     assert_output,
     capture_print,
-    NORMALIZERS_BUILDOUT,
 )
 
 N = NORMALIZERS_BUILDOUT

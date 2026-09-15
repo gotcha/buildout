@@ -17,6 +17,7 @@
 version = '4.0.1.dev0'
 
 import os
+
 from setuptools import setup
 
 

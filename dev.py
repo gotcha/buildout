@@ -1,13 +1,12 @@
 # Create bin/buildout script.
 # This should be called with python from a virtualenv that has all our
 # dependencies already installed.
-from pathlib import Path
-
 import os
-import pkg_resources
 import platform
 import sys
+from pathlib import Path
 
+import pkg_resources
 
 EGG_INFO_PATH = "src/zc.buildout.egg-info"
 if not os.path.exists(EGG_INFO_PATH):

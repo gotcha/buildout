@@ -1,7 +1,6 @@
 import os
 import tempfile
 
-
 from zc.buildout.rmtree import rmtree
 
 

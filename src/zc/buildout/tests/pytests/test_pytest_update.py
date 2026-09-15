@@ -11,9 +11,9 @@ import sys
 import pytest
 
 from zc.buildout.tests.pytests.conftest import (
+    NORMALIZERS_BUILDOUT,
     assert_output,
     capture_print,
-    NORMALIZERS_BUILDOUT,
 )
 
 pytestmark = pytest.mark.skipif(

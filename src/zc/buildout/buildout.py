@@ -16,15 +16,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, MutableMapping, MutableMapping as DictMixin
-from functools import partial
-from hashlib import md5 as md5_original
-from io import StringIO, TextIOWrapper
-from packaging import utils as packaging_utils
-from zc.buildout.rmtree import rmtree
-
-import zc.buildout.easy_install
-import zc.buildout.configparser
 import copy
 import datetime
 import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
@@ -34,18 +25,27 @@ import inspect
 import itertools
 import logging
 import os
-import pkg_resources
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import zc.buildout
-from zc.buildout import _activity
-import zc.buildout.download
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
+from collections.abc import MutableMapping as DictMixin
+from functools import partial
+from hashlib import md5 as md5_original
+from io import StringIO, TextIOWrapper
 from typing import Any, ClassVar, NoReturn, TextIO, TypeVar, overload
-from collections.abc import Callable, Iterator, Sequence
 
+import pkg_resources
+from packaging import utils as packaging_utils
+
+import zc.buildout
+import zc.buildout.configparser
+import zc.buildout.download
+import zc.buildout.easy_install
+from zc.buildout import _activity
+from zc.buildout.rmtree import rmtree
 
 try:
     hashed = md5_original(b'test')
@@ -1976,8 +1976,8 @@ The following list shows the affected packages and their namespaces:
         self[name] # Add to parts
 
     def parse(self, data: str) -> None:
-        from io import StringIO
         import textwrap
+        from io import StringIO
 
         sections = zc.buildout.configparser.parse(
             StringIO(textwrap.dedent(data)), '', _default_globals)
@@ -2373,10 +2373,10 @@ def _default_globals() -> dict[str, Any]:
     # OF SUCH DAMAGE.
 
     # default available modules, explicitly re-imported locally here on purpose
-    import sys
     import os
     import platform
     import re
+    import sys
 
     globals_defs = {'sys': sys, 'os': os, 'platform': platform, 're': re,}
 

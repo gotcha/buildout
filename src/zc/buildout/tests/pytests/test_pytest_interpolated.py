@@ -5,8 +5,8 @@ Raw output (as written in the configuration files) stays the default;
 way recipes see them.
 """
 from zc.buildout.tests.pytests.conftest import (
-    assert_output,
     NORMALIZERS_BUILDOUT,
+    assert_output,
 )
 
 N = NORMALIZERS_BUILDOUT

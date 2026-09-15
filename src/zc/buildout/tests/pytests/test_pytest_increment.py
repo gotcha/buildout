@@ -1,5 +1,9 @@
 """Pytest port of test_increment.py — no DocTestRunner."""
-from zc.buildout.tests.pytests.conftest import assert_output, capture_print, NORMALIZERS_INCREMENT
+from zc.buildout.tests.pytests.conftest import (
+    NORMALIZERS_INCREMENT,
+    assert_output,
+    capture_print,
+)
 
 N = NORMALIZERS_INCREMENT
 
