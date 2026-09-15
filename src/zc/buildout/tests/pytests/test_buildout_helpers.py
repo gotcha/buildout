@@ -493,34 +493,42 @@ def test_pin_buildout_version_without_dist_raises(monkeypatch):
         _pin_buildout_version({})
 
 
-def test_absolutize_cache_dirs_relative_resolves_under_directory():
+def test_absolutize_cache_dirs_relative_resolves_under_directory(tmp_path):
+    base = str(tmp_path / 'base')
     data = {'buildout': {
-        'directory': SectionKey('/base', 'COMPUTED_VALUE'),
+        'directory': SectionKey(base, 'COMPUTED_VALUE'),
         'download-cache': SectionKey('dl', 'DEFAULT_VALUE'),
         'eggs-directory': SectionKey('eggs', 'DEFAULT_VALUE'),
         'extends-cache': SectionKey('ext', 'DEFAULT_VALUE'),
     }}
-    _absolutize_cache_dirs(data, '/cwd')
-    assert data['buildout']['download-cache'].value == '/base/dl'
-    assert data['buildout']['eggs-directory'].value == '/base/eggs'
-    assert data['buildout']['extends-cache'].value == '/base/ext'
+    _absolutize_cache_dirs(data, str(tmp_path / 'cwd'))
+    assert (data['buildout']['download-cache'].value
+            == os.path.join(base, 'dl'))
+    assert (data['buildout']['eggs-directory'].value
+            == os.path.join(base, 'eggs'))
+    assert (data['buildout']['extends-cache'].value
+            == os.path.join(base, 'ext'))
     # the source annotation is preserved
     assert data['buildout']['eggs-directory'].source == 'DEFAULT_VALUE'
 
 
-def test_absolutize_cache_dirs_without_directory_uses_buildout_dir():
+def test_absolutize_cache_dirs_without_directory_uses_buildout_dir(tmp_path):
+    buildout_dir = str(tmp_path / 'cwd')
     data = {'buildout': {'eggs-directory': SectionKey('eggs', 'DEFAULT_VALUE')}}
-    _absolutize_cache_dirs(data, '/cwd')
-    assert data['buildout']['eggs-directory'].value == '/cwd/eggs'
+    _absolutize_cache_dirs(data, buildout_dir)
+    assert (data['buildout']['eggs-directory'].value
+            == os.path.join(buildout_dir, 'eggs'))
 
 
-def test_absolutize_cache_dirs_command_line_source_uses_directory():
+def test_absolutize_cache_dirs_command_line_source_uses_directory(tmp_path):
+    base = str(tmp_path / 'base')
     data = {'buildout': {
-        'directory': SectionKey('/base', 'COMPUTED_VALUE'),
+        'directory': SectionKey(base, 'COMPUTED_VALUE'),
         'eggs-directory': SectionKey('eggs', 'COMMAND_LINE_VALUE'),
     }}
-    _absolutize_cache_dirs(data, '/cwd')
-    assert data['buildout']['eggs-directory'].value == '/base/eggs'
+    _absolutize_cache_dirs(data, str(tmp_path / 'cwd'))
+    assert (data['buildout']['eggs-directory'].value
+            == os.path.join(base, 'eggs'))
 
 
 def test_absolutize_cache_dirs_absolute_is_untouched():
@@ -544,11 +552,12 @@ def test_absolutize_cache_dirs_expands_user():
         os.path.expanduser('~/eggs'))
 
 
-def test_absolutize_cache_dirs_relative_to_source_file():
-    data = {'buildout': {'eggs-directory': SectionKey(
-        'rel', '/some/dir/buildout.cfg')}}
-    _absolutize_cache_dirs(data, '/cwd')
-    assert data['buildout']['eggs-directory'].value == '/some/dir/rel'
+def test_absolutize_cache_dirs_relative_to_source_file(tmp_path):
+    source = str(tmp_path / 'dir' / 'buildout.cfg')
+    data = {'buildout': {'eggs-directory': SectionKey('rel', source)}}
+    _absolutize_cache_dirs(data, str(tmp_path / 'cwd'))
+    assert (data['buildout']['eggs-directory'].value
+            == os.path.join(os.path.dirname(source), 'rel'))
 
 
 def test_absolutize_cache_dirs_remote_relative_is_ambiguous():
@@ -577,18 +586,19 @@ def test_links_and_hosts_strips_hosts_and_drops_blanks():
 
 
 def test_absolutize_standard_dirs_rewrites_all_four():
+    base = os.path.join(os.path.abspath(os.sep), 'base')
     section = {
         'bin-directory': 'bin',
         'parts-directory': 'parts',
         'eggs-directory': 'eggs',
         'develop-eggs-directory': 'develop-eggs',
     }
-    _absolutize_standard_dirs(section, lambda n: os.path.join('/base', n))
+    _absolutize_standard_dirs(section, lambda n: os.path.join(base, n))
     assert section == {
-        'bin-directory': '/base/bin',
-        'parts-directory': '/base/parts',
-        'eggs-directory': '/base/eggs',
-        'develop-eggs-directory': '/base/develop-eggs',
+        'bin-directory': os.path.join(base, 'bin'),
+        'parts-directory': os.path.join(base, 'parts'),
+        'eggs-directory': os.path.join(base, 'eggs'),
+        'develop-eggs-directory': os.path.join(base, 'develop-eggs'),
     }
 
 
@@ -1508,7 +1518,11 @@ def test_upgrade_and_restart_warns_when_not_local_buildout(
 def test_upgrade_and_restart_regenerates_scripts_and_restarts(
         tmp_path, monkeypatch, caplog):
     bin_dir = tmp_path / 'bin'
-    monkeypatch.setattr(sys, 'argv', [str(bin_dir / 'buildout')])
+    script = str(bin_dir / 'buildout')
+    if sys.platform == 'win32':
+        # The helper expects the ``-script.py`` console-script suffix.
+        script += '-script.py'
+    monkeypatch.setattr(sys, 'argv', [script])
     dist = pkg_resources.Distribution(
         location=str(tmp_path), project_name='zc.buildout', version='9.9')
     ws = pkg_resources.WorkingSet([])
@@ -1543,7 +1557,7 @@ def test_upgrade_and_restart_regenerates_scripts_and_restarts(
     assert calls == [
         ('sort', '/eggs', '/develop-eggs'),
         ('scripts', ['zc.buildout'], sys.executable, str(bin_dir), ''),
-        ('call', [sys.executable, str(bin_dir / 'buildout')],
+        ('call', [sys.executable, script],
          dict(os.environ, BUILDOUT_RESTART_AFTER_UPGRADE='1')),
     ]
     assert ('Upgraded:\n  zc.buildout version 9.9;\nRestarting.'

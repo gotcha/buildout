@@ -962,7 +962,9 @@ def _make_scripts_dist(tmp_path, project_name='demo',
         scripts_dir = egg_info / 'scripts'
         scripts_dir.mkdir()
         for name, contents in scripts_meta.items():
-            (scripts_dir / name).write_text(contents)
+            # Bytes, not text: keep '\n' intact; text mode would translate
+            # to os.linesep on disk.
+            (scripts_dir / name).write_bytes(contents.encode('utf-8'))
     (dist,) = pkg_resources.find_distributions(str(tmp_path))
     return dist
 
@@ -1153,8 +1155,8 @@ def test_script_target_relative_paths_builds_base_setup(tmp_path):
         'demo', None, str(dest_dir), [str(egg)], str(tmp_path))
     assert target is not None
     sname, spath, rpsetup = target
-    assert sname == os.path.normcase(os.path.abspath(str(dest_dir / 'demo')))
-    assert spath == "join(base, 'eggs/demo.egg')"
+    assert sname == os.path.join(str(dest_dir), 'demo')
+    assert spath == "join(base, %r)" % os.path.join('eggs', 'demo.egg')
     assert rpsetup == (
         easy_install.relative_paths_setup + 'base = os.path.dirname(base)\n')
 
