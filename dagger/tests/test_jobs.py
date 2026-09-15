@@ -118,7 +118,11 @@ def _workflow_cells(data):
     cells["radon"] = {"python": python, "commands": (command,), "family": "static"}
 
     # coverage variants
-    for wf_name, job_name in (("coverage", "coverage-legacy"), ("coverage-pytest", "coverage-pytest")):
+    for wf_name, job_name in (
+        ("coverage", "coverage-legacy"),
+        ("coverage-pytest", "coverage-pytest"),
+        ("coverage-unittests", "coverage-unittests"),
+    ):
         steps = {step["name"]: step for step in wf[wf_name]["steps"] if "name" in step}
         run_step = next(step for step in steps.values() if "coverage" in step["run"])
         python, command = _devenv_run(run_step["run"])
@@ -157,7 +161,7 @@ def test_jobs_module_imports_nothing_from_dagger():
 
 def test_workflow_cells_match_job_table(workflow):
     cells = _workflow_cells(workflow)
-    assert len(cells) == 45
+    assert len(cells) == 46
     by_name = {job.name: job for job in jobs.JOBS}
     missing = set(cells) - set(by_name)
     assert not missing, f"workflow cells without a Job row: {sorted(missing)}"
@@ -196,12 +200,12 @@ def test_family_invariants():
         "pip": 12,
         "scripts": 22,
         "static": 3,
-        "coverage": 2,
+        "coverage": 3,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 56
+    assert len(jobs.JOBS) == 57
 
 
 def test_select_jobs_pip():

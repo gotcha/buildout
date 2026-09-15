@@ -341,6 +341,37 @@ jobs:
         name: coverage-pytest-html
         path: htmlcov/
 
+  coverage-unittests:
+    # Coverage over the unit tests only: the subset of the pytest suite
+    # that takes no integration fixture from the pytests conftest
+    # (make coverage-unittests passes --unittests-only). Same mechanism
+    # as the coverage-pytest job, over that subset.
+    name: coverage unittests
+    needs: setuptools
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: ./.github/actions/devenv-setup
+      with:
+        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
+        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
+        # means this step is skipped entirely.
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Run unittests with coverage
+      env:
+        PYTHONWARNINGS: ignore
+      run: >-
+        devenv shell
+        --option languages.python.version:string "3.12"
+        -- make coverage-unittests
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-unittests-html
+        path: htmlcov/
+
   generate-scripts:
     name: Scripts Python ${{ matrix.python-version }}
     needs: pip

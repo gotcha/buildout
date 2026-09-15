@@ -1,4 +1,4 @@
-.PHONY: all test pytest coverage coverage-pytest typecheck test-traced lint complexity complexity-baseline help
+.PHONY: all test pytest coverage coverage-pytest coverage-unittests typecheck test-traced lint complexity complexity-baseline help
 PYTHON_VERSION ?= 3.12
 all: test
 
@@ -53,6 +53,18 @@ coverage-pytest: bin/test
 	rm -f .coverage .coverage.*
 	rm -rf htmlcov
 	$(COVERAGE_ENV) $(HERMETIC_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
+	bin/coverage combine
+	bin/coverage report
+	bin/coverage html
+
+# Unittests-only variant: --unittests-only (pytests conftest) deselects
+# every test that takes an integration fixture from conftest.py as an
+# argument, leaving the tests that call the library directly. Same
+# coverage machinery as coverage-pytest, over that subset.
+coverage-unittests: bin/test
+	rm -f .coverage .coverage.*
+	rm -rf htmlcov
+	$(COVERAGE_ENV) $(HERMETIC_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto --unittests-only
 	bin/coverage combine
 	bin/coverage report
 	bin/coverage html

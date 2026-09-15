@@ -1,4 +1,5 @@
 """Pytest fixtures and helpers for the buildout integration test suite."""
+import inspect
 import io
 import os
 import re
@@ -474,5 +475,54 @@ def capture_print(fn, *args, **kwargs):
     finally:
         sys.stdout = old_stdout
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Unit-test-only selection (--unittests-only, used by make coverage-unittests)
+# ---------------------------------------------------------------------------
+# The ported doctests drive buildout through the integration fixtures of
+# this conftest (buildout_env, update_env, easy_install_env, ...). The unit
+# tests are the tests that take no such fixture as an argument: they call
+# the library directly. Builtin fixtures (tmp_path and friends) keep a test
+# in the unit set, and autouse fixtures (reset_easy_install_globals) are
+# not arguments, so they do not affect the selection either.
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--unittests-only",
+        action="store_true",
+        help=(
+            "deselect tests that take a fixture defined in a conftest.py "
+            "as an argument; keeps the unit tests only"
+        ),
+    )
+
+
+def _defined_in_conftest(fixturedef):
+    func = getattr(fixturedef, "func", None)
+    if func is None:
+        return False
+    source = inspect.getsourcefile(func)
+    return source is not None and os.path.basename(source) == "conftest.py"
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--unittests-only"):
+        return
+    selected = []
+    deselected = []
+    for item in items:
+        fixtureinfo = getattr(item, "_fixtureinfo", None)
+        argnames = getattr(fixtureinfo, "argnames", ())
+        fixturedefs = getattr(fixtureinfo, "name2fixturedefs", {})
+        is_unittest = not any(
+            _defined_in_conftest(fixturedefs[name][-1])
+            for name in argnames
+            if name in fixturedefs
+        )
+        (selected if is_unittest else deselected).append(item)
+    config.hook.pytest_deselected(items=deselected)
+    items[:] = selected
 
 
