@@ -14,7 +14,6 @@ def test_runsetup(buildout_env):
     buildout = buildout_env['buildout']
     ls = buildout_env['ls']
     mkdir = buildout_env['mkdir']
-    print_ = buildout_env['print_']
     system = buildout_env['system']
     write = buildout_env['write']
 
@@ -526,7 +525,6 @@ def test_setup(buildout_env):
     cd = buildout_env['cd']
     ls = buildout_env['ls']
     mkdir = buildout_env['mkdir']
-    print_ = buildout_env['print_']
     system = buildout_env['system']
     write = buildout_env['write']
 
@@ -578,7 +576,6 @@ Running setup script './setup.py'.
 def test_debugging(buildout_env):
     buildout = buildout_env['buildout']
     mkdir = buildout_env['mkdir']
-    print_ = buildout_env['print_']
     sample_buildout = buildout_env['sample_buildout']
     system = buildout_env['system']
     write = buildout_env['write']
@@ -669,7 +666,6 @@ def test_windows(buildout_env):
     buildout = buildout_env['buildout']
     join = buildout_env['join']
     mkdir = buildout_env['mkdir']
-    print_ = buildout_env['print_']
     system = buildout_env['system']
     write = buildout_env['write']
 

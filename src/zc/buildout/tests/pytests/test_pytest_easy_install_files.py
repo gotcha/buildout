@@ -234,7 +234,7 @@ def test_easy_install_distribution_installation_unknown_extras(easy_install_env)
     # Attempting to install a requirement with an extra it doesn't provide
     # is an error.
     try:
-        ws = zc.buildout.easy_install.install(
+        _ = zc.buildout.easy_install.install(
             ['demo[unknown_extra]'], dest, links=[link_server],
             index=link_server+'index/')
         assert False, "Expected UserError not raised"
@@ -242,7 +242,7 @@ def test_easy_install_distribution_installation_unknown_extras(easy_install_env)
         assert_output(str(_exc), "Couldn't find the required extra...", N)
     # We can pass the ``allow_unknown_extras`` argument to force the
     # installation to proceed.
-    ws = zc.buildout.easy_install.install(
+    _ = zc.buildout.easy_install.install(
         ['demo[unknown_extra]'], dest, links=[link_server],
         index=link_server+'index/',
         allow_unknown_extras=True)
@@ -460,7 +460,7 @@ def test_easy_install_use_dependency_links(easy_install_env):
     link_server3 = start_server(repoloc)
     # Now let's install the egg.
     example_dest = tmpdir('example-install')
-    workingset = zc.buildout.easy_install.install(
+    _ = zc.buildout.easy_install.install(
         ['hasdeps'], example_dest,
         links=[link_server3], index=link_server3+'index/')
     # TODO assert: 'GET 200 /\nGET 200 /demoneeded-1.2-py3-none-any.whl'
@@ -471,7 +471,7 @@ def test_easy_install_use_dependency_links(easy_install_env):
     # the dependencies.
     rmdir(example_dest)
     example_dest = tmpdir('example-install')
-    workingset = zc.buildout.easy_install.install(
+    _ = zc.buildout.easy_install.install(
         ['hasdeps'], example_dest, index=link_server+'index/',
         links=[link_server, link_server3])
     # TODO assert: 'GET 200 /\nGET 200 /demoneeded-1.2-py3-none-any.whl'
@@ -485,7 +485,7 @@ def test_easy_install_use_dependency_links(easy_install_env):
     # to zc.buildout.easy_install.install().
     rmdir(example_dest)
     example_dest = tmpdir('example-install')
-    workingset = zc.buildout.easy_install.install(
+    _ = zc.buildout.easy_install.install(
         ['hasdeps'], example_dest, index=link_server+'index/',
         links=[link_server, link_server3],
         use_dependency_links=False)
@@ -502,14 +502,14 @@ def test_easy_install_use_dependency_links(easy_install_env):
     # The function returns its previous setting.
     rmdir(example_dest)
     example_dest = tmpdir('example-install')
-    workingset = zc.buildout.easy_install.install(
+    _ = zc.buildout.easy_install.install(
         ['hasdeps'], example_dest, index=link_server+'index/',
         links=[link_server, link_server3])
     # It can be overridden by passing a keyword argument to the install
     # function.
     rmdir(example_dest)
     example_dest = tmpdir('example-install')
-    workingset = zc.buildout.easy_install.install(
+    _ = zc.buildout.easy_install.install(
         ['hasdeps'], example_dest, index=link_server+'index/',
         links=[link_server, link_server3],
         use_dependency_links=True)
@@ -519,7 +519,7 @@ def test_easy_install_use_dependency_links(easy_install_env):
     assert repr(_val) == 'False' or str(_val) == 'False'
     rmdir(example_dest)
     example_dest = tmpdir('example-install')
-    workingset = zc.buildout.easy_install.install(
+    zc.buildout.easy_install.install(
         ['hasdeps'], example_dest, index=link_server+'index/',
         links=[link_server, link_server3])
     # TODO assert: 'GET 200 /demoneeded-1.2-py3-none-any.whl'
@@ -530,7 +530,6 @@ def test_easy_install_script_generation(easy_install_env):
     join = easy_install_env['join']
     link_server = easy_install_env['link_server']
     ls = easy_install_env['ls']
-    os = easy_install_env['os']
     system = easy_install_env['system']
     tmpdir = easy_install_env['tmpdir']
     write = easy_install_env['write']
@@ -872,7 +871,7 @@ def test_easy_install_relative_paths(easy_install_env):
     ws = zc.buildout.easy_install.install(
         ['demo'], join(bo, 'eggs'), links=[link_server],
         index=link_server+'index/')
-    scripts = zc.buildout.easy_install.scripts(
+    _ = zc.buildout.easy_install.scripts(
        ['demo'], ws, sys.executable, join(bo, 'bin'), dict(demo='run'),
        extra_paths=[ba, join(bo, 'bar'), bo],
        interpreter='py',
@@ -1602,8 +1601,6 @@ def test_downloadcache(easy_install_env):
     get = easy_install_env['get']
     link_server = easy_install_env['link_server']
     ls = easy_install_env['ls']
-    os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     remove = easy_install_env['remove']
     sample_buildout = easy_install_env['sample_buildout']
     start_server = easy_install_env['start_server']
@@ -1898,11 +1895,8 @@ Got demoneeded 1.1...
 def test_dependencylinks_fallback(easy_install_env):
     buildout = easy_install_env['buildout']
     get = easy_install_env['get']
-    join = easy_install_env['join']
     link_server = easy_install_env['link_server']
-    ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    os = easy_install_env['os']
     remove = easy_install_env['remove']
     sample_buildout = easy_install_env['sample_buildout']
     sample_eggs = easy_install_env['sample_eggs']
@@ -2008,11 +2002,8 @@ Got demoneeded 1.1.
 def test_dependencylinks_option(easy_install_env):
     buildout = easy_install_env['buildout']
     get = easy_install_env['get']
-    join = easy_install_env['join']
     link_server = easy_install_env['link_server']
-    ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    os = easy_install_env['os']
     remove = easy_install_env['remove']
     sample_buildout = easy_install_env['sample_buildout']
     sample_eggs = easy_install_env['sample_eggs']
@@ -2247,7 +2238,6 @@ Generated interpreter '/sample-buildout/bin/python'.
 def test_allow_unknown_extras(easy_install_env):
     buildout = easy_install_env['buildout']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -2745,7 +2735,6 @@ def test_extends_cache(easy_install_env):
     join = easy_install_env['join']
     ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    os = easy_install_env['os']
     print_ = easy_install_env['print_']
     remove = easy_install_env['remove']
     rmdir = easy_install_env['rmdir']

@@ -33,7 +33,6 @@ def test_update(update_env):
     ls = update_env['ls']
     mkdir = update_env['mkdir']
     new_releases = update_env['new_releases']
-    print_ = update_env['print_']
     sample_buildout = update_env['sample_buildout']
     system = update_env['system']
     tmpdir = update_env['tmpdir']

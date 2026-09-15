@@ -65,7 +65,6 @@ def test_develop_w_non_setuptools_setup_scripts(easy_install_env):
     join = easy_install_env['join']
     ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -83,7 +82,6 @@ def test_develop_verbose(easy_install_env):
     join = easy_install_env['join']
     ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -116,9 +114,6 @@ Reusing editable install: /sample-buildout/develop-eggs/foo.egg-link
 """, N)
 
 def test_buildout_error_handling(easy_install_env):
-    buildout = easy_install_env['buildout']
-    os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -214,7 +209,6 @@ Error: Missing option: x:recipe
 
 def test_show_who_requires_when_there_is_a_conflict(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -292,8 +286,6 @@ but sampley 1 requires 'demoneeded==1.0'.
 """, N)
 
 def test_version_conflict_rendering(easy_install_env):
-    print_ = easy_install_env['print_']
-
     # We use the arguments passed by pkg_resources.VersionConflict to construct a
     # nice error message:
     error = pkg_resources.VersionConflict('pkg1 2.1', 'pkg1 1.0')
@@ -310,7 +302,6 @@ pkg1 2.1 is simply wrong
 
 def test_show_who_requires_missing_distributions(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -345,7 +336,6 @@ Error: Couldn't find a distribution for 'demoneeded'.
 
 def test_show_who_requires_picked_versions(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -374,10 +364,8 @@ demoneeded = 1.1
 """, N)
 
 def test_comparing_saved_options_with_funny_characters(easy_install_env):
-    buildout = easy_install_env['buildout']
     mkdir = easy_install_env['mkdir']
     os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -418,16 +406,15 @@ def test_finding_eggs_as_local_directories(easy_install_env):
     _ = system(join('bin', 'buildout') + ' setup ' + src + ' bdist_egg')
     # Install it so it gets unzipped:
     d1 = tmpdir('d1')
-    ws = zc.buildout.easy_install.install(['demo'], d1, links=[join(src, 'dist')])
+    _ = zc.buildout.easy_install.install(['demo'], d1, links=[join(src, 'dist')])
     assert_output(capture_print(ls, d1), 'd  demo-1.0-py2.4.egg', N)
     # Then try to install it again:
     d2 = tmpdir('d2')
-    ws = zc.buildout.easy_install.install(['demo'], d2, links=[d1])
+    _ = zc.buildout.easy_install.install(['demo'], d2, links=[d1])
     assert_output(capture_print(ls, d2), 'd  demo-1.0-py2.4.egg', N)
 
 def test_create_sections_on_command_line(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -442,7 +429,6 @@ bar = 1
 
 def test_help(easy_install_env):
     os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
 
@@ -476,9 +462,7 @@ Options:
 """, N)
 
 def test_version(easy_install_env):
-    buildout = easy_install_env['buildout']
     os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
 
@@ -487,7 +471,6 @@ def test_version(easy_install_env):
 
 def test_bootstrap_with_extension(easy_install_env):
     os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     tmpdir = easy_install_env['tmpdir']
@@ -509,7 +492,6 @@ Generated script '/sample-bootstrap/bin/buildout'.
 
 def test_bug_92891_bootstrap_crashes_with_egg_recipe_in_buildout_section(easy_install_env):
     os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     tmpdir = easy_install_env['tmpdir']
@@ -742,7 +724,6 @@ define = X,Y
 def test_uninstall_recipes_used_for_removal(easy_install_env):
     join = easy_install_env['join']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -777,7 +758,6 @@ def test_extensions_installed_as_eggs_work_in_offline_mode(easy_install_env):
     bdist_egg = easy_install_env['bdist_egg']
     join = easy_install_env['join']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -792,7 +772,6 @@ def test_extensions_installed_as_eggs_work_in_offline_mode(easy_install_env):
 def test_changes_in_svn_or_git_dont_affect_sig(easy_install_env):
     join = easy_install_env['join']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -830,11 +809,10 @@ def test_unicode_filename_doesnt_break_hash(easy_install_env):
     mkdir('héhé')
     write('héhé', 'héhé.py', "\nprint('Example filename from pyramid tests')\n")
     from zc.buildout.buildout import _dir_hash
-    dont_care = _dir_hash('héhé')
+    _ = _dir_hash('héhé')
 
 def test_o_option_sets_offline(easy_install_env):
     join = easy_install_env['join']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
 
@@ -849,7 +827,6 @@ def test_recipe_upgrade(easy_install_env):
     buildout = easy_install_env['buildout']
     join = easy_install_env['join']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     rmdir = easy_install_env['rmdir']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -911,7 +888,6 @@ def test_update_adds_to_uninstall_list(easy_install_env):
     buildout = easy_install_env['buildout']
     cat = easy_install_env['cat']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -943,7 +919,6 @@ __buildout_signature__ = ...
 
 def test_log_when_there_are_not_local_distros(easy_install_env):
     link_server = easy_install_env['link_server']
-    print_ = easy_install_env['print_']
     tmpdir = easy_install_env['tmpdir']
 
     from zope.testing.loggingsupport import InstalledHandler
@@ -954,7 +929,7 @@ def test_log_when_there_are_not_local_distros(easy_install_env):
     logger.propagate = False
     dest = tmpdir('sample-install')
     import zc.buildout.easy_install
-    ws = zc.buildout.easy_install.install(['demo==0.2'], dest, links=[link_server], index=link_server + 'index/')
+    _ = zc.buildout.easy_install.install(['demo==0.2'], dest, links=[link_server], index=link_server + 'index/')
     assert_output(str(handler), """
 zc.buildout.easy_install DEBUG
   Installing 'demo==0.2'.
@@ -968,7 +943,6 @@ zc.buildout.easy_install DEBUG
 def test_internal_errors(easy_install_env):
     buildout = easy_install_env['buildout']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -994,7 +968,6 @@ NameError: global name 'os' is not defined...
 
 def test_whine_about_unused_options(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1013,9 +986,7 @@ This may be an indication for either a typo in the option's name or a bug in the
 
 def test_abnormal_exit_during_install(easy_install_env):
     buildout = easy_install_env['buildout']
-    ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    os = easy_install_env['os']
     system = easy_install_env['system']
     write = easy_install_env['write']
     # People sometimes hit control-c while running a builout. We need to make
@@ -1050,9 +1021,7 @@ Uninstalling p1.
 
 def test_abnormal_exit_while_updating(easy_install_env):
     buildout = easy_install_env['buildout']
-    ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    os = easy_install_env['os']
     system = easy_install_env['system']
     write = easy_install_env['write']
     # People sometimes hit control-c while running a builout. We need to make
@@ -1090,9 +1059,7 @@ Uninstalling p3.
 
 def test_abnormal_exit_after_uninstall(easy_install_env):
     buildout = easy_install_env['buildout']
-    ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    os = easy_install_env['os']
     system = easy_install_env['system']
     write = easy_install_env['write']
     # People sometimes hit control-c while running a builout. We need to make
@@ -1135,7 +1102,6 @@ def test_install_source_dist_with_bad_py(easy_install_env):
     join = easy_install_env['join']
     ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1192,7 +1158,6 @@ def test_version_requirements_in_build_honored(easy_install_env):
 def test_bug_105081_Specific_egg_versions_are_ignored_when_newer_eggs_are_around(easy_install_env):
     buildout = easy_install_env['buildout']
     join = easy_install_env['join']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1305,7 +1270,6 @@ def test_bug_59270_recipes_always_start_in_buildout_dir(easy_install_env):
     join = easy_install_env['join']
     mkdir = easy_install_env['mkdir']
     os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -1353,7 +1317,6 @@ d  demoneeded-1.1-py2.4.egg
 
 def test_bug_75607_buildout_should_not_run_if_it_creates_an_empty_buildout_cfg(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     remove = easy_install_env['remove']
     system = easy_install_env['system']
 
@@ -1367,7 +1330,6 @@ Error: Couldn't open /sample-buildout/buildout.cfg
 def test_dealing_with_extremely_insane_dependencies(easy_install_env):
     buildout = easy_install_env['buildout']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1455,7 +1417,6 @@ def test_read_find_links_to_load_extensions(easy_install_env):
     buildout = easy_install_env['buildout']
     join = easy_install_env['join']
     os = easy_install_env['os']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     tmpdir = easy_install_env['tmpdir']
     write = easy_install_env['write']
@@ -1485,7 +1446,6 @@ def test_distributions_from_local_find_links_make_it_to_download_cache(easy_inst
     join = easy_install_env['join']
     ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1561,7 +1521,6 @@ def test_prefer_final(easy_install_env):
 def test_buildout_prefer_final_option(easy_install_env):
     buildout = easy_install_env['buildout']
     cat = easy_install_env['cat']
-    print_ = easy_install_env['print_']
     remove = easy_install_env['remove']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -1631,7 +1590,6 @@ Error: Invalid value for 'prefer-final' option: 'no'
 
 def test_wont_downgrade_due_to_prefer_final(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1661,7 +1619,6 @@ def test_develop_with_modules(easy_install_env):
     join = easy_install_env['join']
     ls = easy_install_env['ls']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1679,7 +1636,6 @@ def test_develop_with_modules(easy_install_env):
 def test_dont_pick_setuptools_if_version_is_specified_when_required_by_src_dist(easy_install_env):
     buildout = easy_install_env['buildout']
     mkdir = easy_install_env['mkdir']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1699,7 +1655,6 @@ Got foo 1.
 def test_pyc_and_pyo_files_have_correct_paths(easy_install_env):
     buildout = easy_install_env['buildout']
     join = easy_install_env['join']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1722,7 +1677,6 @@ def test_dont_mess_with_standard_dirs_with_variable_refs(easy_install_env):
 
 def test_expand_shell_patterns_in_develop_paths(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -1744,7 +1698,6 @@ Installing eggs.
 
 def test_warn_users_when_expanding_shell_patterns_yields_no_results(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     sample_buildout = easy_install_env['sample_buildout']
     system = easy_install_env['system']
     write = easy_install_env['write']
@@ -1781,7 +1734,6 @@ def test_make_sure_versions_dont_cancel_extras(easy_install_env):
 
 def test_increment_buildout_options(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1798,7 +1750,6 @@ Installing p2.
 
 def test_increment_buildout_with_multiple_extended_files_421022(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1817,7 +1768,6 @@ Installing other.
 
 def test_increment_on_command_line(easy_install_env):
     buildout = easy_install_env['buildout']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1905,7 +1855,6 @@ def test_distutils_scripts_using_from_are_properly_parsed(easy_install_env):
 
 def test_want_new_zcrecipeegg(easy_install_env):
     join = easy_install_env['join']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1924,7 +1873,6 @@ Error: Couldn't find a distribution for 'zc.recipe.egg<2dev,>=2.0.6'.
 def test_macro_inheritance_bug(easy_install_env):
     join = easy_install_env['join']
     ls = easy_install_env['ls']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1979,7 +1927,6 @@ if __name__ == '__main__':
 
 def test_cant_use_install_from_cache_and_offline_together(easy_install_env):
     join = easy_install_env['join']
-    print_ = easy_install_env['print_']
     system = easy_install_env['system']
     write = easy_install_env['write']
 
@@ -1997,7 +1944,7 @@ def test_error_installing_in_offline_mode_if_dont_have_needed_dist(easy_install_
 
     import zc.buildout.easy_install
     try:
-        ws = zc.buildout.easy_install.install(
+        _ = zc.buildout.easy_install.install(
             ['demo==0.2'], None,
             links=[link_server], index=link_server+'index/')
         assert False, "Expected and can't install one in offline (no-install) mode. not raised"
@@ -2034,10 +1981,10 @@ def test_buildout_honors_umask(easy_install_env):
     orig_umask = os.umask(63)
     _val = (zc.buildout.easy_install._execute_permission() == 0o700)
     assert repr(_val) == 'True' or str(_val) == 'True'
-    tmp = os.umask(18)
+    _ = os.umask(18)
     _val = (zc.buildout.easy_install._execute_permission() == 0o755)
     assert repr(_val) == 'True' or str(_val) == 'True'
-    tmp = os.umask(orig_umask)
+    _ = os.umask(orig_umask)
 
 def test_parse_with_section_expr(easy_install_env):
     buildout = easy_install_env['buildout']

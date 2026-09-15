@@ -712,7 +712,7 @@ a local directory that may contained unzipped eggs.
 Install it so it gets unzipped:
 
     >>> d1 = tmpdir('d1')
-    >>> ws = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['demo'], d1, links=[join(src, 'dist')],
     ...     )
 
@@ -722,7 +722,7 @@ Install it so it gets unzipped:
 Then try to install it again:
 
     >>> d2 = tmpdir('d2')
-    >>> ws = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['demo'], d2, links=[d1],
     ...     )
 
@@ -1398,7 +1398,7 @@ Buildout's _dir_hash() used to break on non-ascii filenames on python 2.
     ... print('Example filename from pyramid tests')
     ... ''')
     >>> from zc.buildout.buildout import _dir_hash
-    >>> dont_care = _dir_hash('héhé')
+    >>> _ = _dir_hash('héhé')
 
     """
 
@@ -1605,7 +1605,7 @@ def log_when_there_are_not_local_distros():
 
     >>> dest = tmpdir('sample-install')
     >>> import zc.buildout.easy_install
-    >>> ws = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['demo==0.2'], dest,
     ...     links=[link_server], index=link_server+'index/')
 
@@ -3235,7 +3235,7 @@ def cant_use_install_from_cache_and_offline_together():
 def error_installing_in_offline_mode_if_dont_have_needed_dist():
     r"""
     >>> import zc.buildout.easy_install
-    >>> ws = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['demo==0.2'], None,
     ...     links=[link_server], index=link_server+'index/')
     Traceback (most recent call last):
@@ -3271,10 +3271,10 @@ def buildout_honors_umask():
     >>> orig_umask = os.umask(0o077)  # Only user gets permissions.
     >>> zc.buildout.easy_install._execute_permission() == 0o700
     True
-    >>> tmp = os.umask(0o022)  # User can write, the rest not.
+    >>> _ = os.umask(0o022)  # User can write, the rest not.
     >>> zc.buildout.easy_install._execute_permission() == 0o755
     True
-    >>> tmp = os.umask(orig_umask)  # Reset umask to the original value.
+    >>> _ = os.umask(orig_umask)  # Reset umask to the original value.
     """
 
 def parse_with_section_expr():

@@ -127,12 +127,12 @@ def make_triple_quoted(value: str, indent: int) -> str:
     The opening triple-quote is followed immediately by the content.
     A leading newline is added so the first content line is on its own
     source line (cosmetic only — assert_output strips it via _norm_ws).
-    The closing triple-quote sits on its own line at `indent` spaces.
+    The closing triple-quote sits on its own line at column zero, so
+    no spaces enter the string value.
 
     If the value ends with '\\n', the closing triple-quote aligns cleanly.
     If not, a trailing newline is added (assert_output strips it too).
     """
-    pad = ' ' * indent
 
     # Escape only what must be escaped inside """: backslashes and runs of """.
     # Newlines stay as real newlines.

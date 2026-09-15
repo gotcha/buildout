@@ -11,12 +11,10 @@ N = NORMALIZERS_BUILDOUT_TXT
 
 
 def test_buildout(buildout_txt_env):
-    buildout = buildout_txt_env['buildout']
     cat = buildout_txt_env['cat']
     clean_up_pyc = buildout_txt_env['clean_up_pyc']
     ls = buildout_txt_env['ls']
     os = buildout_txt_env['os']
-    print_ = buildout_txt_env['print_']
     remove = buildout_txt_env['remove']
     rmdir = buildout_txt_env['rmdir']
     sample_buildout = buildout_txt_env['sample_buildout']
@@ -1264,7 +1262,6 @@ recipe recipes:debug
 def test_configuration_part_selection(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
     cat = buildout_txt_env['cat']
-    mkdir = buildout_txt_env['mkdir']
     sample_buildout = buildout_txt_env['sample_buildout']
     system = buildout_txt_env['system']
     write = buildout_txt_env['write']
@@ -1456,18 +1453,10 @@ def test_configuration_macros_cleanup(buildout_txt_env):
 
 
 def test_extending_macros(buildout_txt_env):
-    buildout = buildout_txt_env['buildout']
-    join = buildout_txt_env['join']
     mkdir = buildout_txt_env['mkdir']
-    os = buildout_txt_env['os']
-    print_ = buildout_txt_env['print_']
-    remove = buildout_txt_env['remove']
     rmdir = buildout_txt_env['rmdir']
     sample_buildout = buildout_txt_env['sample_buildout']
-    start_server = buildout_txt_env['start_server']
-    stop_server = buildout_txt_env['stop_server']
     system = buildout_txt_env['system']
-    tmpdir = buildout_txt_env['tmpdir']
     write = buildout_txt_env['write']
 
     # Extending sections (macros) - Adding and removing options
@@ -1546,18 +1535,10 @@ Develop: '/sample-buildout/demo'
 
 
 def test_extending_adding_and_removing_options(buildout_txt_env):
-    buildout = buildout_txt_env['buildout']
-    join = buildout_txt_env['join']
     mkdir = buildout_txt_env['mkdir']
     os = buildout_txt_env['os']
-    print_ = buildout_txt_env['print_']
-    remove = buildout_txt_env['remove']
-    rmdir = buildout_txt_env['rmdir']
     sample_buildout = buildout_txt_env['sample_buildout']
-    start_server = buildout_txt_env['start_server']
-    stop_server = buildout_txt_env['stop_server']
     system = buildout_txt_env['system']
-    tmpdir = buildout_txt_env['tmpdir']
     write = buildout_txt_env['write']
 
     # Adding and removing options
@@ -2728,7 +2709,6 @@ def test_options_command_line(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
     cat = buildout_txt_env['cat']
     ls = buildout_txt_env['ls']
-    mkdir = buildout_txt_env['mkdir']
     os = buildout_txt_env['os']
     sample_buildout = buildout_txt_env['sample_buildout']
     system = buildout_txt_env['system']
@@ -3078,7 +3058,6 @@ d  recipes
 def test_options_alternate_locations(buildout_txt_env):
     buildout = buildout_txt_env['buildout']
     ls = buildout_txt_env['ls']
-    mkdir = buildout_txt_env['mkdir']
     os = buildout_txt_env['os']
     rmdir = buildout_txt_env['rmdir']
     sample_buildout = buildout_txt_env['sample_buildout']
@@ -3734,7 +3713,6 @@ d  recipes
 def test_extensions(buildout_txt_env):
     mkdir = buildout_txt_env['mkdir']
     os = buildout_txt_env['os']
-    print_ = buildout_txt_env['print_']
     sample_buildout = buildout_txt_env['sample_buildout']
     system = buildout_txt_env['system']
     write = buildout_txt_env['write']

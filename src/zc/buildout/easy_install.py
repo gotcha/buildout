@@ -2430,7 +2430,7 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
     python_path.append(env.get('PYTHONPATH', ''))
     env['PYTHONPATH'] = os.pathsep.join(python_path)
 
-    output = _run_pip(args, env, dest, level)
+    _run_pip(args, env, dest, level)
 
     split_entries = [os.path.splitext(entry) for entry in os.listdir(dest)]
     if editable:

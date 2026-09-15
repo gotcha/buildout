@@ -11,7 +11,6 @@ def test_default_cfg(easy_install_env):
     mkdir = easy_install_env['mkdir']
     join = easy_install_env['join']
     write = easy_install_env['write']
-    print_ = easy_install_env['print_']
 
     home = tmpdir('home')
     mkdir(home, '.buildout')

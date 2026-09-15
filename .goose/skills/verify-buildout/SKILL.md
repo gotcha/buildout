@@ -145,7 +145,12 @@ the suites and never substitute for them.
    - `make test` — legacy doctest/testrunner suite (`bin/test -pvc`).
      The official truth. Several minutes — long enough for the
      turn-budget rules in develop-buildout: announce the run and
-     checkpoint state before starting it. Scoped smoke:
+     checkpoint state before starting it. Always capture the output
+     (`make test 2>&1 | tee /tmp/buildout-test-<label>.log`): a
+     several-minute rerun is too slow to be the way you re-read a
+     failure, and the log survives the turn. The logs are scratch
+     artifacts — never commit them, and delete them once the suite
+     passes. Scoped smoke:
      `make test-small` (single `buildout.txt` file) or
      `bin/test -pvc -t <name>`.
    - `make pytest` — ported pytest suite in

@@ -220,7 +220,7 @@ Unknown extras
 Attempting to install a requirement with an extra it doesn't provide
 is an error.
 
-    >>> ws = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['demo[unknown_extra]'], dest, links=[link_server],
     ...     index=link_server+'index/')
     Traceback (most recent call last):
@@ -230,7 +230,7 @@ is an error.
 We can pass the ``allow_unknown_extras`` argument to force the
 installation to proceed.
 
-    >>> ws = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['demo[unknown_extra]'], dest, links=[link_server],
     ...     index=link_server+'index/',
     ...     allow_unknown_extras=True)
@@ -473,7 +473,7 @@ Let's add the egg to another repository.
 Now let's install the egg.
 
     >>> example_dest = tmpdir('example-install')
-    >>> workingset = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['hasdeps'], example_dest,
     ...     links=[link_server3], index=link_server3+'index/')
     GET 200 /
@@ -487,7 +487,7 @@ the dependencies.
 
     >>> rmdir(example_dest)
     >>> example_dest = tmpdir('example-install')
-    >>> workingset = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['hasdeps'], example_dest, index=link_server+'index/',
     ...     links=[link_server, link_server3])
     GET 200 /
@@ -504,7 +504,7 @@ to zc.buildout.easy_install.install().
 
     >>> rmdir(example_dest)
     >>> example_dest = tmpdir('example-install')
-    >>> workingset = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['hasdeps'], example_dest, index=link_server+'index/',
     ...     links=[link_server, link_server3],
     ...     use_dependency_links=False)
@@ -525,7 +525,7 @@ The function returns its previous setting.
 
     >>> rmdir(example_dest)
     >>> example_dest = tmpdir('example-install')
-    >>> workingset = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['hasdeps'], example_dest, index=link_server+'index/',
     ...     links=[link_server, link_server3])
 
@@ -534,7 +534,7 @@ function.
 
     >>> rmdir(example_dest)
     >>> example_dest = tmpdir('example-install')
-    >>> workingset = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['hasdeps'], example_dest, index=link_server+'index/',
     ...     links=[link_server, link_server3],
     ...	    use_dependency_links=True)
@@ -546,7 +546,7 @@ To return the dependency_links behavior to normal call the function again.
     False
     >>> rmdir(example_dest)
     >>> example_dest = tmpdir('example-install')
-    >>> workingset = zc.buildout.easy_install.install(
+    >>> _ = zc.buildout.easy_install.install(
     ...     ['hasdeps'], example_dest, index=link_server+'index/',
     ...     links=[link_server, link_server3])
     GET 200 /demoneeded-1.2-py3-none-any.whl
@@ -919,7 +919,7 @@ to pass a common base directory of the scripts and eggs:
     ...     ['demo'], join(bo, 'eggs'), links=[link_server],
     ...     index=link_server+'index/')
 
-    >>> scripts = zc.buildout.easy_install.scripts(
+    >>> _ = zc.buildout.easy_install.scripts(
     ...    ['demo'], ws, sys.executable, join(bo, 'bin'), dict(demo='run'),
     ...    extra_paths=[ba, join(bo, 'bar'), bo],
     ...    interpreter='py',

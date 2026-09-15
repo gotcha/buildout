@@ -18,6 +18,7 @@ import doctest
 import re
 import textwrap
 from pathlib import Path
+from typing import Union
 
 ENV_NAMES = frozenset({
     'sample_buildout', 'ls', 'cat', 'mkdir', 'rmdir', 'remove', 'tmpdir',
@@ -30,17 +31,77 @@ ENV_NAMES = frozenset({
 FIXTURE_VAR = 'easy_install_env'  # overridden per call
 
 
-def get_env_names_used(examples):
-    used = set()
-    for ex in examples:
-        try:
-            sub = ast.parse(ex.source, mode='exec')
-            for n in ast.walk(sub):
-                if isinstance(n, ast.Name) and n.id in ENV_NAMES:
-                    used.add(n.id)
-        except SyntaxError:
-            pass
-    return sorted(used)
+class _UsageVisitor(ast.NodeVisitor):
+    """First load line and first bind line of each ENV_NAME in a body.
+
+    Bodies bind their own imports and rewrite fixture calls, so the
+    unpacking set must come from the emitted statements, not the
+    doctest source. A name loaded before the body's own binding (line
+    order) stays load-bearing and keeps its unpacking line. A name the
+    body binds first would shadow its unpacking unused (F811) or go
+    unread entirely (F841).
+
+    Loads inside nested scopes count as loads of the outer name even
+    when the nested scope shadows it through a parameter: over-keeping
+    an unpacking line is the safe direction, and a lint run after
+    generation catches any residue.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.first_load: dict[str, int] = {}
+        self.first_bind: dict[str, int] = {}
+
+    def _note(self, name: str, lineno: int, book: dict[str, int]) -> None:
+        if name in ENV_NAMES:
+            book.setdefault(name, lineno)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Load):
+            self._note(node.id, node.lineno, self.first_load)
+        else:
+            self._note(node.id, node.lineno, self.first_bind)
+
+    def _note_import(self, node: Union[ast.Import, ast.ImportFrom]) -> None:
+        for alias in node.names:
+            name = alias.asname or alias.name.split('.')[0]
+            self._note(name, node.lineno, self.first_bind)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self._note_import(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self._note_import(node)
+
+    def _note_def(
+        self,
+        node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef],
+    ) -> None:
+        self._note(node.name, node.lineno, self.first_bind)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._note_def(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._note_def(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._note_def(node)
+
+
+def env_names_loaded(emitted_lines: list[str]) -> list[str]:
+    """Fixture names the emitted body loads before binding anything itself."""
+    if not any(line.strip() for line in emitted_lines):
+        return []
+    # Wrapping in a def keeps the lines parseable even when triple-quoted
+    # string interiors sit at column zero, where textwrap.dedent would
+    # leave the first statement unexpectedly indented.
+    tree = ast.parse('def _emitted():\n' + '\n'.join(emitted_lines))
+    visitor = _UsageVisitor()
+    visitor.visit(tree)
+    return sorted(name for name, line in visitor.first_load.items()
+                  if line <= visitor.first_bind.get(name, line))
 
 
 def dedent_strings(src):
@@ -206,17 +267,18 @@ def emit_example(ex, fixture_var):
 
 def emit_fn_from_docstring(fn_name, docstring, fixture_var='easy_install_env'):
     examples = doctest.DocTestParser().get_examples(docstring)
-    env_used = get_env_names_used(examples)
     pytest_name = fn_name if fn_name.startswith('test_') else 'test_' + fn_name
+    body = []
+    for ex in examples:
+        body.extend(emit_example(ex, fixture_var))
+    env_used = env_names_loaded(body)
 
     lines = ['def %s(%s):' % (pytest_name, fixture_var)]
     for name in env_used:
         lines.append("    %s = %s[%r]" % (name, fixture_var, name))
     if env_used:
         lines.append('')
-
-    for ex in examples:
-        lines.extend(emit_example(ex, fixture_var))
+    lines.extend(body)
 
     lines.append('')
     return '\n'.join(lines)
@@ -228,16 +290,17 @@ def emit_fn_from_txt(txt_path, fixture_var='easy_install_env'):
     examples = doctest.DocTestParser().get_examples(content)
     stem = Path(txt_path).stem.replace('-', '_')
     fn_name = 'test_' + stem
-    env_used = get_env_names_used(examples)
+    body = []
+    for ex in examples:
+        body.extend(emit_example(ex, fixture_var))
+    env_used = env_names_loaded(body)
 
     lines = ['def %s(%s):' % (fn_name, fixture_var)]
     for name in env_used:
         lines.append("    %s = %s[%r]" % (name, fixture_var, name))
     if env_used:
         lines.append('')
-
-    for ex in examples:
-        lines.extend(emit_example(ex, fixture_var))
+    lines.extend(body)
 
     lines.append('')
     return '\n'.join(lines)

@@ -1915,7 +1915,6 @@ The following list shows the affected packages and their namespaces:
     @command
     def annotate(self, args: Optional[List[str]]=None) -> None:
         verbose = self['buildout'].get('verbosity', 0) != 0
-        section = None
         if args is None:
             sections = []
         else:
@@ -2986,7 +2985,7 @@ def _valued_option(
         try:
             timeout_string = args.pop(0)
             # Quirk preserved: the value is only validated, never used.
-            timeout = int(timeout_string)
+            int(timeout_string)
             options.append(
                 ('buildout', 'socket-timeout', timeout_string))
         except IndexError:

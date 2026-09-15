@@ -34,8 +34,6 @@ ignore = [
     "E731",  # assign a lambda expression
     "E722",  # bare except
     "E741",  # ambiguous variable name (l, O, ...)
-    "F811",  # redefinition (pytest port class injection)
-    "F841",  # unused local variable (incl. __doing__ frame locals)
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -267,6 +267,13 @@ over doctest sources (`.txt` files, `test_all.py` docstrings):
   line-level suppression cannot come from the source. Prefer truthful
   fixes in ported code; a suppression hand-added to a port is lost on
   the next regen.
+- Every regeneration pairs with an `inject_prose.py` re-run, and
+  `inject_prose.py --check` anchored and unplaced counts must hold or
+  improve against the pre-edit baseline. The prose comments in the
+  ports preserve the doctest narrative for readers; a dropped or
+  displaced prose block is a regeneration defect, not cosmetic loss.
+  If an edit moves an anchor (an example's first emitted statement),
+  fix the anchor, never delete the prose.
 
 ## Reducing complexity
 
