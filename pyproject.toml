@@ -29,7 +29,6 @@ target-version = "py39"
 # `make lint` means the same thing across ruff versions.)
 select = ["E4", "E7", "E9", "F"]
 ignore = [
-    "E402",  # module-level import not at top (sys.path dance)
     "E701",  # multiple statements on one line (colon)
     "E702",  # multiple statements on one line (semicolon)
     "E731",  # assign a lambda expression
@@ -45,11 +44,26 @@ ignore = [
 # %-placeholder is a deliberate no-op, not a bug.
 "src/zc/buildout/tests/pytests/test_pytest_buildout_doctests.py" = ["F507"]
 # Deliberate unused imports: import-availability probes in try/except
-# and public re-exports.
-"src/zc/buildout/__init__.py" = ["F401"]
+# and public re-exports. __init__.py also has load-bearing import
+# order (do-not-reorder comment in the file): the distutils-hack
+# finder removal before the pip import, warning filters before the
+# pkg_resources deprecation surfaces.
+"src/zc/buildout/__init__.py" = ["F401", "E402"]
 "src/zc/buildout/easy_install.py" = ["F401"]
 "src/zc/buildout/patches.py" = ["F401"]
 "zc.recipe.egg_/src/zc/recipe/egg/__init__.py" = ["F401"]
+# Packaging entry point: name and version assignments ahead of the
+# setuptools import.
+"setup.py" = ["E402"]
+# Packaging entry point: name and version assignments ahead of the
+# setuptools import.
+"zc.recipe.egg_/setup.py" = ["E402"]
+# Puts its own directory on sys.path to import the sibling gen_pytest
+# module as a script.
+"src/zc/buildout/tests/pytests/inject_prose.py" = ["E402"]
+# Deliberate late import after pkg_resources.working_set.add_entry;
+# the file carries an isort do-not-move note on that line.
+"dev.py" = ["E402"]
 
 [tool.towncrier]
 filename = "CHANGES.rst"
