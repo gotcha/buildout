@@ -52,14 +52,14 @@ can't delete.
 and we'll configure a buildout to use it:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
 
     >>> print_(system(buildout), end='')
     Getting distribution for 'spam'.

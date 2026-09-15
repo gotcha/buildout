@@ -25,14 +25,14 @@ def read(*rnames):
 
 long_description= read('README.rst') + '\n' + read('CHANGES.rst')
 
-entry_points = """
+entry_points = f"""
 [console_scripts]
-buildout = %(name)s.buildout:main
+buildout = {name}.buildout:main
 
 [zc.buildout]
-debug = %(name)s.testrecipes:Debug
+debug = {name}.testrecipes:Debug
 
-""" % {"name": name}
+"""
 
 setup(
     name = name,

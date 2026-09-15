@@ -31,12 +31,12 @@ dependency_links which point to the new server.
     >>> write(sample_buildout, 'depdemo', 'dependencydemo.py',
     ...       'import eggrecipedemoneeded')
     >>> write(sample_buildout, 'depdemo', 'setup.py',
-    ... '''from setuptools import setup; setup(
+    ... f'''from setuptools import setup; setup(
     ...     name='depdemo', py_modules=['dependencydemo'],
     ...     install_requires = 'demoneeded',
-    ...     dependency_links = ['%s'],
+    ...     dependency_links = ['{link_server2}'],
     ...     zip_safe=True, version='1')
-    ... ''' % link_server2)
+    ... ''')
 
 Now let's configure the buildout to use the develop egg.
 
@@ -101,16 +101,16 @@ Let's change things so that the buildout configuration specifies where
 to look for eggs.
 
     >>> write(sample_buildout, 'buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... develop = depdemo
     ... parts = eggs
-    ... find-links = %s
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg:eggs
     ... eggs = depdemo
-    ... ''' % link_server)
+    ... ''')
 
     >>> print_(system(buildout), end='')
     Develop: '/sample-buildout/depdemo'
@@ -125,12 +125,12 @@ Now let's change things once again so that both buildout and setup
 specify different places to look for the dependency egg.
 
     >>> write(sample_buildout, 'depdemo', 'setup.py',
-    ... '''from setuptools import setup; setup(
+    ... f'''from setuptools import setup; setup(
     ...     name='depdemo', py_modules=['dependencydemo'],
     ...     install_requires = 'demoneeded',
-    ...     dependency_links = ['%s'],
+    ...     dependency_links = ['{link_server2}'],
     ...     zip_safe=True, version='1')
-    ... '''  % link_server2)
+    ... ''')
 
     >>> remove_demoneeded_egg()
     >>> print_(system(buildout), end='') #doctest: +ELLIPSIS
@@ -151,17 +151,17 @@ dependency_links and only look for eggs using find-links.
 Here is an example of using this option to disable dependency_links.
 
     >>> write(sample_buildout, 'buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... develop = depdemo
     ... parts = eggs
-    ... find-links = %s
+    ... find-links = {link_server}
     ... use-dependency-links = false
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg:eggs
     ... eggs = depdemo
-    ... ''' % link_server)
+    ... ''')
 
     >>> remove_demoneeded_egg()
     >>> print_(system(buildout), end='')
@@ -176,17 +176,17 @@ If we set the option to true, things return to the way they were
 before. The dependency's are looked for first in the logging server.
 
     >>> write(sample_buildout, 'buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... develop = depdemo
     ... parts = eggs
-    ... find-links = %s
+    ... find-links = {link_server}
     ... use-dependency-links = true
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg:eggs
     ... eggs = depdemo
-    ... ''' % link_server)
+    ... ''')
     >>> remove_demoneeded_egg()
     >>> print_(system(buildout), end='') #doctest: +ELLIPSIS
     GET 200 /...

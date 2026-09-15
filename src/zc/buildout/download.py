@@ -112,9 +112,8 @@ class Download:
         if not os.path.exists(download_cache):
             raise zc.buildout.UserError(
                 'The directory:\n'
-                '%r\n'
-                "to be used as a download cache doesn't exist.\n"
-                % download_cache)
+                f'{download_cache!r}\n'
+                "to be used as a download cache doesn't exist.\n")
         cache_dir = self.cache_dir
         assert cache_dir is not None
         if not os.path.exists(cache_dir):
@@ -122,7 +121,7 @@ class Download:
         cache_key = self.filename(url)
         cached_path = os.path.join(cache_dir, cache_key)
 
-        self.logger.debug('Searching cache at %s' % cache_dir)
+        self.logger.debug('Searching cache at %s', cache_dir)
         if os.path.exists(cached_path):
             is_temp = False
             if self.fallback:
@@ -136,11 +135,11 @@ class Download:
             if not check_md5sum(cached_path, md5sum):
                 raise ChecksumError(
                     'MD5 checksum mismatch for cached download '
-                    'from %r at %r' % (url, cached_path))
-            self.logger.debug('Using cache file %s' % cached_path)
+                    f'from {url!r} at {cached_path!r}')
+            self.logger.debug('Using cache file %s', cached_path)
         else:
-            self.logger.debug('Cache miss; will cache %s as %s' %
-                              (url, cached_path))
+            self.logger.debug('Cache miss; will cache %s as %s',
+                              url, cached_path)
             _, is_temp = self.download(url, md5sum, cached_path)
 
         return cached_path, is_temp
@@ -162,30 +161,30 @@ class Download:
         parsed_url = urlparse(url, 'file')
         url_scheme, _, url_path = parsed_url[:3]
         if url_scheme == 'file':
-            self.logger.debug('Using local resource %s' % url)
+            self.logger.debug('Using local resource %s', url)
             if not check_md5sum(url_path, md5sum):
                 raise ChecksumError(
-                    'MD5 checksum mismatch for local resource at %r.' %
-                    url_path)
+                    f'MD5 checksum mismatch for local resource at '
+                    f'{url_path!r}.')
             return locate_at(url_path, path), False
 
         if self.offline:
             raise zc.buildout.UserError(
-                "Couldn't download %r in offline mode." % url)
+                f"Couldn't download {url!r} in offline mode.")
 
-        self.logger.info('Downloading %s' % url)
+        self.logger.info('Downloading %s', url)
         handle, tmp_path = tempfile.mkstemp(prefix='buildout-')
         os.close(handle)
         try:
             tmp_path, headers = urlretrieve(url, tmp_path)
             if not check_md5sum(tmp_path, md5sum):
                 raise ChecksumError(
-                    'MD5 checksum mismatch downloading %r' % url)
+                    f'MD5 checksum mismatch downloading {url!r}')
         except OSError:
             e = sys.exc_info()[1]
             os.remove(tmp_path)
             raise zc.buildout.UserError("Error downloading extends for URL "
-                              "%s: %s" % (url, e))
+                              f"{url}: {e}")
         except Exception:
             os.remove(tmp_path)
             raise
@@ -221,7 +220,7 @@ class Download:
                         return name
 
             url_host, url_port = parsed[-2:]
-            return '%s:%s' % (url_host, url_port)
+            return f'{url_host}:{url_port}'
 
 
 def check_md5sum(path: str, md5sum: str | None) -> bool:

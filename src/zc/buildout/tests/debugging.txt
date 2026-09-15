@@ -76,7 +76,7 @@ supply some input:
     Develop: '/sample-buildout/recipes'
     Installing data-dir.
     > /zc/buildout/buildout.py(925)__getitem__()
-    -> raise MissingOption("Missing option: %s:%s" % (self.name, key))
+    -> raise MissingOption(f"Missing option: {self.name}:{key}")
     (Pdb) > /sample-buildout/recipes/mkdir.py(14)install()
     -> directory = self.options['directory']
     (Pdb) ['path', 'recipe']
@@ -86,7 +86,7 @@ supply some input:
       File "/zc/buildout/buildout.py", line 1352, in main
     ...
       File "/zc/buildout/buildout.py", line 925, in __getitem__
-        raise MissingOption("Missing option: %s:%s" % (self.name, key))
+        raise MissingOption(f"Missing option: {self.name}:{key}")
     MissingOption: Missing option: data-dir:directory
     <BLANKLINE>
     Starting pdb:

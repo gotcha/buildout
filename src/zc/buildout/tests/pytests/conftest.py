@@ -90,7 +90,7 @@ NORMALIZERS_BUILDOUT = [
     (re.compile(r'[-d]  setuptools-\S+[.]egg'), 'setuptools.egg'),
     (re.compile(r'zc\.buildout(-\S+)?\.egg(-link)?'), 'zc.buildout.egg'),
     (re.compile(r'creating \S*setup\.cfg'), 'creating setup.cfg'),
-    (re.compile(r'hello%ssetup' % os.path.sep), 'hello/setup'),
+    (re.compile(rf'hello{os.path.sep}setup'), 'hello/setup'),
     (re.compile(r'Picked: (\S+) = \S+'), r'Picked: \1 = V.V'),
     (re.compile(r'We have a develop egg: zc\.buildout (\S+)'),
      'We have a develop egg: zc.buildout X.X.'),

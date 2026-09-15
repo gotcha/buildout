@@ -53,14 +53,14 @@ def test_update(update_env):
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    find-links = %(new_releases)s
-    index = %(new_releases)s
+    find-links = {new_releases}
+    index = {new_releases}
     parts = show-versions
     develop = showversions
     
     [show-versions]
     recipe = showversions
-    """ % {'new_releases': new_releases})
+    """.format_map({'new_releases': new_releases}))
     # We'll also include a recipe that echos the versions of setuptools and
     # zc.buildout used:
     mkdir(sample_buildout, 'showversions')
@@ -142,8 +142,8 @@ if __name__ == '__main__':
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    find-links = %(new_releases)s
-    index = %(new_releases)s
+    find-links = {new_releases}
+    index = {new_releases}
     parts = show-versions
     develop = showversions
     
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     
     [show-versions]
     recipe = showversions
-    """ % {'new_releases': new_releases})
+    """.format_map({'new_releases': new_releases}))
     # Now we can see that we actually "upgrade" to an earlier version.
     assert_output(system(buildout), """
 Upgraded:
@@ -170,14 +170,14 @@ zc.buildout V.V
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    find-links = %(new_releases)s
-    index = %(new_releases)s
+    find-links = {new_releases}
+    index = {new_releases}
     parts = show-versions
     develop = showversions
     
     [show-versions]
     recipe = showversions
-    """ % {'new_releases': new_releases})
+    """.format_map({'new_releases': new_releases}))
     assert_output(system(buildout + ' -o'), """
 Develop: '/sample-buildout/showversions'
 Updating show-versions.
@@ -196,13 +196,13 @@ zc.buildout 1.0.0
     write(sample_buildout2, 'buildout.cfg',
     """
     [buildout]
-    find-links = %(new_releases)s
-    index = %(new_releases)s
+    find-links = {new_releases}
+    index = {new_releases}
     parts =
     
     [versions]
     zc.buildout = 99.99
-    """ % {'new_releases': new_releases})
+    """.format_map({'new_releases': new_releases}))
     cd(sample_buildout2)
     assert_output(system(buildout), """
 Creating directory '/sample_buildout2/eggs/v5'.
@@ -219,15 +219,15 @@ Not upgrading because not running a local buildout command.
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    find-links = %(new_releases)s
-    index = %(new_releases)s
+    find-links = {new_releases}
+    index = {new_releases}
     parts = show-versions
     develop = showversions
     relative-paths = true
     
     [show-versions]
     recipe = showversions
-    """ % {'new_releases': new_releases})
+    """.format_map({'new_releases': new_releases}))
     assert_output(system(buildout), """
 Upgraded:
   zc.buildout version 99.99;
@@ -296,8 +296,8 @@ if __name__ == '__main__':
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    find-links = %(new_releases)s
-    index = %(new_releases)s
+    find-links = {new_releases}
+    index = {new_releases}
     parts = fail
     develop = failrecipe
     
@@ -306,7 +306,7 @@ if __name__ == '__main__':
     
     [fail]
     recipe = failrecipe
-    """ % {'new_releases': new_releases})
+    """.format_map({'new_releases': new_releases}))
     # Run the buildout:
     assert_output(system(buildout, with_exit_code=True), """
 Upgraded:

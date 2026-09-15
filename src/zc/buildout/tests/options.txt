@@ -625,17 +625,17 @@ provide alternate locations, and even names for these directories::
     ... [buildout]
     ... develop = recipes
     ... parts =
-    ... develop-eggs-directory = %(developbasket)s
-    ... eggs-directory = %(basket)s
+    ... develop-eggs-directory = {developbasket}
+    ... eggs-directory = {basket}
     ... eggs-directory-version = v2
-    ... bin-directory = %(scripts)s
-    ... parts-directory = %(work)s
-    ... """ % {
+    ... bin-directory = {scripts}
+    ... parts-directory = {work}
+    ... """.format_map({
     ...    'developbasket': os.path.join(alt, 'developbasket'),
     ...    'basket': os.path.join(alt, 'basket'),
     ...    'scripts': os.path.join(alt, 'scripts'),
-    ...    'work': os.path.join(alt, 'work'),
-    ... })
+    ...    'work': os.path.join(alt, 'work')
+    ... }))
 
     >>> print_(system(buildout), end='')
     Creating directory '/sample-alt/basket/v2'.
@@ -665,13 +665,13 @@ You can also specify an alternate buildout directory::
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... directory = %(alt)s
-    ... develop = %(recipes)s
+    ... directory = {alt}
+    ... develop = {recipes}
     ... parts =
-    ... """ % {
+    ... """.format_map({
     ...    'alt': alt,
-    ...    'recipes': os.path.join(sample_buildout, 'recipes'),
-    ...    })
+    ...    'recipes': os.path.join(sample_buildout, 'recipes')
+    ...    }))
 
     >>> print_(system(buildout), end='')
     Creating directory '/sample-alt/eggs/v5'.

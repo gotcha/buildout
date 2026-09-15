@@ -1837,11 +1837,11 @@ recipe recipes:debug
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    extends = b1.cfg b2.cfg %(b3)s
+    extends = b1.cfg b2.cfg {b3}
     
     [debug]
     op = buildout
-    """ % {'b3': os.path.join(other, 'b3.cfg')})
+    """.format_map({'b3': os.path.join(other, 'b3.cfg')}))
     write(sample_buildout, 'b1.cfg',
     """
     [buildout]
@@ -1927,7 +1927,7 @@ op2 b2 2
 op3 b2 3
 recipe recipes:debug
 """, N)
-    assert_output(system([buildout, 'buildout:extends=b2.cfg %(b3)s' % {'b3': os.path.join(other, 'b3.cfg')}]), """
+    assert_output(system([buildout, 'buildout:extends=b2.cfg {b3}'.format_map({'b3': os.path.join(other, 'b3.cfg')})]), """
 Develop: '/sample-buildout/recipes'
 Uninstalling debug.
 Installing debug.
@@ -1943,11 +1943,11 @@ recipe recipes:debug
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    extends = b1.cfg b2.cfg %(b3)s
+    extends = b1.cfg b2.cfg {b3}
     
     [debug]
     op = buildout
-    """ % {'b3': os.path.join(other, 'b3.cfg')})
+    """.format_map({'b3': os.path.join(other, 'b3.cfg')}))
 
 
 def test_extending_multiple_configuration_files_optional_extends(buildout_txt_env):
@@ -2054,11 +2054,11 @@ recipe recipes:debug
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    extends = b1.cfg b2.cfg %(b3)s
+    extends = b1.cfg b2.cfg {b3}
     
     [debug]
     op = buildout
-    """ % {'b3': os.path.join(other, 'b3.cfg')})
+    """.format_map({'b3': os.path.join(other, 'b3.cfg')}))
     remove(sample_buildout, 'optional.cfg')
 
 
@@ -2121,12 +2121,12 @@ recipe recipes:debug
     [buildout]
     develop = recipes
     parts = debug
-    extends = %(url)s/r2.cfg
+    extends = {url}/r2.cfg
     
     [debug]
     recipe = recipes:debug
     name = base
-    """ % {'url': server_url})
+    """.format_map({'url': server_url}))
     assert_output(system([buildout, '-c', 'client.cfg']), """
 Develop: '/sample-buildout/recipes'
 Uninstalling debug.
@@ -2216,11 +2216,11 @@ recipe recipes:debug
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    extends = b1.cfg b2.cfg %(b3)s
+    extends = b1.cfg b2.cfg {b3}
     
     [debug]
     op = buildout
-    """ % {'b3': os.path.join(other, 'b3.cfg')})
+    """.format_map({'b3': os.path.join(other, 'b3.cfg')}))
     write(sample_buildout, 'b1.cfg',
     """
     [buildout]
@@ -3102,17 +3102,17 @@ def test_options_alternate_locations(buildout_txt_env):
     [buildout]
     develop = recipes
     parts =
-    develop-eggs-directory = %(developbasket)s
-    eggs-directory = %(basket)s
+    develop-eggs-directory = {developbasket}
+    eggs-directory = {basket}
     eggs-directory-version = v2
-    bin-directory = %(scripts)s
-    parts-directory = %(work)s
-    """ % {
+    bin-directory = {scripts}
+    parts-directory = {work}
+    """.format_map({
        'developbasket': os.path.join(alt, 'developbasket'),
        'basket': os.path.join(alt, 'basket'),
        'scripts': os.path.join(alt, 'scripts'),
-       'work': os.path.join(alt, 'work'),
-    })
+       'work': os.path.join(alt, 'work')
+    }))
     assert_output(system(buildout), """
 Creating directory '/sample-alt/basket/v2'.
 Creating directory '/sample-alt/scripts'.
@@ -3137,13 +3137,13 @@ d  work
     write(sample_buildout, 'buildout.cfg',
     """
     [buildout]
-    directory = %(alt)s
-    develop = %(recipes)s
+    directory = {alt}
+    develop = {recipes}
     parts =
-    """ % {
+    """.format_map({
        'alt': alt,
-       'recipes': os.path.join(sample_buildout, 'recipes'),
-       })
+       'recipes': os.path.join(sample_buildout, 'recipes')
+       }))
     assert_output(system(buildout), """
 Creating directory '/sample-alt/eggs/v5'.
 Creating directory '/sample-alt/bin'.

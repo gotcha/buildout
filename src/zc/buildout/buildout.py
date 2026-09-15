@@ -89,7 +89,7 @@ class MissingSection(zc.buildout.UserError, KeyError):
     """
 
     def __str__(self) -> str:
-        return "The referenced section, %r, was not defined." % self.args[0]
+        return f"The referenced section, {self.args[0]!r}, was not defined."
 
 
 def _annotate_section(section: dict[str, Any], source: str) -> dict[str, SectionKey]:
@@ -179,8 +179,8 @@ class SectionKey:
                 print_(line)
 
     def __repr__(self) -> str:
-        return "<SectionKey value=%s source=%s>" % (
-            " ".join(self.value.split('\n')), self.source)
+        value = " ".join(self.value.split('\n'))
+        return f"<SectionKey value={value} source={self.source}>"
 
 
 class HistoryItem:
@@ -227,8 +227,9 @@ class HistoryItem:
         self.printOperation()
 
     def __repr__(self) -> str:
-        return "<HistoryItem operation=%s value=%s source=%s>" % (
-            self.operation, " ".join(self.value.split('\n')), self.source)
+        value = " ".join(self.value.split('\n'))
+        return (f"<HistoryItem operation={self.operation} value={value} "
+                f"source={self.source}>")
 
 
 # Annotated configuration data: maps section names to sections whose values
@@ -251,7 +252,7 @@ def _print_annotate(data: dict[str, dict[str, SectionKey]], verbose: bool, chose
     for section in sections:
         if (not chosen_sections) or (section in chosen_sections):
             print_()
-            print_('[%s]' % section)
+            print_(f'[{section}]')
             keys = list(data[section].keys())
             keys.sort()
             for key in keys:
@@ -279,7 +280,7 @@ def _format_picked_versions(picked_versions: list[tuple[str, str]], required_by:
             target = required_output
         else:
             target = output
-        target.append("%s = %s" % (dist_, version))
+        target.append(f"{dist_} = {version}")
     output.extend(required_output)
     return output
 
@@ -395,10 +396,10 @@ def _resolve_config_file(
                 directory = SectionKey('.', 'COMPUTED_VALUE')
             else:
                 raise zc.buildout.UserError(
-                    "Couldn't open %s" % config_file)
+                    f"Couldn't open {config_file}")
         elif command == 'init':
             raise zc.buildout.UserError(
-                "%r already exists." % config_file)
+                f"{config_file!r} already exists.")
 
         if config_file:
             directory = SectionKey(
@@ -579,10 +580,9 @@ def _absolutize_cache_dirs(data: ConfigData, buildout_dir: str) -> None:
                 else:
                     if _isurl(src):
                         raise zc.buildout.UserError(
-                            'Setting "%s" to a non absolute location ("%s") '
+                            f'Setting "{name}" to a non absolute location ("{origdir}") '
                             'within a\n'
-                            'remote configuration file ("%s") is ambiguous.' % (
-                                name, origdir, src))
+                            f'remote configuration file ("{src}") is ambiguous.')
                     basedir = os.path.dirname(src)
                 absdir = os.path.expanduser(origdir)
                 if not os.path.isabs(absdir):
@@ -1005,8 +1005,7 @@ def _upgrade_and_restart(
         return
 
     logger.info("Upgraded:\n  %s;\nRestarting.",
-                ",\n  ".join([("%s version %s"
-                               % (dist.project_name, dist.version)
+                ",\n  ".join([(f"{dist.project_name} version {dist.version}"
                                )
                               for dist in upgraded
                               ]
@@ -1047,12 +1046,10 @@ def _split_query_option(arg: str) -> tuple[str, str]:
     if len(option) == 1:
         option = 'buildout', option[0]
     elif len(option) != 2:
-        _error("Invalid query argument: %r (expected section:option)"
-               % arg)
+        _error(f"Invalid query argument: {arg!r} (expected section:option)")
     section, option = option
     if not section or not option:
-        _error("Invalid query argument: %r (expected section:option)"
-               % arg)
+        _error(f"Invalid query argument: {arg!r} (expected section:option)")
     return section, option
 
 
@@ -1297,7 +1294,7 @@ class Buildout(DictMixin):
                 )
 
     def _init_config(self, config_file: str, args: tuple[str, ...] | list[str]) -> None:
-        print_('Creating %r.' % config_file)
+        print_(f'Creating {config_file!r}.')
         f = open(config_file, 'w')
         sep = re.compile(r'[\\/]')
         if args:
@@ -1315,9 +1312,9 @@ class Buildout(DictMixin):
                     'eggs =\n'
                     )
             if eggs:
-                f.write('  %s\n' % eggs)
+                f.write(f'  {eggs}\n')
             if paths:
-                f.write('extra-paths =\n  %s\n' % paths)
+                f.write(f'extra-paths =\n  {paths}\n')
                 for p in [a for a in args if sep.search(a)]:
                     if not os.path.exists(p):
                         os.mkdir(p)
@@ -1837,7 +1834,7 @@ class Buildout(DictMixin):
             if os.path.exists(self.update_versions_file):
                 output[:1] = [
                     '',
-                    '# Added by buildout at %s' % datetime.datetime.now()
+                    f'# Added by buildout at {datetime.datetime.now()}'
                 ]
             output.append('')
             f = open(self.update_versions_file, 'a')
@@ -1906,7 +1903,7 @@ The following list shows the affected packages and their namespaces:
         section, option, interpolated = _parse_query_args(args)
         verbose = self['buildout'].get('verbosity', 0) != 0
         if verbose:
-            print_('${%s:%s}' % (section, option))
+            print_(f'${{{section}:{option}}}')
         value = _raw_query_value(self._raw, section, option)
         if interpolated:
             value = self[section].get(option)
@@ -1950,7 +1947,7 @@ The following list shows the affected packages and their namespaces:
 
                 if base_path:
                     v = v.replace(os.getcwd(), base_path)
-                print_("%s =%s" % (k, v))
+                print_(f"{k} ={v}")
 
     def __getitem__(self, section: str) -> Options:
         with _activity('Getting section %s.', section):
@@ -2101,7 +2098,7 @@ class Options(DictMixin):
         if name == 'buildout':
             return data
         if name in doing:
-            raise zc.buildout.UserError("Infinite extending loop %r" % name)
+            raise zc.buildout.UserError(f"Infinite extending loop {name!r}")
         doing.append(name)
         try:
             to_do = data.get('<', None)
@@ -2116,7 +2113,7 @@ class Options(DictMixin):
                         continue
                     raw = self.buildout._raw.get(iname)
                     if raw is None:
-                        raise zc.buildout.UserError("No section named %r" % iname)
+                        raise zc.buildout.UserError(f"No section named {iname!r}")
                     result.update(self._do_extend_raw(iname, raw, doing))
 
                 annotated_result = _annotate_section(result, "")
@@ -2182,23 +2179,19 @@ class Options(DictMixin):
             s = tuple(ref[2:-1].split(':'))
             if not self._valid(ref):
                 if len(s) < 2:
-                    raise zc.buildout.UserError("The substitution, %s,\n"
-                                                "doesn't contain a colon."
-                                                % ref)
+                    raise zc.buildout.UserError(f"The substitution, {ref},\n"
+                                                "doesn't contain a colon.")
                 if len(s) > 2:
-                    raise zc.buildout.UserError("The substitution, %s,\n"
-                                                "has too many colons."
-                                                % ref)
+                    raise zc.buildout.UserError(f"The substitution, {ref},\n"
+                                                "has too many colons.")
                 if not self._simple(s[0]):
                     raise zc.buildout.UserError(
-                        "The section name in substitution, %s,\n"
-                        "has invalid characters."
-                        % ref)
+                        f"The section name in substitution, {ref},\n"
+                        "has invalid characters.")
                 if not self._simple(s[1]):
                     raise zc.buildout.UserError(
-                        "The option name in substitution, %s,\n"
-                        "has invalid characters."
-                        % ref)
+                        f"The option name in substitution, {ref},\n"
+                        "has invalid characters.")
 
             section, option = s
             if not section:
@@ -2223,7 +2216,7 @@ class Options(DictMixin):
 
         v = self.get(key)
         if v is None:
-            raise MissingOption("Missing option: %s:%s" % (self.name, key))
+            raise MissingOption(f"Missing option: {self.name}:{key}")
         return v
 
     def __setitem__(self, option: str, value: str) -> None:
@@ -2337,7 +2330,7 @@ def _save_option(option: str, value: str, f: TextIO) -> None:
     print_(option, '=', value, file=f)
 
 def _save_options(section: str, options: Options | dict[str, str], f: TextIO) -> None:
-    print_('[%s]' % section, file=f)
+    print_(f'[{section}]', file=f)
     items = list(options.items())
     items.sort()
     for option, value in items:
@@ -2430,8 +2423,8 @@ def _validated_extends_cache(raw_download_options: dict[str, str]) -> str | None
     extends_cache = raw_download_options.get('extends-cache')
     if extends_cache and variable_template_split(extends_cache)[1::2]:
         raise ValueError(
-            "extends-cache '%s' may not contain ${section:variable} to expand."
-            % extends_cache
+            f"extends-cache '{extends_cache}' may not contain "
+            "${section:variable} to expand."
         )
     return extends_cache
 
@@ -2453,7 +2446,7 @@ def _resolve_config_location(base: str, filename: str) -> tuple[str, str, bool]:
 
 def _filename_for_logging(filename: str, downloaded_filename: str | None) -> str:
     if downloaded_filename:
-        return '%s (downloaded as %s)' % (filename, downloaded_filename)
+        return f'{filename} (downloaded as {downloaded_filename})'
     return filename
 
 def _merge_config_data(eresults: list[ConfigData]) -> ConfigData:
@@ -2564,7 +2557,7 @@ def _optional_extends_results(
     if optional_extends:
         for fname in optional_extends.value.split():
             if not os.path.exists(fname):
-                print("optional-extends file not found: %s" % fname)
+                print(f"optional-extends file not found: {fname}")
                 continue
             next_extend, user_defaults = _open(
                 base, fname, seen, download_options, override,
@@ -2609,8 +2602,7 @@ def _open(
     extends = options.pop('extends', None)
     if 'extended-by' in options:
         raise zc.buildout.UserError(
-            'No-longer supported "extended-by" option found in %s.' %
-            filename)
+            f'No-longer supported "extended-by" option found in {filename}.')
 
     result = _annotate(result, filename)
 
@@ -2789,7 +2781,7 @@ def _doing() -> None:
         for message, args in doing:
             if args:
                 message = message % args
-            sys.stderr.write('  %s\n' % message)
+            sys.stderr.write(f'  {message}\n')
 
 def _error(*message: Any) -> NoReturn:
     sys.stderr.write('Error: ' + ' '.join(message) +'\n')
@@ -2808,8 +2800,8 @@ def _check_for_unused_options_in_section(buildout: Buildout, section: str) -> No
         buildout._logger.warning(
             "Section `%s` contains unused option(s): %s.\n"
             "This may be an indication for either a typo in the option's name "
-            "or a bug in the used recipe." %
-            (section, ' '.join(map(repr, unused)))
+            "or a bug in the used recipe.",
+            section, ' '.join(map(repr, unused))
         )
 
 _usage = """\
@@ -2928,7 +2920,7 @@ def _version() -> NoReturn:
         pkg_resources.Requirement.parse('zc.buildout'))
     # We are running, so zc.buildout is in the working set.
     assert dist is not None
-    print_("buildout version %s" % dist.version)
+    print_(f"buildout version {dist.version}")
     sys.exit(0)
 
 
@@ -3132,4 +3124,4 @@ def bool_option(options: Options | dict[str, str], name: str, default: str | boo
         return _bool_names[value]
     except KeyError:
         raise zc.buildout.UserError(
-            'Invalid value for %r option: %r' % (name, value))
+            f'Invalid value for {name!r} option: {value!r}')

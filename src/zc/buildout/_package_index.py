@@ -1044,14 +1044,14 @@ class PackageIndex(Environment):
         >>> san('D:../foo')
         'D___foo'
         """
-        pattern = '|'.join((
+        pattern = (
             # drive letters
-            r':',
+            r':'
             # path separators
-            r'[/\\]',
+            r'|[/\\]'
             # parent dirs
-            r'(?:(?<=([/\\]|:))\.\.(?=[/\\]|$))|(?:^\.\.(?=[/\\]|$))',
-        ))
+            r'|(?:(?<=([/\\]|:))\.\.(?=[/\\]|$))|(?:^\.\.(?=[/\\]|$))'
+        )
         return re.sub(pattern, r'_', name)
 
     @classmethod

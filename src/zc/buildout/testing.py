@@ -169,7 +169,7 @@ def system(command, input='', with_exit_code=False, env=None):
     if with_exit_code:
         # Use the with_exit_code=True parameter when you want to test the exit
         # code of the command you're running.
-        output += 'EXIT CODE: %s' % p.wait()
+        output += f'EXIT CODE: {p.wait()}'
     p.wait()
     return output
 
@@ -362,7 +362,7 @@ def buildoutSetUp(test):
 
     def start_server(path):
         port, thread = _start_server(path, name=path)
-        url = 'http://localhost:%s/' % port
+        url = f'http://localhost:{port}/'
         register_teardown(lambda: stop_server(url, thread))
         return url
 
@@ -477,7 +477,7 @@ class Handler(BaseHTTPRequestHandler):
             for name in names:
                 if os.path.isdir(os.path.join(path, name)):
                     name += '/'
-                out.append('<a href="%s">%s</a><br>\n' % (name, name))
+                out.append(f'<a href="{name}">{name}</a><br>\n')
             out.append('</body></html>\n')
             out = ''.join(out).encode()
             self.send_header('Content-Length', str(len(out)))
@@ -505,7 +505,7 @@ class Handler(BaseHTTPRequestHandler):
         # size is accepted for signature compatibility with
         # BaseHTTPRequestHandler.log_request; it is unused here.
         if self.__server.__log:
-            print_('%s %s %s' % (self.command, code, self.path))
+            print_(f'{self.command} {code} {self.path}')
 
 def _run(tree, port):
     server_address = ('localhost', port)
@@ -579,9 +579,9 @@ def install(project, destination):
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse(project))
     if dist is None:
-        raise ValueError('Distribution not found for %r' % project)
+        raise ValueError(f'Distribution not found for {project!r}')
     if dist.location is None:
-        raise ValueError('Distribution %r has no location' % project)
+        raise ValueError(f'Distribution {project!r} has no location')
     if dist.location.endswith('.egg'):
         destination = os.path.join(destination,
                                    os.path.basename(dist.location),
@@ -603,9 +603,9 @@ def install_develop(project, destination):
     dist = pkg_resources.working_set.find(
         pkg_resources.Requirement.parse(project))
     if dist is None:
-        raise ValueError('Distribution not found for %r' % project)
+        raise ValueError(f'Distribution not found for {project!r}')
     if dist.location is None:
-        raise ValueError('Distribution %r has no location' % project)
+        raise ValueError(f'Distribution {project!r} has no location')
     with open(os.path.join(destination, project+'.egg-link'), 'w') as f:
         f.write(dist.location)
 
@@ -619,8 +619,7 @@ def _normalize_path(match):
 
 normalize_path = (
     re.compile(
-        r'''[^'" \t\n\r]+\%(sep)s_[Tt][Ee][Ss][Tt]_\%(sep)s([^"' \t\n\r]+)'''
-        % {'sep': os.path.sep}),
+        rf'''[^'" \t\n\r]+\{os.path.sep}_[Tt][Ee][Ss][Tt]_\{os.path.sep}([^"' \t\n\r]+)'''),
     _normalize_path,
     )
 

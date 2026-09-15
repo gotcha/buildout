@@ -428,13 +428,13 @@ Now, let's create a buildout that requires y and z:
     ... [buildout]
     ... parts = eggs
     ... develop = sampley samplez
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = sampley
     ...        samplez
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='')
     Develop: '/sample-buildout/sampley'
@@ -462,13 +462,13 @@ if we hadn't required sampley ourselves:
     ... [buildout]
     ... parts = eggs
     ... develop = sampley samplez samplea sampleb
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = samplea
     ...        samplez
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
 If we use the verbose switch, we can see where requirements are coming from:
 
@@ -594,7 +594,7 @@ We do not need to run in verbose mode for that to work:
     >>> write('buildout.cfg',
     ... '''
     ... [buildout]
-    ... find-links = %(sample_eggs)s
+    ... find-links = {sample_eggs}
     ... parts = eggs
     ... show-picked-versions = true
     ... develop = sampley samplea sampleb
@@ -602,7 +602,7 @@ We do not need to run in verbose mode for that to work:
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = samplea
-    ... ''' % globals())
+    ... '''.format_map(globals()))
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Develop: ...
     Versions had to be automatically picked.
@@ -1452,14 +1452,14 @@ Let's create a recipe egg
 And update our buildout to use it.
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ...
     ... [foo]
     ... recipe = recipe
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
 
     >>> print_(system(buildout), end='')
     Getting distribution for 'recipe'.
@@ -1517,14 +1517,14 @@ But we will if we use neither of these:
 We can also select a particular recipe version:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ...
     ... [foo]
     ... recipe = recipe ==1
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
 
     >>> print_(system(buildout), end='')
     Uninstalling foo.
@@ -1953,7 +1953,7 @@ def install_source_dist_with_bad_py():
     ... '''
     ... [buildout]
     ... parts = eggs bo
-    ... find-links = %(dist)s
+    ... find-links = {dist}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
@@ -1963,7 +1963,7 @@ def install_source_dist_with_bad_py():
     ... recipe = zc.recipe.egg
     ... eggs = zc.buildout
     ... scripts = buildout=bo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout));print_('X') # doctest: +ELLIPSIS
     Installing eggs.
@@ -2018,12 +2018,12 @@ def bug_105081_Specific_egg_versions_are_ignored_when_newer_eggs_are_around():
     ... '''
     ... [buildout]
     ... parts = x
-    ... find-links = %(sample_eggs)s
+    ... find-links = {sample_eggs}
     ...
     ... [x]
     ... recipe = zc.recipe.egg
     ... eggs = demo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='')
     Installing x.
@@ -2040,12 +2040,12 @@ def bug_105081_Specific_egg_versions_are_ignored_when_newer_eggs_are_around():
     ... '''
     ... [buildout]
     ... parts = x
-    ... find-links = %(sample_eggs)s
+    ... find-links = {sample_eggs}
     ...
     ... [x]
     ... recipe = zc.recipe.egg
     ... eggs = demo ==0.1
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='')
     Uninstalling x.
@@ -2233,8 +2233,8 @@ def dealing_with_extremely_insane_dependencies():
 
     >>> import os
     >>> for i in range(5):
-    ...     p = 'pack%s' % i
-    ...     deps = [('pack%s' % j) for j in range(5) if j is not i]
+    ...     p = f'pack{i}'
+    ...     deps = [f'pack{j}' for j in range(5) if j is not i]
     ...     if i == 4:
     ...         deps.append('pack5')
     ...     mkdir(p)
@@ -2358,8 +2358,8 @@ Now we'll create a buildout that uses this extension to load other packages:
     ... [buildout]
     ... parts =
     ... extensions = wackyextension
-    ... find-links = %(dist)s
-    ... ''' % globals())
+    ... find-links = {dist}
+    ... '''.format_map(globals()))
 
 When we run the buildout. it will load the extension from the dist
 directory and then use the wacky extension to load the demo package
@@ -2560,13 +2560,13 @@ The default is prefer-final = true:
     ... '''
     ... [buildout]
     ... parts = eggs
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ... update-versions-file = versions-picked.cfg
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg:eggs
     ... eggs = demo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Installing ...
@@ -2589,14 +2589,14 @@ We get the same behavior if we add prefer-final = true
     ... '''
     ... [buildout]
     ... parts = eggs
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ... prefer-final = true
     ... update-versions-file = versions-picked.cfg
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg:eggs
     ... eggs = demo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating ...
@@ -2619,14 +2619,14 @@ distributions:
     ... '''
     ... [buildout]
     ... parts = eggs
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ... prefer-final = false
     ... update-versions-file = versions-picked.cfg
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg:eggs
     ... eggs = demo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating ...
@@ -2648,13 +2648,13 @@ We get an error if we specify anything but true or false:
     ... '''
     ... [buildout]
     ... parts = eggs
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ... prefer-final = no
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg:eggs
     ... eggs = demo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout+' -v'), end='') # doctest: +ELLIPSIS
     While:
@@ -2765,15 +2765,15 @@ honoring our version specification.
     ... allow-picked-versions = false
     ...
     ... [versions]
-    ... wtf = %s
+    ... wtf = {wtf}
     ... foo = 1
     ...
     ... [foo]
     ... recipe = zc.recipe.egg
     ... eggs = foo
-    ... ''' % ('\n'.join(
-    ...     '%s = %s' % (d.key, d.version)
-    ...     for d in zc.buildout.easy_install.buildout_and_setuptools_dists)))
+    ... '''.format_map({'wtf': '\n'.join(
+    ...     f'{d.key} = {d.version}'
+    ...     for d in zc.buildout.easy_install.buildout_and_setuptools_dists)}))
 
     >>> print_(system(buildout), end='')
     Installing foo.
@@ -2789,13 +2789,13 @@ def pyc_and_pyo_files_have_correct_paths():
     ... '''
     ... [buildout]
     ... parts = eggs
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = demo
     ... interpreter = py
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> _ = system(buildout)
 
@@ -2820,7 +2820,7 @@ def dont_mess_with_standard_dirs_with_variable_refs():
     ... eggs-directory = ${buildout:directory}/develop-eggs
     ... eggs-directory-version =
     ... parts =
-    ... ''' % globals())
+    ... ''')
     >>> print_(system(buildout), end='')
 
     """
@@ -2842,13 +2842,13 @@ def expand_shell_patterns_in_develop_paths():
     ... [buildout]
     ... parts = eggs
     ... develop = sample*
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = sampley
     ...        samplez
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     We can see that both eggs were found:
 
@@ -2874,12 +2874,12 @@ def warn_users_when_expanding_shell_patterns_yields_no_results():
     ... [buildout]
     ... parts = eggs
     ... develop = samplea grumble*
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = samplea
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     We should get one of the eggs, and a warning for the pattern that
     did not match anything.
@@ -3304,13 +3304,13 @@ def test_abi_tag_eggs():
     >>> write('buildout.cfg',
     ... '''
     ... [buildout]
-    ... find-links = %(sample_eggs)s
+    ... find-links = {sample_eggs}
     ... parts = abi
     ... abi-tag-eggs = true
     ... [abi]
     ... recipe = zc.recipe.egg
     ... eggs = demo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
     >>> _ = system(join('bin', 'buildout'))
     >>> from zc.buildout.pep425tags import get_abi_tag
     >>> abi_tag = get_abi_tag()
@@ -3545,7 +3545,7 @@ def test_suite():
                     (re.compile(r'zc.buildout(-\S+)?[.]egg(-link)?'),
                      'zc.buildout.egg'),
                     (re.compile(r'creating \S*setup.cfg'), 'creating setup.cfg'),
-                    (re.compile(r'hello\%ssetup' % os.path.sep), 'hello/setup'),
+                    (re.compile(rf'hello\{os.path.sep}setup'), 'hello/setup'),
                     (re.compile(r'Picked: (\S+) = \S+'),
                      'Picked: \\1 = V.V'),
                     (re.compile(r'We have a develop egg: zc.buildout (\S+)'),
@@ -3597,7 +3597,7 @@ def test_suite():
                (re.compile(r'zc.buildout(-\S+)?[.]egg(-link)?'),
                 'zc.buildout.egg'),
                (re.compile(r'creating \S*setup.cfg'), 'creating setup.cfg'),
-               (re.compile(r'hello\%ssetup' % os.path.sep), 'hello/setup'),
+               (re.compile(rf'hello\{os.path.sep}setup'), 'hello/setup'),
                (re.compile(r'Picked: (\S+) = \S+'),
                 'Picked: \\1 = V.V'),
                (re.compile(r'We have a develop egg: zc.buildout (\S+)'),
@@ -3610,7 +3610,7 @@ def test_suite():
                            r'when that file already exists: '),
                 '[Errno 17] File exists: '
                 ),
-               (re.compile('executable = %s' % re.escape(sys.executable)),
+               (re.compile(f'executable = {re.escape(sys.executable)}'),
                 'executable = python'),
                (re.compile(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}'),
                 'YYYY-MM-DD hh:mm:ss.dddddd'),
@@ -3776,7 +3776,7 @@ def test_suite():
                (re.compile(r'zc.buildout(-\S+)?[.]egg(-link)?'),
                 'zc.buildout.egg'),
                (re.compile(r'creating \S*setup.cfg'), 'creating setup.cfg'),
-               (re.compile(r'hello\%ssetup' % os.path.sep), 'hello/setup'),
+               (re.compile(rf'hello\{os.path.sep}setup'), 'hello/setup'),
                (re.compile(r'Picked: (\S+) = \S+'),
                 'Picked: \\1 = V.V'),
                (re.compile(r'We have a develop egg: zc.buildout (\S+)'),

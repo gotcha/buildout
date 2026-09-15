@@ -108,8 +108,9 @@ def env_names_loaded(emitted_lines: list[str]) -> list[str]:
 def dedent_strings(src):
     """Parse src, dedent every multiline string constant, re-emit via ast.unparse.
 
-    Also replaces % globals() with % <fixture_var> so that %(sample_eggs)s-style
-    substitutions use the fixture dict instead of module globals.
+    Also replaces % globals() with % <fixture_var> (and the same for
+    .format_map(globals())) so that substitutions use the fixture dict
+    instead of module globals.
     """
     try:
         mod = ast.parse(src, mode='exec')
@@ -130,6 +131,20 @@ def dedent_strings(src):
                     isinstance(node.right.func, ast.Name) and
                     node.right.func.id == 'globals'):
                 node.right = ast.Name(id=FIXTURE_VAR, ctx=ast.Load())
+            return node
+
+        def visit_Call(self, node):
+            self.generic_visit(node)
+            # Replace 'string'.format_map(globals()) with
+            # 'string'.format_map(<fixture>)
+            if (isinstance(node.func, ast.Attribute)
+                    and node.func.attr == 'format_map'
+                    and len(node.args) == 1
+                    and isinstance(node.args[0], ast.Call)
+                    and isinstance(node.args[0].func, ast.Name)
+                    and node.args[0].func.id == 'globals'
+                    and not node.args[0].args):
+                node.args[0] = ast.Name(id=FIXTURE_VAR, ctx=ast.Load())
             return node
 
     fixed = _Fixer().visit(mod)
@@ -176,12 +191,12 @@ def make_capture_print(stripped):
         call = ast.parse(stripped, mode='eval').body
         fn_name = ast.unparse(call.func)
         args = ', '.join(ast.unparse(a) for a in call.args)
-        kwargs = ', '.join('%s=%s' % (k.arg, ast.unparse(k.value))
+        kwargs = ', '.join(f'{k.arg}={ast.unparse(k.value)}'
                           for k in call.keywords)
         all_args = ', '.join(filter(None, [args, kwargs]))
         if all_args:
-            return 'capture_print(%s, %s)' % (fn_name, all_args)
-        return 'capture_print(%s)' % fn_name
+            return f'capture_print({fn_name}, {all_args})'
+        return f'capture_print({fn_name})'
     except SyntaxError:
         return None
 
@@ -216,20 +231,20 @@ def emit_example(ex, fixture_var):
         inner = extract_print_arg(stripped)
         if inner is not None:
             if 'system(' in inner:
-                lines.append('    assert_output(%s, %r, N)' % (inner, expected))
+                lines.append(f'    assert_output({inner}, {expected!r}, N)')
             else:
-                lines.append('    assert_output(str(%s), %r, N)' % (inner, expected))
+                lines.append(f'    assert_output(str({inner}), {expected!r}, N)')
         else:
             lines.append(
-                '    assert_output(capture_print(lambda: %s), %r, N)' % (stripped, expected))
+                f'    assert_output(capture_print(lambda: {stripped}), {expected!r}, N)')
 
     elif stripped.startswith('ls('):
         cp = make_capture_print(stripped)
-        lines.append('    assert_output(%s, %r, N)' % (cp or 'capture_print(ls)', expected))
+        lines.append(f"    assert_output({cp or 'capture_print(ls)'}, {expected!r}, N)")
 
     elif stripped.startswith('cat('):
         cp = make_capture_print(stripped)
-        lines.append('    assert_output(%s, %r, N)' % (cp or 'capture_print(cat)', expected))
+        lines.append(f"    assert_output({cp or 'capture_print(cat)'}, {expected!r}, N)")
 
     elif looks_like_traceback(expected):
         last_line = expected.strip().split('\n')[-1]
@@ -237,10 +252,10 @@ def emit_example(ex, fixture_var):
         lines.append('    try:')
         for line in stripped.split('\n'):
             lines.append('        ' + line)
-        lines.append('        assert False, "Expected %s not raised"' % exc_type)
+        lines.append(f'        assert False, "Expected {exc_type} not raised"')
         lines.append('    except Exception as _exc:')
         lines.append(
-            '        assert_output(type(_exc).__name__ + ": " + str(_exc), %r, N)' % last_line)
+            f'        assert_output(type(_exc).__name__ + ": " + str(_exc), {last_line!r}, N)')
 
     else:
         if looks_like_python_literal(expected):
@@ -248,11 +263,11 @@ def emit_example(ex, fixture_var):
                 ast.parse(stripped, mode='eval')
                 if stripped.startswith('(') and stripped.endswith(')'):
                     # Already parenthesized: another layer would trip UP034.
-                    lines.append('    _val = %s' % stripped)
+                    lines.append(f'    _val = {stripped}')
                 else:
-                    lines.append('    _val = (%s)' % stripped)
+                    lines.append(f'    _val = ({stripped})')
                 lines.append(
-                    '    assert repr(_val) == %r or str(_val) == %r' % (expected, expected))
+                    f'    assert repr(_val) == {expected!r} or str(_val) == {expected!r}')
             except SyntaxError:
                 fixed = dedent_strings(src_raw)
                 for line in (fixed or textwrap.dedent(src_raw)).split('\n'):
@@ -261,7 +276,7 @@ def emit_example(ex, fixture_var):
             try:
                 ast.parse(stripped, mode='eval')
                 lines.append(
-                    '    assert_output(capture_print(lambda: %s), %r, N)' % (stripped, expected))
+                    f'    assert_output(capture_print(lambda: {stripped}), {expected!r}, N)')
             except SyntaxError:
                 fixed = dedent_strings(src_raw)
                 for line in (fixed or textwrap.dedent(src_raw)).split('\n'):
@@ -279,9 +294,9 @@ def emit_fn_from_docstring(fn_name, docstring, fixture_var='easy_install_env'):
         body.extend(emit_example(ex, fixture_var))
     env_used = env_names_loaded(body)
 
-    lines = ['def %s(%s):' % (pytest_name, fixture_var)]
+    lines = [f'def {pytest_name}({fixture_var}):']
     for name in env_used:
-        lines.append("    %s = %s[%r]" % (name, fixture_var, name))
+        lines.append(f"    {name} = {fixture_var}[{name!r}]")
     if env_used:
         lines.append('')
     lines.extend(body)
@@ -301,9 +316,9 @@ def emit_fn_from_txt(txt_path, fixture_var='easy_install_env'):
         body.extend(emit_example(ex, fixture_var))
     env_used = env_names_loaded(body)
 
-    lines = ['def %s(%s):' % (fn_name, fixture_var)]
+    lines = [f'def {fn_name}({fixture_var}):']
     for name in env_used:
-        lines.append("    %s = %s[%r]" % (name, fixture_var, name))
+        lines.append(f"    {name} = {fixture_var}[{name!r}]")
     if env_used:
         lines.append('')
     lines.extend(body)

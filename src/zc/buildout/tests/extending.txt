@@ -484,11 +484,11 @@ Here is a more elaborate example::
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... extends = b1.cfg b2.cfg %(b3)s
+    ... extends = b1.cfg b2.cfg {b3}
     ...
     ... [debug]
     ... op = buildout
-    ... """ % {'b3': os.path.join(other, 'b3.cfg')})
+    ... """.format_map({'b3': os.path.join(other, 'b3.cfg')}))
 
     >>> write(sample_buildout, 'b1.cfg',
     ... """
@@ -582,8 +582,8 @@ There are several things to note about this example:
     op3 b2 3
     recipe recipes:debug
 
-    >>> print_(system([buildout, 'buildout:extends=b2.cfg %(b3)s'
-    ... % {'b3': os.path.join(other, 'b3.cfg')}]), end='')
+    >>> print_(system([buildout, 'buildout:extends=b2.cfg {b3}'
+    ... .format_map({'b3': os.path.join(other, 'b3.cfg')})]), end='')
     Develop: '/sample-buildout/recipes'
     Uninstalling debug.
     Installing debug.
@@ -599,11 +599,11 @@ There are several things to note about this example:
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... extends = b1.cfg b2.cfg %(b3)s
+    ... extends = b1.cfg b2.cfg {b3}
     ...
     ... [debug]
     ... op = buildout
-    ... """ % {'b3': os.path.join(other, 'b3.cfg')})
+    ... """.format_map({'b3': os.path.join(other, 'b3.cfg')}))
 
 
 Optional extends
@@ -658,11 +658,11 @@ so we do not interfere with existing tests::
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... extends = b1.cfg b2.cfg %(b3)s
+    ... extends = b1.cfg b2.cfg {b3}
     ...
     ... [debug]
     ... op = buildout
-    ... """ % {'b3': os.path.join(other, 'b3.cfg')})
+    ... """.format_map({'b3': os.path.join(other, 'b3.cfg')}))
     >>> remove(sample_buildout, 'optional.cfg')
 
 
@@ -698,12 +698,12 @@ we'll set up a web server with some configuration files::
     ... [buildout]
     ... develop = recipes
     ... parts = debug
-    ... extends = %(url)s/r2.cfg
+    ... extends = {url}/r2.cfg
     ...
     ... [debug]
     ... recipe = recipes:debug
     ... name = base
-    ... """ % {'url': server_url})
+    ... """.format_map({'url': server_url}))
 
     >>> print_(system([buildout, '-c', 'client.cfg']), end='')
     Develop: '/sample-buildout/recipes'

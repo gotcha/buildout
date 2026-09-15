@@ -65,13 +65,13 @@ class ParsingError(Error):
     """Raised when a configuration file does not follow legal syntax."""
 
     def __init__(self, filename: str) -> None:
-        Error.__init__(self, 'File contains parsing errors: %s' % filename)
+        Error.__init__(self, f'File contains parsing errors: {filename}')
         self.filename = filename
         self.errors = []
 
     def append(self, lineno: int, line: str) -> None:
         self.errors.append((lineno, line))
-        self.message += '\n\t[line %2d]: %s' % (lineno, line)
+        self.message += f'\n\t[line {lineno:2d}]: {line}'
 
 class MissingSectionHeaderError(ParsingError):
     """Raised when a key-value pair is found before any section header."""
@@ -79,8 +79,8 @@ class MissingSectionHeaderError(ParsingError):
     def __init__(self, filename: str, lineno: int, line: str) -> None:
         Error.__init__(
             self,
-            'File contains no section headers.\nfile: %s, line: %d\n%r' %
-            (filename, lineno, line))
+            f'File contains no section headers.\nfile: {filename}, line: '
+            f'{lineno}\n{line!r}')
         self.filename = filename
         self.lineno = lineno
         self.line = line
@@ -139,11 +139,11 @@ def _merge_option(cursect: dict[str, str], optname: str, optval: str) -> None:
         # +=/-= in one file
         cursect[optname] = cursect[optname].rstrip()
         if optval:
-            cursect[optname] = "%s\n%s" % (cursect[optname], optval)
+            cursect[optname] = f"{cursect[optname]}\n{optval}"
     else:
         if opt_op == '=':
             for suffix in '+-':
-                tempname = "%s %s" % (optname, suffix)
+                tempname = f"{optname} {suffix}"
                 if tempname in cursect:
                     del cursect[tempname]
         cursect[optname] = optval
@@ -176,7 +176,7 @@ def _append_continuation(cursect: dict[str, str], optname: str, line: str, block
         line = line.rstrip()
     else:
         line = line.strip()
-    cursect[optname] = "%s\n%s" % (cursect[optname], line)
+    cursect[optname] = f"{cursect[optname]}\n{line}"
 
 
 def _finalize_sections(sections: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
@@ -250,8 +250,10 @@ def _start_section(
         # finally, ignore section when an expression
         # evaluates to false
         if not section_condition:
+            # Keep eager printf here: logging's lazy args cannot do
+            # mapping-key substitution (msg % mapping raises TypeError).
             logger.debug(
-                'Ignoring section %(sectname)r with [expression]:'
+                'Ignoring section %(sectname)r with [expression]:'  # noqa: UP031
                 ' %(expression)r' % locals())
             return None, section_condition
 

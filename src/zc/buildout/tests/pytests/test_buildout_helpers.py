@@ -652,7 +652,7 @@ def test_create_cache_dirs_creates_missing_and_skips_empty(
     with caplog.at_level(logging.INFO, logger='zc.buildout'):
         _create_cache_dirs(str(tmp_path), ['dl', None, ''], logger)
     assert (tmp_path / 'dl').is_dir()
-    assert "Creating directory %r." % str(tmp_path / 'dl') in caplog.text
+    assert f"Creating directory {str(tmp_path / 'dl')!r}." in caplog.text
 
 
 def test_create_cache_dirs_existing_is_quiet(tmp_path, caplog):
@@ -1458,7 +1458,7 @@ def test_optional_extends_results_skips_missing_file(capsys):
         set(), {}, eresults)
     assert eresults == []
     assert out == {}
-    assert ('optional-extends file not found: %s' % missing
+    assert (f'optional-extends file not found: {missing}'
             ) in capsys.readouterr().out
 
 
@@ -1587,8 +1587,8 @@ def test_split_query_option_rejects_empty_parts(capsys):
         with pytest.raises(SystemExit) as exc:
             _split_query_option(arg)
         assert exc.value.code == 1
-        assert ("Error: Invalid query argument: %r (expected "
-                "section:option)" % arg) in capsys.readouterr().err
+        assert (f"Error: Invalid query argument: {arg!r} (expected "
+                "section:option)") in capsys.readouterr().err
 
 
 def test_parse_query_args_single_option():

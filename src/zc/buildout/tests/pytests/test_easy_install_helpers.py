@@ -479,7 +479,7 @@ def test_best_matching_dist_conflict_fatal_outside_buildout_run(monkeypatch):
 def _env_dist(version, precedence=pkg_resources.EGG_DIST, project_name='demo'):
     """Build a stub distribution addable to a ``pkg_resources.Environment``."""
     return pkg_resources.Distribution(
-        location='/%s-%s.egg' % (project_name, version),
+        location=f'/{project_name}-{version}.egg',
         project_name=project_name,
         version=version,
         precedence=precedence,
@@ -743,7 +743,7 @@ def test_remove_namespace_init_files_removes_found_files(tmp_path, caplog):
     with caplog.at_level(logging.DEBUG, logger='zc.buildout.easy_install'):
         _remove_namespace_init_files(str(tmp_path))
     assert not ns_file.exists()
-    assert 'Removed namespace __init__.py file: %s' % ns_file in caplog.text
+    assert f'Removed namespace __init__.py file: {ns_file}' in caplog.text
 
 
 def test_remove_namespace_init_files_without_files_is_noop(
@@ -954,7 +954,7 @@ def _make_scripts_dist(tmp_path, project_name='demo',
     egg_info = tmp_path / (project_name + '.egg-info')
     egg_info.mkdir()
     (egg_info / 'PKG-INFO').write_text(
-        'Metadata-Version: 2.1\nName: %s\nVersion: 1.0\n' % project_name)
+        f'Metadata-Version: 2.1\nName: {project_name}\nVersion: 1.0\n')
     if entry_points_txt is not None:
         (egg_info / 'entry_points.txt').write_text(entry_points_txt)
     if scripts_meta is not None:
@@ -1155,7 +1155,7 @@ def test_script_target_relative_paths_builds_base_setup(tmp_path):
     assert target is not None
     sname, spath, rpsetup = target
     assert sname == os.path.join(str(dest_dir), 'demo')
-    assert spath == "join(base, %r)" % os.path.join('eggs', 'demo.egg')
+    assert spath == f"join(base, {os.path.join('eggs', 'demo.egg')!r})"
     assert rpsetup == (
         easy_install.relative_paths_setup + 'base = os.path.dirname(base)\n')
 
@@ -1542,7 +1542,7 @@ def test_move_dist_into_place_reraises_for_wrong_package_at_newloc(
 def _build_dist(tmp_path, project_name='demo', version='1.0'):
     """Distribution whose location is an on-disk-style path under tmp_path."""
     return pkg_resources.Distribution(
-        location=str(tmp_path / ('%s-%s.egg' % (project_name, version))),
+        location=str(tmp_path / f'{project_name}-{version}.egg'),
         project_name=project_name,
         version=version,
     )
@@ -1709,7 +1709,7 @@ def _marked_script(tmp_path, directory, filename, actual_name, content):
     actual = tmp_path / actual_name
     actual.write_text(content)
     (directory / filename).write_text(
-        "# EASY-INSTALL-DEV-SCRIPT\n__file__ = '%s'\n" % str(actual))
+        f"# EASY-INSTALL-DEV-SCRIPT\n__file__ = '{actual}'\n")
 
 
 def test_collect_distutils_dev_scripts_reads_actual_script(tmp_path):

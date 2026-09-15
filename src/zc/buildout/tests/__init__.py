@@ -31,15 +31,14 @@ def create_sample_eggs(test, executable=sys.executable):
         write(tmp, 'README.txt', '')
 
         for i in (0, 1, 2):
-            write(tmp, 'eggrecipedemoneeded.py', 'y=%s\ndef f():\n  pass' % i)
+            write(tmp, 'eggrecipedemoneeded.py', f'y={i}\ndef f():\n  pass')
             rc1 = 'rc1' if i==2 else ''
             write(
                 tmp, 'setup.py',
                 "from setuptools import setup\n"
                 "setup(name='demoneeded', py_modules=['eggrecipedemoneeded'],"
-                " zip_safe=True, version='1.%s%s', author='bob', url='bob', "
+                f" zip_safe=True, version='1.{i}{rc1}', author='bob', url='bob', "
                 "author_email='bob')\n"
-                % (i, rc1)
                 )
             zc.buildout.testing.sdist(tmp, dest)
 
@@ -81,10 +80,9 @@ def create_sample_eggs(test, executable=sys.executable):
                 'import eggrecipedemoneeded, sys\n'
                 'def print_(*a):\n'
                 '    sys.stdout.write(" ".join(map(str, a))+"\\n")\n'
-                'x=%s\n'
+                f'x={i}\n'
                 'def main():\n'
-                '   print_(x, eggrecipedemoneeded.y)\n'
-                % i)
+                '   print_(x, eggrecipedemoneeded.y)\n')
             rc1 = 'rc1' if i==4 else ''
             write(
                 tmp, 'setup.py',
@@ -93,7 +91,7 @@ def create_sample_eggs(test, executable=sys.executable):
                 " install_requires = 'demoneeded',"
                 " entry_points={'console_scripts': "
                      "['demo = eggrecipedemo:main']},"
-                " zip_safe=True, version='0.%s%s')\n" % (i, rc1)
+                f" zip_safe=True, version='0.{i}{rc1}')\n"
                 )
             zc.buildout.testing.bdist_wheel(tmp, dest)
 
@@ -221,20 +219,20 @@ def create_wheel(name, version, dest, install_requires=None,
     else:
         extras = {}
     if dependency_links:
-        links = 'dependency_links = %s, ' % dependency_links
+        links = f'dependency_links = {dependency_links}, '
     else:
         links = ''
     if install_requires:
-        requires = 'install_requires = %s, ' % install_requires
+        requires = f'install_requires = {install_requires}, '
     else:
         requires = ''
     try:
         with open(os.path.join(d, 'setup.py'), 'w') as f:
             f.write(
                 'from setuptools import setup\n'
-                'setup(name=%r, version=%r, extras_require=%r, zip_safe=True,\n'
-                '      %s %s py_modules=["setup"]\n)'
-                % (name, str(version), extras, requires, links)
+                f'setup(name={name!r}, version={str(version)!r}, extras_require={extras!r}, '
+                'zip_safe=True,\n'
+                f'      {requires} {links} py_modules=["setup"]\n)'
             )
         zc.buildout.testing.bdist_wheel(d, os.path.abspath(dest))
     finally:

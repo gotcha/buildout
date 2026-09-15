@@ -290,7 +290,7 @@ if is_win32:
     # work around spawn lamosity on windows
     # XXX need safe quoting (see the subproces.list2cmdline) and test
     def _safe_arg(arg: str) -> str:
-        return '"%s"' % arg
+        return f'"{arg}"'
 else:
     _safe_arg = str
 
@@ -309,8 +309,7 @@ else:
 def call_subprocess(args: Sequence[str | Path], **kw: Any) -> None:
     if subprocess.call(args, **kw) != 0:
         raise Exception(
-            "Failed to run command:\n%s"
-            % repr(args)[1:-1])
+            f"Failed to run command:\n{repr(args)[1:-1]}")
 
 
 def get_subprocess_output(args: list[str], **kw: Any) -> str:
@@ -401,8 +400,8 @@ def _constrained_requirement(constraint: str, requirement: pkg_resources.Require
             version = constraint
             constraint = '==' + constraint
         if version not in requirement:
-            msg = ("The requirement (%r) is not allowed by your [versions] "
-                   "constraint (%s)" % (str(requirement), version))
+            msg = (f"The requirement ({str(requirement)!r}) is not allowed "
+                   f"by your [versions] constraint ({version})")
             raise IncompatibleConstraintError(msg)
         specifier = specifiers.SpecifierSet(constraint)
     else:
@@ -685,9 +684,8 @@ def _fetch_new_dists(
     """
     if dest is None:
         raise zc.buildout.UserError(
-            "We don't have a distribution for %s\n"
-            "and can't install one in offline (no-install) mode.\n"
-            % requirement)
+            f"We don't have a distribution for {requirement}\n"
+            "and can't install one in offline (no-install) mode.\n")
 
     logger.info('Getting distribution for %r.', str(requirement))
 
@@ -708,7 +706,7 @@ def _fetch_new_dists(
 
         if dist is None:
             raise zc.buildout.UserError(
-                "Couldn't download distribution %s." % avail)
+                f"Couldn't download distribution {avail}.")
 
         dists = [_move_to_eggs_dir_and_compile(dist, dest)]
         for _d in dists:
@@ -780,14 +778,13 @@ def _unpack_dist_for_build(dist: pkg_resources.Distribution, build_tmp: str) -> 
             # Otherwise we let pip do the complaining.
             logger.warning(
                 "Couldn't find a setup script to build in %s. "
-                "Trying pip install anyway."
-                % os.path.basename(_dist_location(dist))
+                "Trying pip install anyway.",
+                os.path.basename(_dist_location(dist))
             )
         elif len(setups) > 1:
             raise distutils.errors.DistutilsError(
-                "Multiple setup scripts in %s"
-                % os.path.basename(_dist_location(dist))
-                )
+                f"Multiple setup scripts in "
+                f"{os.path.basename(_dist_location(dist))}")
         else:
             base = os.path.dirname(setups[0])
     return base
@@ -901,11 +898,11 @@ class Installer:
 
         """
         output = [
-            "Version and requirements information containing %s:" % name]
+            f"Version and requirements information containing {name}:"]
         version_constraint = self._versions.get(canonicalize_name(name))
         if version_constraint:
             output.append(
-                "[versions] constraint on %s: %s" % (name, version_constraint))
+                f"[versions] constraint on {name}: {version_constraint}")
         output += [line for line in self._requirements_and_constraints
                    if name.lower() in line.lower()]
         return '\n  '.join(output)
@@ -981,7 +978,7 @@ class Installer:
                 dists.extend(env[project])
 
             if not dists:
-                raise zc.buildout.UserError("Couldn't install: %s" % dist)
+                raise zc.buildout.UserError(f"Couldn't install: {dist}")
 
             if len(dists) > 1:
                 logger.warning("Installing %s\n"
@@ -1160,7 +1157,7 @@ class Installer:
 
         logger.debug('Installing %s.', repr(specs)[1:-1])
         self._requirements_and_constraints.append(
-            "Base installation request: %s" % repr(specs)[1:-1])
+            f"Base installation request: {repr(specs)[1:-1]}")
 
         for_buildout_run = bool(working_set)
 
@@ -1219,8 +1216,8 @@ class Installer:
 
             for extra_requirement in extra_requirements:
                 self._requirements_and_constraints.append(
-                    "Requirement of %s: %s" % (
-                        current_requirement, extra_requirement))
+                    f"Requirement of {current_requirement}: "
+                    f"{extra_requirement}")
             # Quirk preserved from the original code: when unknown extras are
             # allowed, extra_requirements holds extra *names* (str), not
             # Requirement objects.
@@ -1240,15 +1237,13 @@ class Installer:
         # Retrieve the dist:
         if avail is None:
             raise zc.buildout.UserError(
-                "Couldn't find a source distribution for %r."
-                % str(requirement))
+                f"Couldn't find a source distribution for "
+                f"{str(requirement)!r}.")
 
         if self._dest is None:
             raise zc.buildout.UserError(
-                "We don't have a distribution for %s\n"
-                "and can't build one in offline (no-install) mode.\n"
-                % requirement
-                )
+                f"We don't have a distribution for {requirement}\n"
+                "and can't build one in offline (no-install) mode.\n")
 
         logger.debug('Building %r', spec)
 
@@ -1297,7 +1292,7 @@ class Installer:
         sorted_dists.sort()
         for dist in sorted_dists:
             if req in dist.requires():
-                logger.debug("  required by %s." % dist)
+                logger.debug("  required by %s.", dist)
                 req_ = str(req)
                 if req_ not in Installer._required_by:
                     Installer._required_by[req_] = set()
@@ -1915,7 +1910,7 @@ def _relative_depth(common: str, path: str) -> int:
     while 1:
         dirname = os.path.dirname(path)
         if dirname == path:
-            raise AssertionError("dirname of %s is the same" % dirname)
+            raise AssertionError(f"dirname of {dirname} is the same")
         if dirname == common:
             break
         n += 1
@@ -1931,7 +1926,7 @@ def _relative_path(common: str, path: str) -> str:
         if dirname == common:
             break
         if dirname == path:
-            raise AssertionError("dirname of %s is the same" % dirname)
+            raise AssertionError(f"dirname of {dirname} is the same")
         path = dirname
     r.reverse()
     return os.path.join(*r)
@@ -1946,7 +1941,7 @@ def _relativitize(path: str, script: str, relative_paths: str) -> str:
     if (common == relative_paths or
         common.startswith(os.path.join(relative_paths, ''))
         ):
-        return "join(base, %r)" % _relative_path(common, path)
+        return f"join(base, {_relative_path(common, path)!r})"
     else:
         return repr(path)
 
@@ -2193,7 +2188,9 @@ sys.argv[0] = %%(setup)r
 
 with open(%%(setup)r) as f:
     exec(compile(f.read(), %%(setup)r, 'exec'))
-""" % setuptools_path
+""" % setuptools_path  # noqa: UP031 - two-stage template: immediate %r
+# plus deferred %%(...)r escapes consumed by a later printf substitution
+# in buildout.py; a one-pass format rewrite would break the second stage.
 
 disable_root_logger = """
 import logging
@@ -2214,10 +2211,10 @@ class VersionConflict(zc.buildout.UserError):
         result = ["There is a version conflict."]
         if len(self.err.args) == 2:
             existing_dist, req = self.err.args
-            result.append("We already have: %s" % existing_dist)
+            result.append(f"We already have: {existing_dist}")
             for dist in self.ws:
                 if req in dist.requires():
-                    result.append("but %s requires %r." % (dist, str(req)))
+                    result.append(f"but {dist} requires {str(req)!r}.")
         else:
             # The error argument is already a nice error string.
             result.append(self.err.args[0])
@@ -2233,7 +2230,7 @@ class MissingDistribution(zc.buildout.UserError):
 
     def __str__(self) -> str:
         req, ws = self.data
-        return "Couldn't find a distribution for %r." % str(req)
+        return f"Couldn't find a distribution for {str(req)!r}."
 
 def _is_url(value: str) -> bool:
     """True when ``value`` carries a real URL scheme.

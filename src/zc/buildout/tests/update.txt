@@ -15,14 +15,14 @@ Let's update the sample buildout.cfg to look in this area:
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... find-links = %(new_releases)s
-    ... index = %(new_releases)s
+    ... find-links = {new_releases}
+    ... index = {new_releases}
     ... parts = show-versions
     ... develop = showversions
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % {'new_releases': new_releases})
+    ... """.format_map({'new_releases': new_releases}))
 
 We'll also include a recipe that echos the versions of setuptools and
 zc.buildout used:
@@ -115,8 +115,8 @@ will install earlier versions of these packages:
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... find-links = %(new_releases)s
-    ... index = %(new_releases)s
+    ... find-links = {new_releases}
+    ... index = {new_releases}
     ... parts = show-versions
     ... develop = showversions
     ...
@@ -125,7 +125,7 @@ will install earlier versions of these packages:
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % {'new_releases': new_releases})
+    ... """.format_map({'new_releases': new_releases}))
 
 Now we can see that we actually "upgrade" to an earlier version.
 
@@ -146,14 +146,14 @@ We won't upgrade in offline mode:
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... find-links = %(new_releases)s
-    ... index = %(new_releases)s
+    ... find-links = {new_releases}
+    ... index = {new_releases}
     ... parts = show-versions
     ... develop = showversions
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % {'new_releases': new_releases})
+    ... """.format_map({'new_releases': new_releases}))
 
     >>> print_(system(buildout+' -o'), end='')
     Develop: '/sample-buildout/showversions'
@@ -175,13 +175,13 @@ directory:
     >>> write(sample_buildout2, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... find-links = %(new_releases)s
-    ... index = %(new_releases)s
+    ... find-links = {new_releases}
+    ... index = {new_releases}
     ... parts =
     ...
     ... [versions]
     ... zc.buildout = 99.99
-    ... """ % {'new_releases': new_releases})
+    ... """.format_map({'new_releases': new_releases}))
 
     >>> cd(sample_buildout2)
     >>> print_(system(buildout), end='')
@@ -201,15 +201,15 @@ directory:
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... find-links = %(new_releases)s
-    ... index = %(new_releases)s
+    ... find-links = {new_releases}
+    ... index = {new_releases}
     ... parts = show-versions
     ... develop = showversions
     ... relative-paths = true
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % {'new_releases': new_releases})
+    ... """.format_map({'new_releases': new_releases}))
 
     >>> print_(system(buildout), end='')
     Upgraded:
@@ -282,8 +282,8 @@ gives us a sys.exit:
     >>> write(sample_buildout, 'buildout.cfg',
     ... """
     ... [buildout]
-    ... find-links = %(new_releases)s
-    ... index = %(new_releases)s
+    ... find-links = {new_releases}
+    ... index = {new_releases}
     ... parts = fail
     ... develop = failrecipe
     ...
@@ -292,7 +292,7 @@ gives us a sys.exit:
     ...
     ... [fail]
     ... recipe = failrecipe
-    ... """ % {'new_releases': new_releases})
+    ... """.format_map({'new_releases': new_releases}))
 
 Run the buildout:
 

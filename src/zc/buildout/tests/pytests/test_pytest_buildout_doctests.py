@@ -220,7 +220,7 @@ def test_show_who_requires_when_there_is_a_conflict(easy_install_env):
     make_dist_that_requires(sample_buildout, 'sampley', ['demoneeded ==1.0'])
     make_dist_that_requires(sample_buildout, 'samplez', ['demoneeded ==1.1'])
     # Now, let's create a buildout that requires y and z:
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez\nfind-links = {link_server}\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n'.format_map(easy_install_env))
     assert_output(system(buildout), """
 Develop: '/sample-buildout/sampley'
 Develop: '/sample-buildout/samplez'
@@ -240,7 +240,7 @@ but sampley 1 requires 'demoneeded==1.0'.
     # if we hadn't required sampley ourselves:
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez samplea sampleb\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n       samplez\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sampley samplez samplea sampleb\nfind-links = {link_server}\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n       samplez\n'.format_map(easy_install_env))
     # If we use the verbose switch, we can see where requirements are coming from:
     assert_output(system(buildout + ' -v'), """
 Installing 'zc.buildout', 'wheel'...
@@ -345,7 +345,7 @@ def test_show_who_requires_picked_versions(easy_install_env):
     make_dist_that_requires(sample_buildout, 'sampley', ['demo'])
     make_dist_that_requires(sample_buildout, 'samplea', ['sampleb'])
     make_dist_that_requires(sample_buildout, 'sampleb', ['sampley', 'samplea'])
-    write('buildout.cfg', '\n[buildout]\nfind-links = %(sample_eggs)s\nparts = eggs\nshow-picked-versions = true\ndevelop = sampley samplea sampleb\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nfind-links = {sample_eggs}\nparts = eggs\nshow-picked-versions = true\ndevelop = sampley samplea sampleb\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n'.format_map(easy_install_env))
     assert_output(system(buildout), """
 Develop: ...
 ...
@@ -844,7 +844,7 @@ Running setup script 'recipe/setup.py'.
 """, N)
     rmdir('recipe', 'build')
     # And update our buildout to use it.
-    write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = %s\n\n[foo]\nrecipe = recipe\n' % join('recipe', 'dist'))
+    write('buildout.cfg', f"\n[buildout]\nparts = foo\nfind-links = {join('recipe', 'dist')}\n\n[foo]\nrecipe = recipe\n")
     assert_output(system(buildout), """
 Getting distribution for 'recipe'.
 Got recipe 1.
@@ -877,7 +877,7 @@ Installing foo.
 recipe v2
 """, N)
     # We can also select a particular recipe version:
-    write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = %s\n\n[foo]\nrecipe = recipe ==1\n' % join('recipe', 'dist'))
+    write('buildout.cfg', f"\n[buildout]\nparts = foo\nfind-links = {join('recipe', 'dist')}\n\n[foo]\nrecipe = recipe ==1\n")
     assert_output(system(buildout), """
 Uninstalling foo.
 Installing foo.
@@ -1117,7 +1117,7 @@ Running setup script 'badegg/setup.py'.
 ...
 """, N)
     dist = join('badegg', 'dist')
-    write('buildout.cfg', '\n[buildout]\nparts = eggs bo\nfind-links = %(dist)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = badegg\n\n[bo]\nrecipe = zc.recipe.egg\neggs = zc.buildout\nscripts = buildout=bo\n' % {**easy_install_env, 'dist': dist})
+    write('buildout.cfg', '\n[buildout]\nparts = eggs bo\nfind-links = {dist}\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = badegg\n\n[bo]\nrecipe = zc.recipe.egg\neggs = zc.buildout\nscripts = buildout=bo\n'.format_map({**easy_install_env, 'dist': dist}))
     assert_output(system(buildout) + '\nX', """
 Installing eggs.
 Getting distribution for 'badegg'.
@@ -1169,7 +1169,7 @@ def test_bug_105081_Specific_egg_versions_are_ignored_when_newer_eggs_are_around
     #
     # Buildout will go and fetch the older version, but it will *use*
     # the newer version when installing a part with this recipe.
-    write('buildout.cfg', '\n[buildout]\nparts = x\nfind-links = %(sample_eggs)s\n\n[x]\nrecipe = zc.recipe.egg\neggs = demo\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = x\nfind-links = {sample_eggs}\n\n[x]\nrecipe = zc.recipe.egg\neggs = demo\n'.format_map(easy_install_env))
     assert_output(system(buildout), """
 Installing x.
 Getting distribution for 'demo'.
@@ -1179,7 +1179,7 @@ Got demoneeded 1.1.
 Generated script '/sample-buildout/bin/demo'.
 """, N)
     assert_output(system(join('bin', 'demo')), '3 1', N)
-    write('buildout.cfg', '\n[buildout]\nparts = x\nfind-links = %(sample_eggs)s\n\n[x]\nrecipe = zc.recipe.egg\neggs = demo ==0.1\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = x\nfind-links = {sample_eggs}\n\n[x]\nrecipe = zc.recipe.egg\neggs = demo ==0.1\n'.format_map(easy_install_env))
     assert_output(system(buildout), """
 Uninstalling x.
 Installing x.
@@ -1338,12 +1338,12 @@ def test_dealing_with_extremely_insane_dependencies(easy_install_env):
     # package was encountered in a dependency list.  Now, we don't do
     # the analysis any more:
     for i in range(5):
-        p = 'pack%s' % i
-        deps = ['pack%s' % j for j in range(5) if j is not i]
+        p = f'pack{i}'
+        deps = [f'pack{j}' for j in range(5) if j is not i]
         if i == 4:
             deps.append('pack5')
         mkdir(p)
-        write(p, 'setup.py', 'from setuptools import setup\nsetup(name=%r, install_requires=%r,\n      url="u", author="a", author_email="e")\n' % (p, deps))
+        write(p, 'setup.py', f'from setuptools import setup\nsetup(name={p!r}, install_requires={deps!r},\n      url="u", author="a", author_email="e")\n')
     write('buildout.cfg', '\n[buildout]\ndevelop = pack0 pack1 pack2 pack3 pack4\nparts = pack1\n\n[pack1]\nrecipe = zc.recipe.egg:eggs\neggs = pack0\n')
     assert_output(system(buildout), """
 Develop: '/sample-buildout/pack0'
@@ -1432,7 +1432,7 @@ creating 'dist/wackyextension-1-...
 """, N)
     # Now we'll create a buildout that uses this extension to load other packages:
     dist = 'file://' + join(src, 'dist').replace(os.path.sep, '/')
-    write('buildout.cfg', '\n[buildout]\nparts =\nextensions = wackyextension\nfind-links = %(dist)s\n' % {**easy_install_env, 'dist': dist})
+    write('buildout.cfg', '\n[buildout]\nparts =\nextensions = wackyextension\nfind-links = {dist}\n'.format_map({**easy_install_env, 'dist': dist}))
     # When we run the buildout. it will load the extension from the dist
     # directory and then use the wacky extension to load the demo package
     assert_output(system(buildout), """
@@ -1531,7 +1531,7 @@ def test_buildout_prefer_final_option(easy_install_env):
     # The default is prefer-final = true:
     _val = (zc.buildout.easy_install.prefer_final())
     assert repr(_val) == 'True' or str(_val) == 'True'
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = {link_server}\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n'.format_map(easy_install_env))
     assert_output(system(buildout), """
 Installing ...
 ...
@@ -1548,7 +1548,7 @@ demoneeded = 1.1
     remove('versions-picked.cfg')
     # Here we see that the final versions of demo and demoneeded are used.
     # We get the same behavior if we add prefer-final = true
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = true\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = {link_server}\nprefer-final = true\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n'.format_map(easy_install_env))
     assert_output(system(buildout), """
 Updating ...
 ...
@@ -1565,7 +1565,7 @@ demoneeded = 1.1
     remove('versions-picked.cfg')
     # If we specify prefer-final = false, we'll get the newest
     # distributions:
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = false\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = {link_server}\nprefer-final = false\nupdate-versions-file = versions-picked.cfg\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n'.format_map(easy_install_env))
     assert_output(system(buildout), """
 Updating ...
 ...
@@ -1581,7 +1581,7 @@ demoneeded = 1.2rc1
 """, N)
     remove('versions-picked.cfg')
     # We get an error if we specify anything but true or false:
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\nprefer-final = no\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = {link_server}\nprefer-final = no\n\n[eggs]\nrecipe = zc.recipe.egg:eggs\neggs = demo\n'.format_map(easy_install_env))
     assert_output(system(buildout + ' -v'), """
 While:
   Initializing.
@@ -1645,7 +1645,7 @@ def test_dont_pick_setuptools_if_version_is_specified_when_required_by_src_dist(
     write('setup.py', "\nfrom setuptools import setup\nsetup(name='foo', version='1', py_modules=['foo'], zip_safe=True)\n")
     write('foo.py', '')
     _ = system(buildout + ' setup . sdist')
-    write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = dist\nversions = versions\nallow-picked-versions = false\n\n[versions]\nwtf = %s\nfoo = 1\n\n[foo]\nrecipe = zc.recipe.egg\neggs = foo\n' % '\n'.join('%s = %s' % (d.key, d.version) for d in zc.buildout.easy_install.buildout_and_setuptools_dists))
+    write('buildout.cfg', '\n[buildout]\nparts = foo\nfind-links = dist\nversions = versions\nallow-picked-versions = false\n\n[versions]\nwtf = {wtf}\nfoo = 1\n\n[foo]\nrecipe = zc.recipe.egg\neggs = foo\n'.format_map({'wtf': '\n'.join((f'{d.key} = {d.version}' for d in zc.buildout.easy_install.buildout_and_setuptools_dists))}))
     assert_output(system(buildout), """
 Installing foo.
 Getting distribution for 'foo==1'.
@@ -1658,7 +1658,7 @@ def test_pyc_and_pyo_files_have_correct_paths(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = demo\ninterpreter = py\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\nfind-links = {link_server}\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = demo\ninterpreter = py\n'.format_map(easy_install_env))
     _ = system(buildout)
     write('t.py', "\nimport eggrecipedemo, eggrecipedemoneeded, sys\ncode = lambda f: f.__code__\nsys.stdout.write(code(eggrecipedemo.main).co_filename+'\\n')\nsys.stdout.write(code(eggrecipedemoneeded.f).co_filename+'\\n')\n")
     assert_output(system(join('bin', 'py') + ' t.py'), """
@@ -1672,7 +1672,7 @@ def test_dont_mess_with_standard_dirs_with_variable_refs(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
-    write('buildout.cfg', '\n[buildout]\neggs-directory = ${buildout:directory}/develop-eggs\neggs-directory-version =\nparts =\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\neggs-directory = ${buildout:directory}/develop-eggs\neggs-directory-version =\nparts =\n')
     print_(system(buildout), end='')
 
 def test_expand_shell_patterns_in_develop_paths(easy_install_env):
@@ -1688,7 +1688,7 @@ def test_expand_shell_patterns_in_develop_paths(easy_install_env):
     make_dist_that_requires(sample_buildout, 'samplez')
     # Now, let's create a buildout that has a shell pattern that matches
     # both:
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sample*\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = sample*\nfind-links = {link_server}\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = sampley\n       samplez\n'.format_map(easy_install_env))
     # We can see that both eggs were found:
     assert_output(system(buildout), """
 Develop: '/sample-buildout/sampley'
@@ -1707,7 +1707,7 @@ def test_warn_users_when_expanding_shell_patterns_yields_no_results(easy_install
     make_dist_that_requires(sample_buildout, 'samplea')
     # So if we have 2 patterns, one that has a matching directory, and
     # another one that does not
-    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = samplea grumble*\nfind-links = %(link_server)s\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nparts = eggs\ndevelop = samplea grumble*\nfind-links = {link_server}\n\n[eggs]\nrecipe = zc.recipe.egg\neggs = samplea\n'.format_map(easy_install_env))
     # We should get one of the eggs, and a warning for the pattern that
     # did not match anything.
     assert_output(system(buildout), """
@@ -2008,7 +2008,7 @@ def test_abi_tag_eggs(easy_install_env):
     system = easy_install_env['system']
     write = easy_install_env['write']
 
-    write('buildout.cfg', '\n[buildout]\nfind-links = %(sample_eggs)s\nparts = abi\nabi-tag-eggs = true\n[abi]\nrecipe = zc.recipe.egg\neggs = demo\n' % easy_install_env)
+    write('buildout.cfg', '\n[buildout]\nfind-links = {sample_eggs}\nparts = abi\nabi-tag-eggs = true\n[abi]\nrecipe = zc.recipe.egg\neggs = demo\n'.format_map(easy_install_env))
     _ = system(join('bin', 'buildout'))
     from zc.buildout.pep425tags import get_abi_tag
     abi_tag = get_abi_tag()

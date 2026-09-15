@@ -75,14 +75,14 @@ To see how this works, we'll create two versions of a recipe egg:
 and we'll configure a buildout to use it:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
 
 If we run the buildout, it will use version 2:
 
@@ -96,10 +96,10 @@ We can specify a versions section that lists our recipe and name it in
 the buildout section:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ...
     ... [versions]
     ... spam = 1
@@ -107,7 +107,7 @@ the buildout section:
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
 
 Here we created a versions section listing the version 1 for the spam
 distribution.  We told the buildout to use it by specifying release-1
@@ -162,10 +162,10 @@ versions for.
 .. Edge case: version applied to range requirement:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ...
     ... [versions]
     ... spam = 1
@@ -173,7 +173,7 @@ versions for.
     ...
     ... [foo]
     ... recipe = spam >0
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
 
     >>> print_(system(buildout+' -v'), end='')
     Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
@@ -190,13 +190,13 @@ specifications were ignored, and the latest version installed, even if
 allow-picked-versions is false.
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... allow-picked-versions = false
     ... #show-picked-versions = true
     ... parts = foo
-    ... find-links = %s
-    ... test = ${foo:option}
+    ... find-links = {join("recipe", "dist")}
+    ... test = ${{foo:option}}
     ...
     ... [versions]
     ... spam = 1
@@ -204,7 +204,7 @@ allow-picked-versions is false.
     ... [foo]
     ... recipe = spam
     ... option = TEST
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
 
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Uninstalling foo.
@@ -217,10 +217,10 @@ You can request buildout to generate an error if it picks any
 versions:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... allow-picked-versions = false
     ...
     ... [versions]
@@ -228,7 +228,7 @@ versions:
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     While:
       Installing.
@@ -242,10 +242,10 @@ versions:
 We can name a version something else, if we wish, using the versions option:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... versions = release1
     ...
     ... [release1]
@@ -254,7 +254,7 @@ We can name a version something else, if we wish, using the versions option:
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Uninstalling foo.
     Installing foo.
@@ -263,10 +263,10 @@ We can name a version something else, if we wish, using the versions option:
 We can also disable checking versions:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... versions =
     ...
     ... [versions]
@@ -275,7 +275,7 @@ We can also disable checking versions:
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Uninstalling foo.
     Installing foo.
@@ -306,17 +306,17 @@ If you set the ``show-picked-versions`` option, buildout will print
 versions it picked at the end of its run:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... show-picked-versions = true
     ...
     ... [versions]
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating foo.
     recipe v2
@@ -328,20 +328,20 @@ versions it picked at the end of its run:
 When everything is pinned, no output is generated:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... show-picked-versions = true
     ...
     ... [versions]
-    ... pip = %s
-    ... setuptools = %s
+    ... pip = {pip_version}
+    ... setuptools = {setuptools_version}
     ... spam = 2
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % (join('recipe', 'dist'), pip_version, setuptools_version))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating foo.
     recipe v2
@@ -353,20 +353,20 @@ naming themselves consistently case-wise. So all version names are normalized
 and case differences won't impact the pinning:
 
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... show-picked-versions = true
     ...
     ... [versions]
-    ... pip = %s
-    ... setuptools = %s
+    ... pip = {pip_version}
+    ... setuptools = {setuptools_version}
     ... Spam = 2
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % (join('recipe', 'dist'), pip_version, setuptools_version))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating foo.
     recipe v2
@@ -376,23 +376,23 @@ buildout file with a single ``[versions]`` section. You include it by
 extending from that versions file:
 
     >>> write('my_versions.cfg',
-    ... '''
+    ... f'''
     ... [versions]
-    ... pip = %s
-    ... setuptools = %s
+    ... pip = {pip_version}
+    ... setuptools = {setuptools_version}
     ... spam = 2
-    ... ''' % (pip_version, setuptools_version))
+    ... ''')
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
     ... extends = my_versions.cfg
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... show-picked-versions = true
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating foo.
     recipe v2
@@ -402,23 +402,23 @@ buildout to append the versions to your versions file. It simply appends them
 at the end.
 
     >>> write('my_versions.cfg',
-    ... '''
+    ... f'''
     ... [versions]
-    ... pip = %s
-    ... setuptools = %s
-    ... ''' % (pip_version, setuptools_version))
+    ... pip = {pip_version}
+    ... setuptools = {setuptools_version}
+    ... ''')
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
     ... extends = my_versions.cfg
     ... update-versions-file = my_versions.cfg
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... show-picked-versions = true
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating foo.
     recipe v2
@@ -448,23 +448,23 @@ buildout will append the versions to your versions file anyway (without
 printing them to the console):
 
     >>> write('my_versions.cfg',
-    ... '''
+    ... f'''
     ... [versions]
-    ... pip = %s
-    ... setuptools = %s
-    ... ''' % (pip_version, setuptools_version))
+    ... pip = {pip_version}
+    ... setuptools = {setuptools_version}
+    ... ''')
     >>> write('buildout.cfg',
-    ... '''
+    ... f'''
     ... [buildout]
     ... parts = foo
     ... extends = my_versions.cfg
     ... update-versions-file = my_versions.cfg
-    ... find-links = %s
+    ... find-links = {join("recipe", "dist")}
     ... show-picked-versions = false
     ...
     ... [foo]
     ... recipe = spam
-    ... ''' % join('recipe', 'dist'))
+    ... ''')
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     Updating foo.
     recipe v2

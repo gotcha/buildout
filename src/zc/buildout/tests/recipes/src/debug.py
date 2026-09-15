@@ -10,7 +10,7 @@ class Debug:
 
     def install(self):
         for option, value in sorted(self.options.items()):
-            sys.stdout.write('%s %s\n' % (option, value))
+            sys.stdout.write(f'{option} {value}\n')
         return ()
 
     update = install

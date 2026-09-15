@@ -256,6 +256,6 @@ def get_bool(options, name, default=False):
         return False
     else:
         raise zc.buildout.UserError(
-            "Invalid value for %s option: %s" % (name, value))
+            f"Invalid value for {name} option: {value}")
 
 Egg = Scripts

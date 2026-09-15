@@ -20,13 +20,13 @@ And set up a buildout that downloads some eggs:
     ... '''
     ... [buildout]
     ... parts = eggs
-    ... download-cache = %(cache)s
-    ... find-links = %(link_server)s
+    ... download-cache = {cache}
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = demo ==0.2
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
 We specified a link server that has some distributions available for
 download:
@@ -123,14 +123,14 @@ install-from-cache option set to true:
     ... '''
     ... [buildout]
     ... parts = eggs
-    ... download-cache = %(cache)s
+    ... download-cache = {cache}
     ... install-from-cache = true
-    ... find-links = %(link_server)s
+    ... find-links = {link_server}
     ...
     ... [eggs]
     ... recipe = zc.recipe.egg
     ... eggs = demo
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='')
     Uninstalling eggs.
@@ -151,8 +151,8 @@ created::
     ... '''
     ... [buildout]
     ... parts =
-    ... download-cache = %(cache)s/newdir
-    ... ''' % globals())
+    ... download-cache = {cache}/newdir
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='')
     Creating directory '/cache/newdir'.
@@ -183,9 +183,9 @@ and a ``buildout.cfg`` that extends from there::
     >>> write('buildout.cfg',
     ... '''
     ... [buildout]
-    ... extends = %(basedir)s/base.cfg
+    ... extends = {basedir}/base.cfg
     ... parts =
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> dummy = system(buildout)
     >>> ls(basedir)
@@ -207,9 +207,9 @@ filesystem because it wouldn't make any sense having a remote cache::
     >>> write('buildout.cfg',
     ... '''
     ... [buildout]
-    ... extends = %(server_url)s/base.cfg
+    ... extends = {server_url}/base.cfg
     ... parts =
-    ... ''' % globals())
+    ... '''.format_map(globals()))
 
     >>> print_(system(buildout), end='') # doctest: +ELLIPSIS
     While:

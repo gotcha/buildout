@@ -10,9 +10,9 @@ class Environ:
 
     def install(self):
         _ = self.options['name']
-        sys.stdout.write('HOME %s\\n' % os.environ['HOME'])
-        sys.stdout.write('USERPROFILE %s\\n' % os.environ['USERPROFILE'])
-        sys.stdout.write('expanduser %s\\n' % os.path.expanduser('~'))
+        sys.stdout.write(f"HOME {os.environ['HOME']}\\n")
+        sys.stdout.write(f"USERPROFILE {os.environ['USERPROFILE']}\\n")
+        sys.stdout.write(f"expanduser {os.path.expanduser('~')}\\n")
         return ()
 
     update = install

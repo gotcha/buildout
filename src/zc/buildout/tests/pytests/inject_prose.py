@@ -130,9 +130,9 @@ def anchor_plan(ex, fixture_var):
         inner = extract_print_arg(stripped)
         if inner is not None:
             if 'system(' in inner:
-                cands.append(norm('assert_output(%s' % inner))
+                cands.append(norm(f'assert_output({inner}'))
             else:
-                cands.append(norm('assert_output(str(%s' % inner))
+                cands.append(norm(f'assert_output(str({inner}'))
             idents = identifiers(inner)
         else:
             cands.append('assert_output(capture_print(lambda: print_(')
@@ -150,14 +150,14 @@ def anchor_plan(ex, fixture_var):
     elif looks_like_python_literal(want):
         try:
             ast.parse(stripped, mode='eval')
-            cands.append(norm('_val = (%s' % fsrc))
+            cands.append(norm(f'_val = ({fsrc}'))
         except SyntaxError:
             via_dedent()
         idents = identifiers(stripped)
     else:
         try:
             ast.parse(stripped, mode='eval')
-            cands.append(norm('assert_output(capture_print(lambda: %s' % fsrc))
+            cands.append(norm(f'assert_output(capture_print(lambda: {fsrc}'))
         except SyntaxError:
             via_dedent()
         idents = identifiers(stripped)
@@ -317,8 +317,8 @@ def process_file(gen_path, sources, write):
             parser = doctest.DocTestParser()
             prose = [p for p in parser.parse((TESTS / srcname).read_text())
                      if isinstance(p, str) and p.strip()]
-            block = ['# Context from %s, the legacy doctest this file was '
-                     'hand-ported from.' % srcname]
+            block = [f'# Context from {srcname}, the legacy doctest this file was '
+                     'hand-ported from.']
             for p in prose:
                 block.extend(render_block(p, ''))
                 block.append('#')
@@ -330,8 +330,7 @@ def process_file(gen_path, sources, write):
             continue
         for fn_name, parts in targets_for(kind, srcname):
             if fn_name not in fns:
-                stats.misses.append('function %s (from %s) not found'
-                                    % (fn_name, srcname))
+                stats.misses.append(f'function {fn_name} (from {srcname}) not found')
                 stats.unplaced += len(
                     [p for p in parts if isinstance(p, doctest.Example)])
                 continue
@@ -360,8 +359,7 @@ def main(argv=None):
         if not name.endswith('.py'):
             name += '.py'
         if name not in SPECS:
-            ap.error('unknown file %r (choose from: %s)'
-                     % (args.only, ', '.join(sorted(SPECS))))
+            ap.error(f'unknown file {args.only!r} (choose from: {", ".join(sorted(SPECS))})')
         specs = {name: SPECS[name]}
 
     total_unplaced = 0
@@ -370,12 +368,12 @@ def main(argv=None):
                                     write=not args.check)
         total_unplaced += stats.unplaced
         action = 'would add' if args.check else 'added'
-        print('%s: blocks placed=%d already-present=%d missed=%d '
-              '(comment lines %s: %d); examples anchored=%d unplaced=%d'
-              % (fname, stats.placed, stats.present, stats.missed,
-                 action, added, stats.anchored, stats.unplaced))
+        print(f'{fname}: blocks placed={stats.placed} already-present={stats.present} '
+              f'missed={stats.missed} '
+              f'(comment lines {action}: {added}); examples '
+              f'anchored={stats.anchored} unplaced={stats.unplaced}')
         for m in stats.misses:
-            print('    unplaced: %s' % m)
+            print(f'    unplaced: {m}')
     return 1 if total_unplaced else 0
 
 

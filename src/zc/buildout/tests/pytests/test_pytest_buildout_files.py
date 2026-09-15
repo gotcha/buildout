@@ -134,14 +134,14 @@ Running setup script 'recipe/setup.py'.
 """, N)
     # and we'll configure a buildout to use it:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     # If we run the buildout, it will use version 2:
     assert_output(system(buildout), """
 Getting distribution for 'spam'.
@@ -152,10 +152,10 @@ recipe v2
     # We can specify a versions section that lists our recipe and name it in
     # the buildout section:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     
     [versions]
     spam = 1
@@ -163,7 +163,7 @@ recipe v2
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     # Here we created a versions section listing the version 1 for the spam
     # distribution.  We told the buildout to use it by specifying release-1
     # as in the versions option.
@@ -213,10 +213,10 @@ recipe v1
     #
     # .. Edge case: version applied to range requirement:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     
     [versions]
     spam = 1
@@ -224,7 +224,7 @@ recipe v1
     
     [foo]
     recipe = spam >0
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout + ' -v'), """
 Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
 ...
@@ -239,13 +239,13 @@ recipe v1
     # specifications were ignored, and the latest version installed, even if
     # allow-picked-versions is false.
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     allow-picked-versions = false
     #show-picked-versions = true
     parts = foo
-    find-links = %s
-    test = ${foo:option}
+    find-links = {join("recipe", "dist")}
+    test = ${{foo:option}}
     
     [versions]
     spam = 1
@@ -253,7 +253,7 @@ recipe v1
     [foo]
     recipe = spam
     option = TEST
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Uninstalling foo.
 Section `buildout` contains unused option(s): 'test'.
@@ -264,10 +264,10 @@ recipe v1
     # You can request buildout to generate an error if it picks any
     # versions:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     allow-picked-versions = false
     
     [versions]
@@ -275,7 +275,7 @@ recipe v1
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 While:
   Installing.
@@ -288,10 +288,10 @@ Error: Picked: spam = 2
 """, N)
     # We can name a version something else, if we wish, using the versions option:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     versions = release1
     
     [release1]
@@ -300,7 +300,7 @@ Error: Picked: spam = 2
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Uninstalling foo.
 Installing foo.
@@ -308,10 +308,10 @@ recipe v1
 """, N)
     # We can also disable checking versions:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     versions =
     
     [versions]
@@ -320,7 +320,7 @@ recipe v1
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Uninstalling foo.
 Installing foo.
@@ -347,17 +347,17 @@ recipe v2
     # If you set the ``show-picked-versions`` option, buildout will print
     # versions it picked at the end of its run:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     show-picked-versions = true
     
     [versions]
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Updating foo.
 recipe v2
@@ -368,20 +368,20 @@ spam = 2
 """, N)
     # When everything is pinned, no output is generated:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     show-picked-versions = true
     
     [versions]
-    pip = %s
-    setuptools = %s
+    pip = {pip_version}
+    setuptools = {setuptools_version}
     spam = 2
     
     [foo]
     recipe = spam
-    ''' % (join('recipe', 'dist'), pip_version, setuptools_version))
+    ''')
     assert_output(system(buildout), """
 Updating foo.
 recipe v2
@@ -392,20 +392,20 @@ recipe v2
     # naming themselves consistently case-wise. So all version names are normalized
     # and case differences won't impact the pinning:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     show-picked-versions = true
     
     [versions]
-    pip = %s
-    setuptools = %s
+    pip = {pip_version}
+    setuptools = {setuptools_version}
     Spam = 2
     
     [foo]
     recipe = spam
-    ''' % (join('recipe', 'dist'), pip_version, setuptools_version))
+    ''')
     assert_output(system(buildout), """
 Updating foo.
 recipe v2
@@ -414,23 +414,23 @@ recipe v2
     # buildout file with a single ``[versions]`` section. You include it by
     # extending from that versions file:
     write('my_versions.cfg',
-    '''
+    f'''
     [versions]
-    pip = %s
-    setuptools = %s
+    pip = {pip_version}
+    setuptools = {setuptools_version}
     spam = 2
-    ''' % (pip_version, setuptools_version))
+    ''')
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
     extends = my_versions.cfg
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     show-picked-versions = true
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Updating foo.
 recipe v2
@@ -439,23 +439,23 @@ recipe v2
     # buildout to append the versions to your versions file. It simply appends them
     # at the end.
     write('my_versions.cfg',
-    '''
+    f'''
     [versions]
-    pip = %s
-    setuptools = %s
-    ''' % (pip_version, setuptools_version))
+    pip = {pip_version}
+    setuptools = {setuptools_version}
+    ''')
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
     extends = my_versions.cfg
     update-versions-file = my_versions.cfg
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     show-picked-versions = true
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Updating foo.
 recipe v2
@@ -476,23 +476,23 @@ Picked versions have been written to my_versions.cfg
     # buildout will append the versions to your versions file anyway (without
     # printing them to the console):
     write('my_versions.cfg',
-    '''
+    f'''
     [versions]
-    pip = %s
-    setuptools = %s
-    ''' % (pip_version, setuptools_version))
+    pip = {pip_version}
+    setuptools = {setuptools_version}
+    ''')
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
     extends = my_versions.cfg
     update-versions-file = my_versions.cfg
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     show-picked-versions = false
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Updating foo.
 recipe v2
@@ -647,7 +647,7 @@ EXIT CODE: 1
 Develop: '/sample-buildout/recipes'
 Installing data-dir.
 > /zc/buildout/buildout.py(925)__getitem__()
--> raise MissingOption("Missing option: %s:%s" % (self.name, key))
+-> raise MissingOption(f"Missing option: {self.name}:{key}")
 (Pdb) > /sample-buildout/recipes/mkdir.py(14)install()
 -> directory = self.options['directory']
 (Pdb) ['path', 'recipe']
@@ -657,7 +657,7 @@ Traceback (most recent call last):
   File "/zc/buildout/buildout.py", line 1352, in main
 ...
   File "/zc/buildout/buildout.py", line 925, in __getitem__
-    raise MissingOption("Missing option: %s:%s" % (self.name, key))
+    raise MissingOption(f"Missing option: {self.name}:{key}")
 MissingOption: Missing option: data-dir:directory
 
 Starting pdb:
@@ -720,14 +720,14 @@ Running setup script 'recipe/setup.py'.
 """, N)
     # and we'll configure a buildout to use it:
     write('buildout.cfg',
-    '''
+    f'''
     [buildout]
     parts = foo
-    find-links = %s
+    find-links = {join("recipe", "dist")}
     
     [foo]
     recipe = spam
-    ''' % join('recipe', 'dist'))
+    ''')
     assert_output(system(buildout), """
 Getting distribution for 'spam'.
 Got spam 1.

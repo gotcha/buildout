@@ -85,7 +85,7 @@ def get_abi_tag() -> str | None:
                           sys.version_info < (3, 3))) \
                 and sys.version_info < (3, 3):
             u = 'u'
-        abi = '%s%s%s%s%s' % (impl, get_impl_ver(), d, m, u)
+        abi = f'{impl}{get_impl_ver()}{d}{m}{u}'
     elif soabi and soabi.startswith('cpython-'):
         abi = 'cp' + soabi.split('-')[1]
     elif soabi:

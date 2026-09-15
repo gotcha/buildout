@@ -1627,13 +1627,13 @@ def test_downloadcache(easy_install_env):
     '''
     [buildout]
     parts = eggs
-    download-cache = %(cache)s
-    find-links = %(link_server)s
+    download-cache = {cache}
+    find-links = {link_server}
     
     [eggs]
     recipe = zc.recipe.egg
     eggs = demo ==0.2
-    ''' % locals())
+    '''.format_map(locals()))
     # We specified a link server that has some distributions available for
     # download:
     assert_output(str(get(link_server)), """
@@ -1712,14 +1712,14 @@ Got demoneeded 1.1.
     '''
     [buildout]
     parts = eggs
-    download-cache = %(cache)s
+    download-cache = {cache}
     install-from-cache = true
-    find-links = %(link_server)s
+    find-links = {link_server}
     
     [eggs]
     recipe = zc.recipe.egg
     eggs = demo
-    ''' % locals())
+    '''.format_map(locals()))
     assert_output(system(buildout), """
 Uninstalling eggs.
 Installing eggs.
@@ -1738,8 +1738,8 @@ Generated script '/sample-buildout/bin/demo'.
     '''
     [buildout]
     parts =
-    download-cache = %(cache)s/newdir
-    ''' % locals())
+    download-cache = {cache}/newdir
+    '''.format_map(locals()))
     assert_output(system(buildout), """
 Creating directory '/cache/newdir'.
 Uninstalling eggs.
@@ -1766,9 +1766,9 @@ d  newdir
     write('buildout.cfg',
     '''
     [buildout]
-    extends = %(basedir)s/base.cfg
+    extends = {basedir}/base.cfg
     parts =
-    ''' % locals())
+    '''.format_map(locals()))
     dummy = system(buildout)
     assert_output(capture_print(ls, basedir), """
 -  base.cfg
@@ -1786,9 +1786,9 @@ d  cache
     write('buildout.cfg',
     '''
     [buildout]
-    extends = %(server_url)s/base.cfg
+    extends = {server_url}/base.cfg
     parts =
-    ''' % locals())
+    '''.format_map(locals()))
     assert_output(system(buildout), """
 While:
   Initializing.
@@ -1860,12 +1860,12 @@ def test_dependencylinks_metadata_followed(easy_install_env):
     write(sample_buildout, 'depdemo', 'dependencydemo.py',
           'import eggrecipedemoneeded')
     write(sample_buildout, 'depdemo', 'setup.py',
-    '''from setuptools import setup; setup(
+    f'''from setuptools import setup; setup(
         name='depdemo', py_modules=['dependencydemo'],
         install_requires = 'demoneeded',
-        dependency_links = ['%s'],
+        dependency_links = ['{link_server2}'],
         zip_safe=True, version='1')
-    ''' % link_server2)
+    ''')
     # Now let's configure the buildout to use the develop egg.
     write(sample_buildout, 'buildout.cfg',
     '''
@@ -1917,12 +1917,12 @@ def test_dependencylinks_fallback(easy_install_env):
     write(sample_buildout, 'depdemo', 'dependencydemo.py',
           'import eggrecipedemoneeded')
     write(sample_buildout, 'depdemo', 'setup.py',
-    '''from setuptools import setup; setup(
+    f'''from setuptools import setup; setup(
         name='depdemo', py_modules=['dependencydemo'],
         install_requires = 'demoneeded',
-        dependency_links = ['%s'],
+        dependency_links = ['{link_server2}'],
         zip_safe=True, version='1')
-    ''' % link_server2)
+    ''')
     # Now let's configure the buildout to use the develop egg.
     write(sample_buildout, 'buildout.cfg',
     '''
@@ -1978,16 +1978,16 @@ Error: Couldn't find a distribution for 'demoneeded'.
     # Let's change things so that the buildout configuration specifies where
     # to look for eggs.
     write(sample_buildout, 'buildout.cfg',
-    '''
+    f'''
     [buildout]
     develop = depdemo
     parts = eggs
-    find-links = %s
+    find-links = {link_server}
     
     [eggs]
     recipe = zc.recipe.egg:eggs
     eggs = depdemo
-    ''' % link_server)
+    ''')
     assert_output(system(buildout), """
 Develop: '/sample-buildout/depdemo'
 Installing eggs.
@@ -2022,16 +2022,16 @@ def test_dependencylinks_option(easy_install_env):
         zip_safe=True, version='1')
     ''')
     write(sample_buildout, 'buildout.cfg',
-    '''
+    f'''
     [buildout]
     develop = depdemo
     parts = eggs
-    find-links = %s
+    find-links = {link_server}
     
     [eggs]
     recipe = zc.recipe.egg:eggs
     eggs = depdemo
-    ''' % link_server)
+    ''')
     _ = system(buildout)
     from glob import glob
     from os.path import join
@@ -2042,12 +2042,12 @@ def test_dependencylinks_option(easy_install_env):
     # Now let's change things once again so that both buildout and setup
     # specify different places to look for the dependency egg.
     write(sample_buildout, 'depdemo', 'setup.py',
-    '''from setuptools import setup; setup(
+    f'''from setuptools import setup; setup(
         name='depdemo', py_modules=['dependencydemo'],
         install_requires = 'demoneeded',
-        dependency_links = ['%s'],
+        dependency_links = ['{link_server2}'],
         zip_safe=True, version='1')
-    '''  % link_server2)
+    ''')
     remove_demoneeded_egg()
     assert_output(system(buildout), """
 Develop: '/sample-buildout/depdemo'
@@ -2065,17 +2065,17 @@ Got demoneeded 1.1...
     #
     # Here is an example of using this option to disable dependency_links.
     write(sample_buildout, 'buildout.cfg',
-    '''
+    f'''
     [buildout]
     develop = depdemo
     parts = eggs
-    find-links = %s
+    find-links = {link_server}
     use-dependency-links = false
     
     [eggs]
     recipe = zc.recipe.egg:eggs
     eggs = depdemo
-    ''' % link_server)
+    ''')
     remove_demoneeded_egg()
     assert_output(system(buildout), """
 Develop: '/sample-buildout/depdemo'
@@ -2088,17 +2088,17 @@ Got demoneeded 1.1.
     # If we set the option to true, things return to the way they were
     # before. The dependency's are looked for first in the logging server.
     write(sample_buildout, 'buildout.cfg',
-    '''
+    f'''
     [buildout]
     develop = depdemo
     parts = eggs
-    find-links = %s
+    find-links = {link_server}
     use-dependency-links = true
     
     [eggs]
     recipe = zc.recipe.egg:eggs
     eggs = depdemo
-    ''' % link_server)
+    ''')
     remove_demoneeded_egg()
     assert_output(system(buildout), """
 Develop: '/sample-buildout/depdemo'
@@ -2778,10 +2778,10 @@ def test_extends_cache(easy_install_env):
     parts =
     foo = bar
     """)
-    write('buildout.cfg', """\
+    write('buildout.cfg', f"""\
     [buildout]
-    extends = %sbase.cfg
-    """ % server_url)
+    extends = {server_url}base.cfg
+    """)
     # When trying to run this buildout offline, we'll find that we cannot read all
     # of the required configuration:
     assert_output(system(buildout + ' -o'), """
@@ -2808,11 +2808,11 @@ Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
     # running buildout and the base.cfg file will be put in it (with the file name
     # being a hash of the complete URL):
     mkdir('cache')
-    write('buildout.cfg', """\
+    write('buildout.cfg', f"""\
     [buildout]
-    extends = %sbase.cfg
+    extends = {server_url}base.cfg
     extends-cache = cache
-    """ % server_url)
+    """)
     assert_output(system(buildout), """
 Section `buildout` contains unused option(s): 'foo'.
 This may be an indication for either a typo in the option's name or a bug in the used recipe.
@@ -2917,10 +2917,10 @@ This may be an indication for either a typo in the option's name or a bug in the
     extends = fancy_default.cfg
     extends-cache = user-cache
     """)
-    write('home', '.buildout', 'fancy_default.cfg', """\
+    write('home', '.buildout', 'fancy_default.cfg', f"""\
     [buildout]
-    extends = %sbase_default.cfg
-    """ % server_url)
+    extends = {server_url}base_default.cfg
+    """)
     write(server_data, 'base_default.cfg', """\
     [buildout]
     foo = bar
@@ -2931,10 +2931,10 @@ This may be an indication for either a typo in the option's name or a bug in the
     extends = fancy.cfg
     extends-cache = cache
     """)
-    write('fancy.cfg', """\
+    write('fancy.cfg', f"""\
     [buildout]
-    extends = %sbase.cfg
-    """ % server_url)
+    extends = {server_url}base.cfg
+    """)
     write(server_data, 'base.cfg', """\
     [buildout]
     parts =
@@ -2967,20 +2967,20 @@ offline = false
     [buildout]
     extends = fancy_default.cfg
     """)
-    write('home', '.buildout', 'fancy_default.cfg', """\
+    write('home', '.buildout', 'fancy_default.cfg', f"""\
     [buildout]
-    extends = %sbase_default.cfg
+    extends = {server_url}base_default.cfg
     extends-cache = user-cache
-    """ % server_url)
+    """)
     write('buildout.cfg', """\
     [buildout]
     extends = fancy.cfg
     """)
-    write('fancy.cfg', """\
+    write('fancy.cfg', f"""\
     [buildout]
-    extends = %sbase.cfg
+    extends = {server_url}base.cfg
     extends-cache = cache
-    """ % server_url)
+    """)
     remove('user-cache', os.listdir('user-cache')[0])
     remove('cache', os.listdir('cache')[0])
     assert_output(system(buildout), """
@@ -3023,20 +3023,20 @@ Error: Couldn't download 'http://localhost/base_default.cfg' in offline mode.
     [buildout]
     extends = fancy_default.cfg
     """)
-    write('home', '.buildout', 'fancy_default.cfg', """\
+    write('home', '.buildout', 'fancy_default.cfg', f"""\
     [buildout]
-    extends = %sbase_default.cfg
+    extends = {server_url}base_default.cfg
     offline = true
-    """ % server_url)
+    """)
     assert_output(system(buildout), """
 While:
   Initializing.
 Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
 """, N)
-    write('home', '.buildout', 'fancy_default.cfg', """\
+    write('home', '.buildout', 'fancy_default.cfg', f"""\
     [buildout]
-    extends = %sbase_default.cfg
-    """ % server_url)
+    extends = {server_url}base_default.cfg
+    """)
     write('buildout.cfg', """\
     [buildout]
     extends = fancy.cfg
@@ -3051,11 +3051,11 @@ Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
     [buildout]
     extends = fancy.cfg
     """)
-    write('fancy.cfg', """\
+    write('fancy.cfg', f"""\
     [buildout]
-    extends = %sbase.cfg
+    extends = {server_url}base.cfg
     offline = true
-    """ % server_url)
+    """)
     assert_output(system(buildout), """
 Section `buildout` contains unused option(s): 'foo'.
 This may be an indication for either a typo in the option's name or a bug in the used recipe.
@@ -3075,20 +3075,20 @@ Error: Couldn't download 'http://localhost/base_default.cfg' in offline mode.
     [buildout]
     extends = fancy_default.cfg
     """)
-    write('home', '.buildout', 'fancy_default.cfg', """\
+    write('home', '.buildout', 'fancy_default.cfg', f"""\
     [buildout]
-    extends = %sbase_default.cfg
+    extends = {server_url}base_default.cfg
     install-from-cache = true
-    """ % server_url)
+    """)
     assert_output(system(buildout), """
 While:
   Initializing.
 Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
 """, N)
-    write('home', '.buildout', 'fancy_default.cfg', """\
+    write('home', '.buildout', 'fancy_default.cfg', f"""\
     [buildout]
-    extends = %sbase_default.cfg
-    """ % server_url)
+    extends = {server_url}base_default.cfg
+    """)
     write('buildout.cfg', """\
     [buildout]
     extends = fancy.cfg
@@ -3103,11 +3103,11 @@ Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
     [buildout]
     extends = fancy.cfg
     """)
-    write('fancy.cfg', """\
+    write('fancy.cfg', f"""\
     [buildout]
-    extends = %sbase.cfg
+    extends = {server_url}base.cfg
     install-from-cache = true
-    """ % server_url)
+    """)
     assert_output(system(buildout), """
 While:
   Installing.
@@ -3129,11 +3129,11 @@ ValueError: install_from_cache set to true with no download cache
     [buildout]
     parts =
     """)
-    write('buildout.cfg', """\
+    write('buildout.cfg', f"""\
     [buildout]
     extends-cache = cache
-    extends = %sbase.cfg
-    """ % server_url)
+    extends = {server_url}base.cfg
+    """)
     print_(system(buildout))
     assert_output(capture_print(ls, 'cache'), '-  <MD5 CHECKSUM>', N)
     assert_output(capture_print(cat, 'cache', os.listdir(cache)[0]), """
@@ -3174,23 +3174,23 @@ foo = bar
     # configuration file will be downloaded only once during that particular run. If
     # some base configuration file is extended more than once, its cached copy is
     # used:
-    write(server_data, 'baseA.cfg', """\
+    write(server_data, 'baseA.cfg', f"""\
     [buildout]
-    extends = %sbase.cfg
+    extends = {server_url}base.cfg
     foo = bar
-    """ % server_url)
-    write(server_data, 'baseB.cfg', """\
+    """)
+    write(server_data, 'baseB.cfg', f"""\
     [buildout]
     extends-cache = cache
-    extends = %sbase.cfg
+    extends = {server_url}base.cfg
     bar = foo
-    """ % server_url)
-    write('buildout.cfg', """\
+    """)
+    write('buildout.cfg', f"""\
     [buildout]
     extends-cache = cache
     newest = true
-    extends = %sbaseA.cfg %sbaseB.cfg
-    """ % (server_url, server_url))
+    extends = {server_url}baseA.cfg {server_url}baseB.cfg
+    """)
     assert_output(system(buildout + ' -n'), """
 Section `buildout` contains unused option(s): 'bar' 'foo'.
 This may be an indication for either a typo in the option's name or a bug in the used recipe.
@@ -3200,7 +3200,7 @@ This may be an indication for either a typo in the option's name or a bug in the
     import zc.buildout.download
     old_download = zc.buildout.download.Download.download
     def wrapper_download(self, url, md5sum=None, path=None):
-      print_("The URL %s was downloaded." % url)
+      print_(f"The URL {url} was downloaded.")
       return old_download(self, url, md5sum, path)
     zc.buildout.download.Download.download = wrapper_download
     assert_output(capture_print(lambda: zc.buildout.buildout.main([])), """
@@ -3238,10 +3238,10 @@ Error: No-longer supported "extended-by" option found in http://localhost/base.c
     This is definitively not
     a proper() config file.
     """)
-    write('buildout.cfg', """\
+    write('buildout.cfg', f"""\
     [buildout]
-    extends = %sfaulty.cfg
-    """ % server_url)
+    extends = {server_url}faulty.cfg
+    """)
     assert_output(system(buildout), """
 While:
   Initializing.
@@ -3259,11 +3259,11 @@ file: http://localhost/faulty.cfg (downloaded as ...), line: 1
     [buildout]
     dummy = fjhfj
     """)
-    write('buildout.cfg', """\
+    write('buildout.cfg', f"""\
     [buildout]
-    extends = %sproper.cfg
-    extends-cache = ${buildout:dummy}
-    """ % server_url)
+    extends = {server_url}proper.cfg
+    extends-cache = ${{buildout:dummy}}
+    """)
     assert_output(system(buildout), """
 While:
   Initializing.
