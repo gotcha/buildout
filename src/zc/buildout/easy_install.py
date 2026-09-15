@@ -725,6 +725,45 @@ def _fetch_new_dists(
     return dists
 
 
+def _cache_links_and_index(
+        install_from_cache: bool,
+        download_cache: Optional[str],
+        links: Union[Tuple[str, ...], List[str]],
+        index: Optional[str],
+        ) -> Tuple[Union[Tuple[str, ...], List[str]], Optional[str]]:
+    """Return the links and index forced by install-from-cache mode.
+
+    In install-from-cache mode no remote location is consulted: the
+    download cache becomes the only index.  A cache must be configured.
+    """
+    if install_from_cache:
+        if not download_cache:
+            raise ValueError("install_from_cache set to true with no"
+                             " download cache")
+        links = ()
+        index = 'file://' + download_cache
+    return links, index
+
+
+def _prepare_links(
+        links: Union[Tuple[str, ...], List[str]],
+        download_cache: Optional[str],
+        fix_file_links: Callable[
+            [Union[Tuple[str, ...], List[str]]], Iterator[str]],
+        ) -> List[str]:
+    """Return the fixed-up find links, with the download cache first."""
+    prepared = list(fix_file_links(links))
+    if download_cache and (download_cache not in prepared):
+        prepared.insert(0, download_cache)
+    return prepared
+
+
+def _initial_path(path: Optional[List[str]]) -> List[str]:
+    """Return a copy of ``path`` plus the buildout/setuptools locations."""
+    # ``path[:]`` copies: later mutations of the argument must not leak in.
+    return (path and path[:] or []) + buildout_and_setuptools_path
+
+
 class Installer(object):
 
     _versions = {}
@@ -759,23 +798,18 @@ class Installer(object):
         self._allow_hosts = allow_hosts
         self._allow_unknown_extras = allow_unknown_extras
 
-        if self._install_from_cache:
-            if not self._download_cache:
-                raise ValueError("install_from_cache set to true with no"
-                                 " download cache")
-            links = ()
-            index = 'file://' + self._download_cache
+        links, index = _cache_links_and_index(
+            self._install_from_cache, self._download_cache, links, index)
 
         if use_dependency_links is not None:
             self._use_dependency_links = use_dependency_links
-        self._links = links = list(self._fix_file_links(links))
-        if self._download_cache and (self._download_cache not in links):
-            links.insert(0, self._download_cache)
+        self._links = links = _prepare_links(
+            links, self._download_cache, self._fix_file_links)
 
         if index:
             self._index_url = index
 
-        path = (path and path[:] or []) + buildout_and_setuptools_path
+        path = _initial_path(path)
         self._path = path
         if self._dest is None:
             newest = False

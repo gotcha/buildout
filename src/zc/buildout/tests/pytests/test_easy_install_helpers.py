@@ -13,6 +13,7 @@ from zc.buildout.easy_install import (
     _available_dists,
     _best_matching_dist,
     _best_version_dists,
+    _cache_links_and_index,
     _collect_req_scripts,
     _develop_dist,
     _dist_distutils_scripts,
@@ -23,6 +24,7 @@ from zc.buildout.easy_install import (
     _fetch_requested_dists,
     _final_dists,
     _find_req_dist,
+    _initial_path,
     _installed_dist_name,
     _is_url,
     _matching_dists,
@@ -31,6 +33,7 @@ from zc.buildout.easy_install import (
     _move_top_levels,
     _parse_requirements,
     _pip_install_args,
+    _prepare_links,
     _read_project_name,
     _read_record_entries,
     _read_top_levels,
@@ -1292,3 +1295,57 @@ def test_fetch_new_dists_skips_ws_add_for_present_dist(tmp_path, monkeypatch):
 
     assert dists == [moved]
     assert added == []
+
+
+def test_cache_links_and_index_passthrough_without_install_from_cache():
+    links = ['https://example.com/simple']
+    assert _cache_links_and_index(False, '/cache', links, '/index') == (
+        links, '/index')
+
+
+def test_cache_links_and_index_requires_a_download_cache():
+    with pytest.raises(ValueError) as exc:
+        _cache_links_and_index(True, None, ['x'], '/index')
+    assert "install_from_cache set to true with no download cache" in str(
+        exc.value)
+
+
+def test_cache_links_and_index_cache_becomes_only_index():
+    assert _cache_links_and_index(True, '/cache', ['x'], '/index') == (
+        (), 'file:///cache')
+
+
+def test_prepare_links_without_download_cache():
+    assert _prepare_links(['a', 'b'], None, iter) == ['a', 'b']
+
+
+def test_prepare_links_inserts_download_cache_first():
+    assert _prepare_links(['a'], '/cache', iter) == ['/cache', 'a']
+
+
+def test_prepare_links_does_not_duplicate_download_cache():
+    assert _prepare_links(['/cache', 'a'], '/cache', iter) == ['/cache', 'a']
+
+
+def test_prepare_links_applies_the_fixer():
+    def fix(links):
+        for link in links:
+            yield link + '/'
+
+    assert _prepare_links(('a',), None, fix) == ['a/']
+
+
+def test_initial_path_none_gives_buildout_and_setuptools():
+    assert _initial_path(None) == easy_install.buildout_and_setuptools_path
+
+
+def test_initial_path_appends_buildout_and_setuptools():
+    assert _initial_path(['/x']) == (
+        ['/x'] + easy_install.buildout_and_setuptools_path)
+
+
+def test_initial_path_copies_the_given_path():
+    path = ['/x']
+    result = _initial_path(path)
+    path.append('/y')
+    assert '/y' not in result
