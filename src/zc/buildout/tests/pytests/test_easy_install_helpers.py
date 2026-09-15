@@ -31,11 +31,13 @@ from zc.buildout.easy_install import (
     _initial_path,
     _installed_dist_name,
     _is_url,
+    _lines_declare_namespace,
     _matching_dists,
     _maybe_add_no_python_version_warning,
     _move_dist_into_place,
     _move_record_leftovers,
     _move_top_levels,
+    _namespace_candidate_lines,
     _parse_requirements,
     _pip_install_args,
     _prepare_links,
@@ -1642,3 +1644,59 @@ def test_write_build_ext_config_keeps_existing_setup_cfg(tmp_path):
     assert 'name = demo' in content
     assert '[build_ext]' in content
     assert include in content
+
+
+def test_namespace_candidate_lines_filters_blank_and_comment_lines(tmp_path):
+    init = tmp_path / '__init__.py'
+    init.write_text(
+        '# See http://peak.telecommunity.com/DevCenter/setuptools\n'
+        '\n'
+        '    # indented comment\n'
+        '__import__("pkg_resources").declare_namespace(__name__)\n'
+        '   \n'
+    )
+
+    assert _namespace_candidate_lines(init) == [
+        '__import__("pkg_resources").declare_namespace(__name__)\n']
+
+
+def test_namespace_candidate_lines_keeps_indented_code_verbatim(tmp_path):
+    init = tmp_path / '__init__.py'
+    init.write_text('try:\n    pass\n')
+
+    assert _namespace_candidate_lines(init) == ['try:\n', '    pass\n']
+
+
+def test_lines_declare_namespace_one_liner_pkg_resources():
+    assert _lines_declare_namespace(
+        ["__import__('pkg_resources').declare_namespace(__name__)\n"])
+
+
+def test_lines_declare_namespace_multiline_pkg_resources():
+    assert _lines_declare_namespace([
+        'try:\n',
+        '    __import__("pkg_resources").declare_namespace(__name__)\n',
+        'except ImportError:\n',
+        '    from pkgutil import extend_path\n',
+        '    __path__ = extend_path(__path__, __name__)\n',
+    ])
+
+
+def test_lines_declare_namespace_pkgutil_extend_path():
+    assert _lines_declare_namespace([
+        'from pkgutil import extend_path\n',
+        '__path__ = extend_path(__path__, __name__)\n',
+    ])
+
+
+def test_lines_declare_namespace_requires_marker_order():
+    # A second marker appearing before the first one does not count.
+    assert not _lines_declare_namespace([
+        'declare_namespace\n',
+        'pkg_resources\n',
+    ])
+
+
+def test_lines_declare_namespace_no_declaration():
+    assert not _lines_declare_namespace(['import os\n', 'x = 1\n'])
+    assert not _lines_declare_namespace([])

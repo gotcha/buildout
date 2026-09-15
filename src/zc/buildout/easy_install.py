@@ -2465,6 +2465,27 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> Union[str, L
     return name
 
 
+def _namespace_candidate_lines(ns_file: Union[str, Path]) -> List[str]:
+    """Return the non-empty, non-comment lines of ``ns_file``."""
+    with open(ns_file, 'r') as myfile:
+        return [line for line in myfile.readlines() if line.strip() and not line.strip().startswith('#')]
+
+
+def _lines_declare_namespace(contents: List[str]) -> bool:
+    """Whether ``contents`` hold a pkg_resources or pkgutil namespace."""
+    for combo in [
+        ("pkg_resources", "declare_namespace"),
+        ("pkgutil", "extend_path"),
+    ]:
+        found_first = False
+        for line in contents:
+            if combo[0] in line:
+                found_first = True
+            if found_first and combo[1] in line:
+                return True
+    return False
+
+
 def check_namespace_init_file(ns_file: Union[str, Path]) -> bool:
     """Look for namespace declaration in file.
 
@@ -2483,25 +2504,17 @@ def check_namespace_init_file(ns_file: Union[str, Path]) -> bool:
         __path__ = extend_path(__path__, __name__)
     """
     logger.debug("Checking namespace __init__.py file: %s", ns_file)
-    with open(ns_file, 'r') as myfile:
-        contents = [line for line in myfile.readlines() if line.strip() and not line.strip().startswith('#')]
+    contents = _namespace_candidate_lines(ns_file)
     if len(contents) == 0:
         logger.debug("Found too few lines to be a namespace declaration.")
         return False
     if len(contents) > 6:
         logger.debug("Found too many lines to be a namespace declaration.")
         return False
-    for combo in [
-        ("pkg_resources", "declare_namespace"),
-        ("pkgutil", "extend_path"),
-    ]:
-        found_first = False
-        for line in contents:
-            if combo[0] in line:
-                found_first = True
-            if found_first and combo[1] in line:
-                logger.debug("Found namespace declaration in %s", ns_file)
-                return True
+    # Debug log and return stay here so the log sequence is unchanged.
+    if _lines_declare_namespace(contents):
+        logger.debug("Found namespace declaration in %s", ns_file)
+        return True
     logger.debug("No namespace declaration found in %s", ns_file)
     return False
 
