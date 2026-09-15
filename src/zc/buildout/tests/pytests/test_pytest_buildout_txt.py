@@ -1841,7 +1841,7 @@ recipe recipes:debug
     
     [debug]
     op = buildout
-    """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    """ % {'b3': os.path.join(other, 'b3.cfg')})
     write(sample_buildout, 'b1.cfg',
     """
     [buildout]
@@ -1927,7 +1927,7 @@ op2 b2 2
 op3 b2 3
 recipe recipes:debug
 """, N)
-    assert_output(system([buildout, 'buildout:extends=b2.cfg %(b3)s' % dict(b3=os.path.join(other, 'b3.cfg'))]), """
+    assert_output(system([buildout, 'buildout:extends=b2.cfg %(b3)s' % {'b3': os.path.join(other, 'b3.cfg')}]), """
 Develop: '/sample-buildout/recipes'
 Uninstalling debug.
 Installing debug.
@@ -1947,7 +1947,7 @@ recipe recipes:debug
     
     [debug]
     op = buildout
-    """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    """ % {'b3': os.path.join(other, 'b3.cfg')})
 
 
 def test_extending_multiple_configuration_files_optional_extends(buildout_txt_env):
@@ -2058,7 +2058,7 @@ recipe recipes:debug
     
     [debug]
     op = buildout
-    """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    """ % {'b3': os.path.join(other, 'b3.cfg')})
     remove(sample_buildout, 'optional.cfg')
 
 
@@ -2126,7 +2126,7 @@ recipe recipes:debug
     [debug]
     recipe = recipes:debug
     name = base
-    """ % dict(url=server_url))
+    """ % {'url': server_url})
     assert_output(system([buildout, '-c', 'client.cfg']), """
 Develop: '/sample-buildout/recipes'
 Uninstalling debug.
@@ -2220,7 +2220,7 @@ recipe recipes:debug
     
     [debug]
     op = buildout
-    """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    """ % {'b3': os.path.join(other, 'b3.cfg')})
     write(sample_buildout, 'b1.cfg',
     """
     [buildout]
@@ -2281,7 +2281,7 @@ recipe recipes:debug
     op1 = 1
     op7 = 7
     """)
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(system(buildout, env=env), """
 Develop: '/sample-buildout/recipes'
 Uninstalling debug.
@@ -3107,12 +3107,12 @@ def test_options_alternate_locations(buildout_txt_env):
     eggs-directory-version = v2
     bin-directory = %(scripts)s
     parts-directory = %(work)s
-    """ % dict(
-       developbasket = os.path.join(alt, 'developbasket'),
-       basket = os.path.join(alt, 'basket'),
-       scripts = os.path.join(alt, 'scripts'),
-       work = os.path.join(alt, 'work'),
-    ))
+    """ % {
+       'developbasket': os.path.join(alt, 'developbasket'),
+       'basket': os.path.join(alt, 'basket'),
+       'scripts': os.path.join(alt, 'scripts'),
+       'work': os.path.join(alt, 'work'),
+    })
     assert_output(system(buildout), """
 Creating directory '/sample-alt/basket/v2'.
 Creating directory '/sample-alt/scripts'.
@@ -3140,10 +3140,10 @@ d  work
     directory = %(alt)s
     develop = %(recipes)s
     parts =
-    """ % dict(
-       alt=alt,
-       recipes=os.path.join(sample_buildout, 'recipes'),
-       ))
+    """ % {
+       'alt': alt,
+       'recipes': os.path.join(sample_buildout, 'recipes'),
+       })
     assert_output(system(buildout), """
 Creating directory '/sample-alt/eggs/v5'.
 Creating directory '/sample-alt/bin'.

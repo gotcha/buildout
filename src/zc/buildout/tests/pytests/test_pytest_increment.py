@@ -32,7 +32,7 @@ inc = 1
 dec -= 2
 inc += 2
 ''')
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(
         system(buildout + ' annotate debug', env=env),
         '''
@@ -140,7 +140,7 @@ develop = demo demo2
 extensions += demo2
 parts =
 ''')
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(
         system(buildout + ' annotate buildout', env=env),
         '''
@@ -184,7 +184,7 @@ extensions += demo2
 extends = base.cfg
 parts =
 ''')
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(
         system(buildout + ' annotate buildout', env=env),
         '''
@@ -232,7 +232,7 @@ extends = base.cfg
           base2.cfg
 parts =
 ''')
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(
         system(buildout + ' annotate buildout', env=env),
         '''
@@ -285,7 +285,7 @@ extends = base.cfg
           base3.cfg
 parts =
 ''')
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(
         system(buildout + ' annotate buildout', env=env),
         '''
@@ -331,7 +331,7 @@ extends = base.cfg
 extensions += demo2
 parts =
 ''')
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(
         system(buildout + ' annotate buildout', env=env),
         '''
@@ -379,7 +379,7 @@ extends = base.cfg
 extensions += demo2
 parts =
 ''')
-    env = dict(HOME=home, USERPROFILE=home)
+    env = {'HOME': home, 'USERPROFILE': home}
     assert_output(
         system(buildout + ' annotate buildout', env=env),
         '''

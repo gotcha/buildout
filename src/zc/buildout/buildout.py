@@ -408,12 +408,12 @@ def _resolve_config_file(
 
 def _cloptions_dict(cloptions: list[tuple[str, str, str]]) -> ConfigData:
     """Group command-line options into config data, keyed by section."""
-    return dict(
-        (section, dict((option, SectionKey(value, 'COMMAND_LINE_VALUE'))
-                       for (_, option, value) in v))
+    return {
+        section: {option: SectionKey(value, 'COMMAND_LINE_VALUE')
+                       for (_, option, value) in v}
         for (section, v) in itertools.groupby(sorted(cloptions),
                                               lambda v: v[0])
-        )
+        }
 
 
 def _load_user_defaults(
@@ -1099,7 +1099,7 @@ class Buildout(DictMixin):
             # default options
             _buildout_default_options_copy = copy.deepcopy(
                 _buildout_default_options)
-            data: ConfigData = dict(buildout=_buildout_default_options_copy)
+            data: ConfigData = {'buildout': _buildout_default_options_copy}
             self._buildout_dir = os.getcwd()
 
             config_file, directory = _resolve_config_file(
@@ -1199,7 +1199,7 @@ class Buildout(DictMixin):
                 versions = self[versions_section_name]
             else:
                 # remove annotations
-                versions = dict((k, v.value) for (k, v) in versions.items())
+                versions = {k: v.value for (k, v) in versions.items()}
             options['versions'] # refetching section name just to avoid a warning
             self.versions = versions
             zc.buildout.easy_install.default_versions(versions)
@@ -1885,12 +1885,12 @@ The following list shows the affected packages and their namespaces:
 
         fd, tsetup = tempfile.mkstemp()
         try:
-            os.write(fd, (zc.buildout.easy_install.runsetup_template % dict(
-                setupdir=os.path.dirname(setup),
-                setup=setup,
-                __file__ = setup,
-                extra="",
-                )).encode())
+            os.write(fd, (zc.buildout.easy_install.runsetup_template % {
+                'setupdir': os.path.dirname(setup),
+                'setup': setup,
+                '__file__': setup,
+                'extra': "",
+                }).encode())
             args = [sys.executable, tsetup] + args
             zc.buildout.easy_install.call_subprocess(args)
         finally:
@@ -1972,7 +1972,7 @@ The following list shows the affected packages and their namespaces:
     def __setitem__(self, name: str, data: dict[str, Any]) -> None:  # values str()-ified
         if name in self._raw:
             raise KeyError("Section already exists", name)
-        self._raw[name] = dict((k, str(v)) for (k, v) in data.items())
+        self._raw[name] = {k: str(v) for (k, v) in data.items()}
         self[name] # Add to parts
 
     def parse(self, data: str) -> None:
@@ -1984,8 +1984,8 @@ The following list shows the affected packages and their namespaces:
         for name in sections:
             if name in self._raw:
                 raise KeyError("Section already exists", name)
-            self._raw[name] = dict((k, str(v))
-                                   for (k, v) in sections[name].items())
+            self._raw[name] = {k: str(v)
+                                   for (k, v) in sections[name].items()}
 
         for name in sections:
             self[name] # Add to parts

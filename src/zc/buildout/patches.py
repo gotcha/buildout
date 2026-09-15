@@ -76,8 +76,8 @@ def patch_PackageIndex() -> None:
             from pip._internal.index.collector import IndexContent
         except ImportError:
             # pip 22.1-
-            from pip._internal.index.collector import (  # ty: ignore[unresolved-import]
-                HTMLPage as IndexContent,
+            from pip._internal.index.collector import (
+                HTMLPage as IndexContent,  # ty: ignore[unresolved-import]
             )
 
         from urllib.error import HTTPError

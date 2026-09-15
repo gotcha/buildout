@@ -800,7 +800,7 @@ def _write_build_ext_config(base: str, build_ext: dict[str, str]) -> None:
         f = open(setup_cfg, 'w')
         f.close()
     setuptools.command.setopt.edit_config(
-        setup_cfg, dict(build_ext=build_ext))
+        setup_cfg, {'build_ext': build_ext})
 
 
 class Installer:
@@ -1313,7 +1313,7 @@ def normalize_versions(versions: Mapping[str, str]) -> dict[str, str]:
     PyPI is case-insensitive and not all distributions are consistent in
     their own naming.  Also, there are dashes, underscores, dots...
     """
-    return dict([(canonicalize_name(k), v) for (k, v) in versions.items()])
+    return {canonicalize_name(k): v for (k, v) in versions.items()}
 
 
 def default_versions(versions: Mapping[str, str] | None=None) -> dict[str, str]:
@@ -1620,7 +1620,7 @@ def develop(setup: str, dest: str,
                 f.close()
                 undo.append(lambda: os.remove(setup_cfg))
             setuptools.command.setopt.edit_config(
-                setup_cfg, dict(build_ext=build_ext))
+                setup_cfg, {'build_ext': build_ext})
 
         tmp3 = tempfile.mkdtemp('build', dir=dest)
         undo.append(lambda : zc.buildout.rmtree.rmtree(tmp3))
@@ -1964,15 +1964,15 @@ def _script(module_name: str, attrs: str, path: str, dest: str, arguments: str, 
 
     python = _safe_arg(sys.executable)
 
-    contents = script_template % dict(
-        python = python,
-        path = path,
-        module_name = module_name,
-        attrs = attrs,
-        arguments = arguments,
-        initialization = initialization,
-        relative_paths_setup = rsetup,
-        )
+    contents = script_template % {
+        'python': python,
+        'path': path,
+        'module_name': module_name,
+        'attrs': attrs,
+        'arguments': arguments,
+        'initialization': initialization,
+        'relative_paths_setup': rsetup,
+        }
     return _create_script(contents, dest)
 
 
@@ -2001,14 +2001,14 @@ def _distutils_script(path: str, dest: str, script_content: str, initialization:
 
     python = _safe_arg(sys.executable)
 
-    contents = distutils_script_template % dict(
-        python = python,
-        path = path,
-        initialization = initialization,
-        relative_paths_setup = rsetup,
-        before = before,
-        after = after
-        )
+    contents = distutils_script_template % {
+        'python': python,
+        'path': path,
+        'initialization': initialization,
+        'relative_paths_setup': rsetup,
+        'before': before,
+        'after': after
+        }
     return _create_script(contents, dest)
 
 def _file_changed(filename: str, old_contents: str, mode: str='r') -> bool:
@@ -2100,12 +2100,12 @@ def _pyscript(path: str, dest: str, rsetup: str, initialization: str='') -> list
     if path:
         path += ','  # Courtesy comma at the end of the list.
 
-    contents = py_script_template % dict(
-        python = python,
-        path = path,
-        relative_paths_setup = rsetup,
-        initialization=initialization,
-        )
+    contents = py_script_template % {
+        'python': python,
+        'path': path,
+        'relative_paths_setup': rsetup,
+        'initialization': initialization,
+        }
     changed = _file_changed(dest, contents)
 
     if is_win32:

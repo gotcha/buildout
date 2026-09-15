@@ -42,6 +42,6 @@ setup(name='extraversiondemo', version='1.0',
     mkdir('dest')
     ws = zc.buildout.easy_install.install(
         ['extraversiondemo[foo]'], 'dest', links=[sample_eggs],
-        versions=dict(extraversiondemo='1.0', dependency='>0.9')
+        versions={'extraversiondemo': '1.0', 'dependency': '>0.9'}
     )
     assert sorted(dist.key for dist in ws) == ['dependency', 'extraversiondemo']

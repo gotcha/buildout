@@ -488,7 +488,7 @@ Here is a more elaborate example::
     ...
     ... [debug]
     ... op = buildout
-    ... """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    ... """ % {'b3': os.path.join(other, 'b3.cfg')})
 
     >>> write(sample_buildout, 'b1.cfg',
     ... """
@@ -583,7 +583,7 @@ There are several things to note about this example:
     recipe recipes:debug
 
     >>> print_(system([buildout, 'buildout:extends=b2.cfg %(b3)s'
-    ... % dict(b3=os.path.join(other, 'b3.cfg'))]), end='')
+    ... % {'b3': os.path.join(other, 'b3.cfg')}]), end='')
     Develop: '/sample-buildout/recipes'
     Uninstalling debug.
     Installing debug.
@@ -603,7 +603,7 @@ There are several things to note about this example:
     ...
     ... [debug]
     ... op = buildout
-    ... """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    ... """ % {'b3': os.path.join(other, 'b3.cfg')})
 
 
 Optional extends
@@ -662,7 +662,7 @@ so we do not interfere with existing tests::
     ...
     ... [debug]
     ... op = buildout
-    ... """ % dict(b3=os.path.join(other, 'b3.cfg')))
+    ... """ % {'b3': os.path.join(other, 'b3.cfg')})
     >>> remove(sample_buildout, 'optional.cfg')
 
 
@@ -703,7 +703,7 @@ we'll set up a web server with some configuration files::
     ... [debug]
     ... recipe = recipes:debug
     ... name = base
-    ... """ % dict(url=server_url))
+    ... """ % {'url': server_url})
 
     >>> print_(system([buildout, '-c', 'client.cfg']), end='')
     Develop: '/sample-buildout/recipes'
@@ -777,7 +777,7 @@ delimiter.)::
     ... op7 = 7
     ... """)
 
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout, env=env), end='')
     Develop: '/sample-buildout/recipes'
     Uninstalling debug.

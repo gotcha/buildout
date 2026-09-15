@@ -182,7 +182,7 @@ bases, using different caches:
 >>> mkdir('cache')
 >>> mkdir('user-cache')
 >>> home=join(sample_buildout, 'home')
->>> env=dict(HOME=home, USERPROFILE=home)
+>>> env={'HOME': home, 'USERPROFILE': home}
 >>> import functools
 >>> system = functools.partial(system, env=env)
 >>> write('home', '.buildout', 'default.cfg', """\

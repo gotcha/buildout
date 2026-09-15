@@ -22,7 +22,7 @@ Let's update the sample buildout.cfg to look in this area:
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % dict(new_releases=new_releases))
+    ... """ % {'new_releases': new_releases})
 
 We'll also include a recipe that echos the versions of setuptools and
 zc.buildout used:
@@ -125,7 +125,7 @@ will install earlier versions of these packages:
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % dict(new_releases=new_releases))
+    ... """ % {'new_releases': new_releases})
 
 Now we can see that we actually "upgrade" to an earlier version.
 
@@ -153,7 +153,7 @@ We won't upgrade in offline mode:
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % dict(new_releases=new_releases))
+    ... """ % {'new_releases': new_releases})
 
     >>> print_(system(buildout+' -o'), end='')
     Develop: '/sample-buildout/showversions'
@@ -181,7 +181,7 @@ directory:
     ...
     ... [versions]
     ... zc.buildout = 99.99
-    ... """ % dict(new_releases=new_releases))
+    ... """ % {'new_releases': new_releases})
 
     >>> cd(sample_buildout2)
     >>> print_(system(buildout), end='')
@@ -209,7 +209,7 @@ directory:
     ...
     ... [show-versions]
     ... recipe = showversions
-    ... """ % dict(new_releases=new_releases))
+    ... """ % {'new_releases': new_releases})
 
     >>> print_(system(buildout), end='')
     Upgraded:
@@ -292,7 +292,7 @@ gives us a sys.exit:
     ...
     ... [fail]
     ... recipe = failrecipe
-    ... """ % dict(new_releases=new_releases))
+    ... """ % {'new_releases': new_releases})
 
 Run the buildout:
 

@@ -56,7 +56,7 @@ def install_extras_with_greater_than_constrains():
     >>> mkdir('dest')
     >>> ws = zc.buildout.easy_install.install(
     ...     ['extraversiondemo[foo]'], 'dest', links=[sample_eggs],
-    ...     versions = dict(extraversiondemo='1.0', dependency='>0.9')
+    ...     versions = {'extraversiondemo': '1.0', 'dependency': '>0.9'}
     ... )
     >>> sorted(dist.key for dist in ws)
     ['dependency', 'extraversiondemo']

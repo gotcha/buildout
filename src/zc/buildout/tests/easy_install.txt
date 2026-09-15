@@ -286,7 +286,7 @@ then the versions numbers will be used.
 
     >>> ws = zc.buildout.easy_install.install(
     ...     ['demo'], dest, links=[link_server], index=link_server+'index/',
-    ...     versions = dict(demo='0.2', demoneeded='1.0'))
+    ...     versions = {'demo': '0.2', 'demoneeded': '1.0'})
     >>> [d.version for d in ws]
     ['1.0', '0.2']
 
@@ -305,7 +305,7 @@ we'll get an error:
     >>> ws = zc.buildout.easy_install.install(
     ...     ['demo >0.2'], dest, links=[link_server],
     ...     index=link_server+'index/',
-    ...     versions = dict(demo='0.2', demoneeded='1.0'))
+    ...     versions = {'demo': '0.2', 'demoneeded': '1.0'})
     Traceback (most recent call last):
     ...
     IncompatibleConstraintError: The requirement ('demo>0.2') is not allowed by your [versions] constraint (0.2)
@@ -400,7 +400,7 @@ The function default_versions can be used to get and set default
 version information to be used when no version information is passes.
 If called with an argument, it sets the default versions:
 
-    >>> zc.buildout.easy_install.default_versions(dict(demoneeded='1'))
+    >>> zc.buildout.easy_install.default_versions({'demoneeded': '1'})
     ... # doctest: +ELLIPSIS
     {...}
 
@@ -782,7 +782,7 @@ original script names to new script names.
 
     >>> bin = tmpdir('bin2')
     >>> scripts = zc.buildout.easy_install.scripts(
-    ...     ['demo'], ws, sys.executable, bin, dict(demo='run'))
+    ...     ['demo'], ws, sys.executable, bin, {'demo': 'run'})
 
     >>> if sys.platform == 'win32':
     ...     scripts == [os.path.join(bin, 'run.exe'),
@@ -813,7 +813,7 @@ to be included in the a generated script:
 
     >>> foo = tmpdir('foo')
     >>> scripts = zc.buildout.easy_install.scripts(
-    ...    ['demo'], ws, sys.executable, bin, dict(demo='run'),
+    ...    ['demo'], ws, sys.executable, bin, {'demo': 'run'},
     ...    extra_paths=[foo])
 
     >>> cat(bin, 'run') # doctest: +NORMALIZE_WHITESPACE
@@ -839,7 +839,7 @@ entry point.  The value passed is a source string to be placed between the
 parentheses in the call:
 
     >>> scripts = zc.buildout.easy_install.scripts(
-    ...    ['demo'], ws, sys.executable, bin, dict(demo='run'),
+    ...    ['demo'], ws, sys.executable, bin, {'demo': 'run'},
     ...    arguments='1, 2')
 
     >>> cat(bin, 'run') # doctest: +NORMALIZE_WHITESPACE
@@ -861,7 +861,7 @@ Passing initialization code
 You can also pass script initialization code:
 
     >>> scripts = zc.buildout.easy_install.scripts(
-    ...    ['demo'], ws, sys.executable, bin, dict(demo='run'),
+    ...    ['demo'], ws, sys.executable, bin, {'demo': 'run'},
     ...    arguments='1, 2',
     ...    initialization='import os\nos.chdir("foo")',
     ...    interpreter='py')
@@ -920,7 +920,7 @@ to pass a common base directory of the scripts and eggs:
     ...     index=link_server+'index/')
 
     >>> _ = zc.buildout.easy_install.scripts(
-    ...    ['demo'], ws, sys.executable, join(bo, 'bin'), dict(demo='run'),
+    ...    ['demo'], ws, sys.executable, join(bo, 'bin'), {'demo': 'run'},
     ...    extra_paths=[ba, join(bo, 'bar'), bo],
     ...    interpreter='py',
     ...    relative_paths=bo)
@@ -1324,7 +1324,7 @@ first:
     ...   'extdemo', dest,
     ...   {'include_dirs': os.path.join(sample_buildout, 'include')},
     ...   links=[link_server], index=link_server+'index/',
-    ...   versions=dict(extdemo='1.4'))
+    ...   versions={'extdemo': '1.4'})
     ['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']
 
     >>> ls(dest)
@@ -1580,7 +1580,7 @@ Environment markers
 
     >>> ws = zc.buildout.easy_install.install(
     ... spec, dest, links=[link_server], index=link_server+'index/',
-    ... versions = dict(demo='0.3'))
+    ... versions = {'demo': '0.3'})
     Traceback (most recent call last):
     ...
     zc.buildout.easy_install.IncompatibleConstraintError: The requirement ('demo==0...

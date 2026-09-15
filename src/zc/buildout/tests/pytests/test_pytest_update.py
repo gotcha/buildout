@@ -60,7 +60,7 @@ def test_update(update_env):
     
     [show-versions]
     recipe = showversions
-    """ % dict(new_releases=new_releases))
+    """ % {'new_releases': new_releases})
     # We'll also include a recipe that echos the versions of setuptools and
     # zc.buildout used:
     mkdir(sample_buildout, 'showversions')
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     
     [show-versions]
     recipe = showversions
-    """ % dict(new_releases=new_releases))
+    """ % {'new_releases': new_releases})
     # Now we can see that we actually "upgrade" to an earlier version.
     assert_output(system(buildout), """
 Upgraded:
@@ -177,7 +177,7 @@ zc.buildout V.V
     
     [show-versions]
     recipe = showversions
-    """ % dict(new_releases=new_releases))
+    """ % {'new_releases': new_releases})
     assert_output(system(buildout + ' -o'), """
 Develop: '/sample-buildout/showversions'
 Updating show-versions.
@@ -202,7 +202,7 @@ zc.buildout 1.0.0
     
     [versions]
     zc.buildout = 99.99
-    """ % dict(new_releases=new_releases))
+    """ % {'new_releases': new_releases})
     cd(sample_buildout2)
     assert_output(system(buildout), """
 Creating directory '/sample_buildout2/eggs/v5'.
@@ -227,7 +227,7 @@ Not upgrading because not running a local buildout command.
     
     [show-versions]
     recipe = showversions
-    """ % dict(new_releases=new_releases))
+    """ % {'new_releases': new_releases})
     assert_output(system(buildout), """
 Upgraded:
   zc.buildout version 99.99;
@@ -306,7 +306,7 @@ if __name__ == '__main__':
     
     [fail]
     recipe = failrecipe
-    """ % dict(new_releases=new_releases))
+    """ % {'new_releases': new_releases})
     # Run the buildout:
     assert_output(system(buildout, with_exit_code=True), """
 Upgraded:

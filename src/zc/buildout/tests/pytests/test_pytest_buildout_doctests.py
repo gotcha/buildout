@@ -1728,7 +1728,7 @@ def test_make_sure_versions_dont_cancel_extras(easy_install_env):
     open('t.py', 'w').close()
     sdist('.', sample_eggs)
     mkdir('dest')
-    ws = zc.buildout.easy_install.install(['extraversiondemo[foo]'], 'dest', links=[sample_eggs], versions=dict(extraversiondemo='1.0'))
+    ws = zc.buildout.easy_install.install(['extraversiondemo[foo]'], 'dest', links=[sample_eggs], versions={'extraversiondemo': '1.0'})
     _val = (sorted(dist.key for dist in ws))
     assert repr(_val) == "['demo', 'demoneeded', 'extraversiondemo']" or str(_val) == "['demo', 'demoneeded', 'extraversiondemo']"
 

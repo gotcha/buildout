@@ -1118,10 +1118,10 @@ class PackageIndex(Environment):
             # Built inside the guard: the command lists embed rev, which is
             # only a str once the None case (no '@revision' in the URL) is
             # excluded here.
-            co_commands = dict(
-                git=[vcs, '-C', filename, 'checkout', '--quiet', rev],
-                hg=[vcs, '--cwd', filename, 'up', '-C', '-r', rev, '-q'],
-            )
+            co_commands = {
+                'git': [vcs, '-C', filename, 'checkout', '--quiet', rev],
+                'hg': [vcs, '--cwd', filename, 'up', '-C', '-r', rev, '-q'],
+            }
             self.info(f"Checking out {rev}")
             subprocess.check_call(co_commands[vcs])
 

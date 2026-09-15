@@ -32,7 +32,7 @@ buildout = %(name)s.buildout:main
 [zc.buildout]
 debug = %(name)s.testrecipes:Debug
 
-""" % dict(name=name)
+""" % {"name": name}
 
 setup(
     name = name,
@@ -55,10 +55,10 @@ setup(
     ],
     include_package_data = True,
     entry_points = entry_points,
-    extras_require = dict(
-        test=['zope.testing', 'manuel',
+    extras_require = {
+        "test": ['zope.testing', 'manuel',
               'bobo ==2.3.0', 'zdaemon', 'zc.zdaemonrecipe',
-              'zc.recipe.deployment']),
+              'zc.recipe.deployment']},
     zip_safe=False,
     classifiers = [
        'Development Status :: 6 - Mature',

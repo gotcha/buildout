@@ -303,7 +303,7 @@ def test_easy_install_specifying_versions(easy_install_env):
     # then the versions numbers will be used.
     ws = zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/',
-        versions = dict(demo='0.2', demoneeded='1.0'))
+        versions = {'demo': '0.2', 'demoneeded': '1.0'})
     _val = ([d.version for d in ws])
     assert repr(_val) == "['1.0', '0.2']" or str(_val) == "['1.0', '0.2']"
     # In this example, we specified a version for demoneeded, even though we
@@ -320,7 +320,7 @@ def test_easy_install_specifying_versions(easy_install_env):
         ws = zc.buildout.easy_install.install(
             ['demo >0.2'], dest, links=[link_server],
             index=link_server+'index/',
-            versions = dict(demo='0.2', demoneeded='1.0'))
+            versions = {'demo': '0.2', 'demoneeded': '1.0'})
         assert False, "Expected IncompatibleConstraintError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "The requirement ('demo>0.2') is not allowed by your [versions] constraint (0.2)", N)
@@ -398,7 +398,7 @@ zc.buildout.easy_install DEBUG
     # The function default_versions can be used to get and set default
     # version information to be used when no version information is passes.
     # If called with an argument, it sets the default versions:
-    _val = (zc.buildout.easy_install.default_versions(dict(demoneeded='1')))
+    _val = (zc.buildout.easy_install.default_versions({'demoneeded': '1'}))
     assert_output(str(_val), '{...}', N)
     # It always returns the previous default versions.  If called without an
     # argument, it simply returns the default versions without changing
@@ -536,7 +536,7 @@ def test_easy_install_script_generation(easy_install_env):
     dest = tmpdir('sample-install')
     zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/',
-        versions=dict(demo='0.2', demoneeded='1.0'))
+        versions={'demo': '0.2', 'demoneeded': '1.0'})
     zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/')
     ws = zc.buildout.easy_install.install(
@@ -744,7 +744,7 @@ sys.path[0:0] = [
     # original script names to new script names.
     bin = tmpdir('bin2')
     scripts = zc.buildout.easy_install.scripts(
-        ['demo'], ws, sys.executable, bin, dict(demo='run'))
+        ['demo'], ws, sys.executable, bin, {'demo': 'run'})
     if sys.platform == 'win32':
         scripts == [os.path.join(bin, 'run.exe'),
                     os.path.join(bin, 'run-script.py')]
@@ -764,7 +764,7 @@ sys.path[0:0] = [
     # to be included in the a generated script:
     foo = tmpdir('foo')
     scripts = zc.buildout.easy_install.scripts(
-       ['demo'], ws, sys.executable, bin, dict(demo='run'),
+       ['demo'], ws, sys.executable, bin, {'demo': 'run'},
        extra_paths=[foo])
     assert_output(capture_print(cat, bin, 'run'), """
 #!/usr/local/bin/python2.7
@@ -788,7 +788,7 @@ if __name__ == '__main__':
     # entry point.  The value passed is a source string to be placed between the
     # parentheses in the call:
     scripts = zc.buildout.easy_install.scripts(
-       ['demo'], ws, sys.executable, bin, dict(demo='run'),
+       ['demo'], ws, sys.executable, bin, {'demo': 'run'},
        arguments='1, 2')
     assert_output(capture_print(cat, bin, 'run'), """
 #!/usr/local/bin/python2.7
@@ -808,7 +808,7 @@ if __name__ == '__main__':
     #
     # You can also pass script initialization code:
     scripts = zc.buildout.easy_install.scripts(
-       ['demo'], ws, sys.executable, bin, dict(demo='run'),
+       ['demo'], ws, sys.executable, bin, {'demo': 'run'},
        arguments='1, 2',
        initialization='import os\nos.chdir("foo")',
        interpreter='py')
@@ -872,7 +872,7 @@ def test_easy_install_relative_paths(easy_install_env):
         ['demo'], join(bo, 'eggs'), links=[link_server],
         index=link_server+'index/')
     _ = zc.buildout.easy_install.scripts(
-       ['demo'], ws, sys.executable, join(bo, 'bin'), dict(demo='run'),
+       ['demo'], ws, sys.executable, join(bo, 'bin'), {'demo': 'run'},
        extra_paths=[ba, join(bo, 'bar'), bo],
        interpreter='py',
        relative_paths=bo)
@@ -1104,7 +1104,7 @@ def test_easy_install_build_options_build(easy_install_env):
     dest = tmpdir('sample-install')
     zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/',
-        versions=dict(demo='0.2', demoneeded='1.0'))
+        versions={'demo': '0.2', 'demoneeded': '1.0'})
     zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/')
 
@@ -1224,7 +1224,7 @@ def test_easy_install_build_options_update(easy_install_env):
     dest = tmpdir('sample-install')
     zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/',
-        versions=dict(demo='0.2', demoneeded='1.0'))
+        versions={'demo': '0.2', 'demoneeded': '1.0'})
     zc.buildout.easy_install.install(
         ['demo'], dest, links=[link_server], index=link_server+'index/')
     # We'll add an include directory to our sample buildout and add the
@@ -1336,7 +1336,7 @@ def test_easy_install_build_options_versions(easy_install_env):
   'extdemo', dest,
   {'include_dirs': os.path.join(sample_buildout, 'include')},
   links=[link_server], index=link_server+'index/',
-  versions=dict(extdemo='1.4')))
+  versions={'extdemo': '1.4'}))
     assert_output(str(_val), "['/sample-install/extdemo-1.4-py2.4-unix-i686.egg']", N)
     assert_output(capture_print(ls, dest), 'd  extdemo-1.4-py2.4-unix-i686.egg', N)
 
@@ -1589,7 +1589,7 @@ d  demoneeded-1.1-py2.4.egg
     try:
         ws = zc.buildout.easy_install.install(
         spec, dest, links=[link_server], index=link_server+'index/',
-        versions = dict(demo='0.3'))
+        versions = {'demo': '0.3'})
         assert False, "Expected zc.buildout.easy_install.IncompatibleConstraintError not raised"
     except Exception as _exc:
         assert_output(str(_exc), "The requirement ('demo==0...", N)
@@ -2909,7 +2909,7 @@ This may be an indication for either a typo in the option's name or a bug in the
     mkdir('cache')
     mkdir('user-cache')
     home=join(sample_buildout, 'home')
-    env=dict(HOME=home, USERPROFILE=home)
+    env={'HOME': home, 'USERPROFILE': home}
     import functools
     system = functools.partial(system, env=env)
     write('home', '.buildout', 'default.cfg', """\
@@ -3295,9 +3295,8 @@ def test_testing_bugfix(easy_install_env):
     count = len(logging.getLogger().handlers)
     assert_output(capture_print(lambda: print(logging.getLogger().handlers)), '[<...NullHandler...>]', N)
     # After calling it, a ``logging.StreamHandler`` was added:
-    import doctest
-
-    import zc.buildout.testing
+    import zc.buildout.testing  # isort: skip
+    import doctest  # isort: skip
     test = doctest.DocTestParser().get_doctest(
         '>>> x', {}, 'foo', 'foo.py', 0)
     zc.buildout.testing.buildoutSetUp(test)

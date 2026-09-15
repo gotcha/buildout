@@ -217,7 +217,7 @@ def create_wheel(name, version, dest, install_requires=None,
                  dependency_links=None):
     d = tempfile.mkdtemp()
     if dest=='available':
-        extras = dict(x=['x'])
+        extras = {'x': ['x']}
     else:
         extras = {}
     if dependency_links:

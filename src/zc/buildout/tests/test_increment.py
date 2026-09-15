@@ -38,7 +38,7 @@ def default_cfg():
     ... dec -= 2
     ... inc += 2
     ... ''')
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout+' annotate debug', env=env), end='')
     <BLANKLINE>
     Annotated sections
@@ -130,7 +130,7 @@ def default_cfg_extensions():
     ... extensions += demo2
     ... parts =
     ... ''')
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout+' annotate buildout', env=env), end='')
     ... # doctest: +ELLIPSIS
     <BLANKLINE>
@@ -167,7 +167,7 @@ def with_extends_increment_in_base():
     ... extends = base.cfg
     ... parts =
     ... ''')
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout+' annotate buildout', env=env), end='')
     ... # doctest: +ELLIPSIS
     <BLANKLINE>
@@ -208,7 +208,7 @@ def with_extends_increment_in_base2():
     ...           base2.cfg
     ... parts =
     ... ''')
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout+' annotate buildout', env=env), end='')
     ... # doctest: +ELLIPSIS
     <BLANKLINE>
@@ -254,7 +254,7 @@ def with_extends_increment_in_base2_and_base3():
     ...           base3.cfg
     ... parts =
     ... ''')
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout+' annotate buildout', env=env), end='')
     ... # doctest: +ELLIPSIS
     <BLANKLINE>
@@ -293,7 +293,7 @@ def with_extends_increment_in_buildout():
     ... extensions += demo2
     ... parts =
     ... ''')
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout+' annotate buildout', env=env), end='')
     ... # doctest: +ELLIPSIS
     <BLANKLINE>
@@ -334,7 +334,7 @@ def with_extends_increment_in_buildout_with_base_and_root():
     ... extensions += demo2
     ... parts =
     ... ''')
-    >>> env = dict(HOME=home, USERPROFILE=home)
+    >>> env = {'HOME': home, 'USERPROFILE': home}
     >>> print_(system(buildout+' annotate buildout', env=env), end='')
     ... # doctest: +ELLIPSIS
     <BLANKLINE>

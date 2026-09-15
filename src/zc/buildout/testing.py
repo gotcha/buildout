@@ -375,29 +375,29 @@ def buildoutSetUp(test):
     def uncd():
         os.chdir(cdpaths.pop())
 
-    test.globs.update(dict(
-        sample_buildout = sample,
-        ls = ls,
-        cat = cat,
-        mkdir = mkdir,
-        rmdir = rmdir,
-        remove = remove,
-        tmpdir = tmpdir,
-        write = write,
-        system = system,
-        get = get,
-        cd = cd, uncd = uncd,
-        join = os.path.join,
-        sdist = sdist,
-        bdist_egg = bdist_egg,
-        start_server = start_server,
-        stop_server = stop_server,
-        buildout = os.path.join(sample, 'bin', 'buildout'),
-        wait_until = wait_until,
-        print_ = print_,
-        clean_up_pyc = clean_up_pyc,
-        os = os,
-        ))
+    test.globs.update({
+        'sample_buildout': sample,
+        'ls': ls,
+        'cat': cat,
+        'mkdir': mkdir,
+        'rmdir': rmdir,
+        'remove': remove,
+        'tmpdir': tmpdir,
+        'write': write,
+        'system': system,
+        'get': get,
+        'cd': cd, 'uncd': uncd,
+        'join': os.path.join,
+        'sdist': sdist,
+        'bdist_egg': bdist_egg,
+        'start_server': start_server,
+        'stop_server': stop_server,
+        'buildout': os.path.join(sample, 'bin', 'buildout'),
+        'wait_until': wait_until,
+        'print_': print_,
+        'clean_up_pyc': clean_up_pyc,
+        'os': os,
+        })
 
     zc.buildout.easy_install.prefer_final(prefer_final)
 
@@ -620,7 +620,7 @@ def _normalize_path(match):
 normalize_path = (
     re.compile(
         r'''[^'" \t\n\r]+\%(sep)s_[Tt][Ee][Ss][Tt]_\%(sep)s([^"' \t\n\r]+)'''
-        % dict(sep=os.path.sep)),
+        % {'sep': os.path.sep}),
     _normalize_path,
     )
 
