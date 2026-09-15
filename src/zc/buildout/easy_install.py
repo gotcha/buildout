@@ -764,6 +764,43 @@ def _initial_path(path: Optional[List[str]]) -> List[str]:
     return (path and path[:] or []) + buildout_and_setuptools_path
 
 
+def _unpack_dist_for_build(dist: pkg_resources.Distribution, build_tmp: str) -> str:
+    """Unpack ``dist`` into ``build_tmp`` and return its setup base dir."""
+    setuptools.archive_util.unpack_archive(dist.location,
+                                           build_tmp)
+    base = build_tmp
+    if not os.path.exists(os.path.join(build_tmp, 'setup.py')):
+        setups = glob.glob(
+            os.path.join(build_tmp, '*', 'setup.py'))
+        if not setups:
+            # We used to raise an error, but now we just log a warning.
+            # Maybe there is a pyproject.toml file that pip can use.
+            # Otherwise we let pip do the complaining.
+            logger.warning(
+                "Couldn't find a setup script to build in %s. "
+                "Trying pip install anyway."
+                % os.path.basename(_dist_location(dist))
+            )
+        elif len(setups) > 1:
+            raise distutils.errors.DistutilsError(
+                "Multiple setup scripts in %s"
+                % os.path.basename(_dist_location(dist))
+                )
+        else:
+            base = os.path.dirname(setups[0])
+    return base
+
+
+def _write_build_ext_config(base: str, build_ext: Dict[str, str]) -> None:
+    """Create ``setup.cfg`` in ``base`` if missing and set ``build_ext``."""
+    setup_cfg = os.path.join(base, 'setup.cfg')
+    if not os.path.exists(setup_cfg):
+        f = open(setup_cfg, 'w')
+        f.close()
+    setuptools.command.setopt.edit_config(
+        setup_cfg, dict(build_ext=build_ext))
+
+
 class Installer(object):
 
     _versions = {}
@@ -1222,35 +1259,8 @@ class Installer(object):
 
             build_tmp = tempfile.mkdtemp('build')
             try:
-                setuptools.archive_util.unpack_archive(dist.location,
-                                                       build_tmp)
-                base = build_tmp
-                if not os.path.exists(os.path.join(build_tmp, 'setup.py')):
-                    setups = glob.glob(
-                        os.path.join(build_tmp, '*', 'setup.py'))
-                    if not setups:
-                        # We used to raise an error, but now we just log a warning.
-                        # Maybe there is a pyproject.toml file that pip can use.
-                        # Otherwise we let pip do the complaining.
-                        logger.warning(
-                            "Couldn't find a setup script to build in %s. "
-                            "Trying pip install anyway."
-                            % os.path.basename(_dist_location(dist))
-                        )
-                    elif len(setups) > 1:
-                        raise distutils.errors.DistutilsError(
-                            "Multiple setup scripts in %s"
-                            % os.path.basename(_dist_location(dist))
-                            )
-                    else:
-                        base = os.path.dirname(setups[0])
-
-                setup_cfg = os.path.join(base, 'setup.cfg')
-                if not os.path.exists(setup_cfg):
-                    f = open(setup_cfg, 'w')
-                    f.close()
-                setuptools.command.setopt.edit_config(
-                    setup_cfg, dict(build_ext=build_ext))
+                base = _unpack_dist_for_build(dist, build_tmp)
+                _write_build_ext_config(base, build_ext)
 
                 dists = self._call_pip_install(base, self._dest, dist)
 

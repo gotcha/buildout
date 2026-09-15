@@ -1,7 +1,10 @@
 """Unit tests for the pure helpers extracted from zc.buildout.easy_install."""
+import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import logging
 import os
 import sys
+
+from pathlib import Path
 
 import pkg_resources
 import pytest
@@ -47,10 +50,12 @@ from zc.buildout.easy_install import (
     _script_paths,
     _script_target,
     _select_from_best,
+    _unpack_dist_for_build,
     _unpack_dist_to_tmp,
     _select_newer_dist,
     _warn_missing_scripts,
     _working_set_or_default,
+    _write_build_ext_config,
 )
 
 BASE_ARGS = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', '/dest']
@@ -1528,3 +1533,112 @@ def test_move_dist_into_place_reraises_for_wrong_package_at_newloc(
                 _env_dist('1.0'), str(tmp_path / 'tmp' / 'demo-1.0.egg'),
                 str(dest))
     assert 'exists, but has no distribution for demo 1.0' in caplog.text
+
+
+def _build_dist(tmp_path, project_name='demo', version='1.0'):
+    """Distribution whose location is an on-disk-style path under tmp_path."""
+    return pkg_resources.Distribution(
+        location=str(tmp_path / ('%s-%s.egg' % (project_name, version))),
+        project_name=project_name,
+        version=version,
+    )
+
+
+def test_unpack_dist_for_build_returns_build_tmp_for_top_level_setup(
+        tmp_path, monkeypatch):
+    calls = []
+
+    def fake_unpack(filename, extract_dir):
+        calls.append((filename, extract_dir))
+        Path(extract_dir, 'setup.py').write_text(
+            'from setuptools import setup\n')
+
+    dist = _build_dist(tmp_path)
+    build_tmp = tmp_path / 'unpacked'
+    build_tmp.mkdir()
+    monkeypatch.setattr(
+        'setuptools.archive_util.unpack_archive', fake_unpack)
+
+    base = _unpack_dist_for_build(dist, str(build_tmp))
+
+    assert base == str(build_tmp)
+    assert calls == [(dist.location, str(build_tmp))]
+
+
+def test_unpack_dist_for_build_finds_setup_in_single_subdir(
+        tmp_path, monkeypatch):
+    def fake_unpack(filename, extract_dir):
+        Path(extract_dir, 'demo-1.0').mkdir()
+        Path(extract_dir, 'demo-1.0', 'setup.py').write_text('')
+
+    build_tmp = tmp_path / 'unpacked'
+    build_tmp.mkdir()
+    monkeypatch.setattr(
+        'setuptools.archive_util.unpack_archive', fake_unpack)
+
+    base = _unpack_dist_for_build(_build_dist(tmp_path), str(build_tmp))
+
+    assert base == os.path.join(str(build_tmp), 'demo-1.0')
+
+
+def test_unpack_dist_for_build_warns_and_keeps_base_without_setup(
+        tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(
+        'setuptools.archive_util.unpack_archive',
+        lambda filename, extract_dir: None)
+    build_tmp = tmp_path / 'unpacked'
+    build_tmp.mkdir()
+
+    with caplog.at_level(logging.WARNING, logger='zc.buildout.easy_install'):
+        base = _unpack_dist_for_build(_build_dist(tmp_path), str(build_tmp))
+
+    assert base == str(build_tmp)
+    assert ("Couldn't find a setup script to build in demo-1.0.egg"
+            in caplog.text)
+    assert 'Trying pip install anyway' in caplog.text
+
+
+def test_unpack_dist_for_build_raises_on_multiple_setups(
+        tmp_path, monkeypatch):
+    def fake_unpack(filename, extract_dir):
+        Path(extract_dir, 'one').mkdir()
+        Path(extract_dir, 'one', 'setup.py').write_text('')
+        Path(extract_dir, 'two').mkdir()
+        Path(extract_dir, 'two', 'setup.py').write_text('')
+
+    build_tmp = tmp_path / 'unpacked'
+    build_tmp.mkdir()
+    monkeypatch.setattr(
+        'setuptools.archive_util.unpack_archive', fake_unpack)
+
+    with pytest.raises(distutils.errors.DistutilsError) as exc:
+        _unpack_dist_for_build(_build_dist(tmp_path), str(build_tmp))
+    assert 'Multiple setup scripts in demo-1.0.egg' in str(exc.value)
+
+
+def test_write_build_ext_config_creates_missing_setup_cfg(tmp_path):
+    base = tmp_path / 'src'
+    base.mkdir()
+    include = str(tmp_path / 'include')
+
+    _write_build_ext_config(str(base), {'include-dirs': include})
+
+    content = (base / 'setup.cfg').read_text()
+    assert '[build_ext]' in content
+    assert 'include-dirs' in content
+    assert include in content
+
+
+def test_write_build_ext_config_keeps_existing_setup_cfg(tmp_path):
+    base = tmp_path / 'src'
+    base.mkdir()
+    setup_cfg = base / 'setup.cfg'
+    setup_cfg.write_text('[metadata]\nname = demo\n')
+    include = str(tmp_path / 'include')
+
+    _write_build_ext_config(str(base), {'include-dirs': include})
+
+    content = setup_cfg.read_text()
+    assert 'name = demo' in content
+    assert '[build_ext]' in content
+    assert include in content
