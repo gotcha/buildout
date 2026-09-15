@@ -19,6 +19,7 @@ from zc.buildout.easy_install import (
     _dist_entry_points,
     _dist_info_dirname,
     _editable_scan_result,
+    _fetch_new_dists,
     _fetch_requested_dists,
     _final_dists,
     _find_req_dist,
@@ -1168,3 +1169,126 @@ def test_warn_missing_scripts_renamed_warns_with_target(caplog):
         _warn_missing_scripts({'missing': 'target'}, ['demo'])
     assert ("Could not generate script 'missing' as script 'target' is not "
             'defined in the egg entry points.') in caplog.text
+
+
+def test_fetch_new_dists_requires_a_dest():
+    req = pkg_resources.Requirement.parse('demo')
+    with pytest.raises(zc.buildout.UserError) as exc:
+        _fetch_new_dists(
+            req, _env_dist('1.0'), pkg_resources.WorkingSet([]),
+            None, None, lambda dist, tmp, cache: dist,
+            pkg_resources.Environment([]), lambda: None)
+    assert "We don't have a distribution for demo" in str(exc.value)
+    assert "offline (no-install) mode" in str(exc.value)
+
+
+def test_fetch_new_dists_without_available_raises_missing():
+    req = pkg_resources.Requirement.parse('demo')
+    ws = pkg_resources.WorkingSet([])
+    with pytest.raises(easy_install.MissingDistribution):
+        _fetch_new_dists(
+            req, None, ws, '/dest', None,
+            lambda dist, tmp, cache: dist,
+            pkg_resources.Environment([]), lambda: None)
+
+
+def test_fetch_new_dists_fetches_registers_and_rescans(
+        tmp_path, monkeypatch, caplog):
+    req = pkg_resources.Requirement.parse('demo')
+    avail = _env_dist('1.0')
+    moved = _env_dist('1.0')
+    ws = pkg_resources.WorkingSet([])
+    fetched = []
+    events = []
+    env = pkg_resources.Environment([])
+
+    def fetch(dist, tmp, download_cache):
+        fetched.append((dist, tmp, download_cache))
+        return dist
+
+    def move(dist, dest):
+        events.append(('move', dist, dest))
+        return moved
+
+    def best_match(req_arg, ws_arg):
+        events.append(('best_match', req_arg, ws_arg))
+        return moved
+
+    monkeypatch.setattr(easy_install, '_move_to_eggs_dir_and_compile', move)
+    monkeypatch.setattr(env, 'best_match', best_match)
+
+    with caplog.at_level(logging.INFO, logger='zc.buildout.easy_install'):
+        dists = _fetch_new_dists(
+            req, avail, ws, '/dest', None, fetch, env,
+            lambda: events.append(('rescan',)))
+
+    assert dists == [moved]
+    (dist, tmp, download_cache), = fetched
+    assert dist is avail
+    assert download_cache is None
+    assert not os.path.exists(tmp)  # temporary directory removed
+    assert events == [
+        ('move', avail, '/dest'),
+        ('rescan',),
+        ('best_match', req, ws),
+    ]
+    assert moved in ws
+    assert 'Getting distribution for' in caplog.text
+    assert 'Got demo 1.0.' in caplog.text
+
+
+def test_fetch_new_dists_failed_download_raises(tmp_path, monkeypatch):
+    req = pkg_resources.Requirement.parse('demo')
+    avail = _env_dist('1.0')
+    with pytest.raises(zc.buildout.UserError) as exc:
+        _fetch_new_dists(
+            req, avail, pkg_resources.WorkingSet([]), '/dest', None,
+            lambda dist, tmp, cache: None,
+            pkg_resources.Environment([]), lambda: None)
+    assert "Couldn't download distribution" in str(exc.value)
+
+
+def test_fetch_new_dists_uses_download_cache_as_tmp(tmp_path, monkeypatch):
+    req = pkg_resources.Requirement.parse('demo')
+    avail = _env_dist('1.0')
+    moved = _env_dist('1.0')
+    fetched = []
+    cache = str(tmp_path)
+
+    def fetch(dist, tmp, download_cache):
+        fetched.append((tmp, download_cache))
+        return dist
+
+    monkeypatch.setattr(
+        easy_install, '_move_to_eggs_dir_and_compile',
+        lambda dist, dest: moved)
+
+    dists = _fetch_new_dists(
+        req, avail, pkg_resources.WorkingSet([]), '/dest', cache, fetch,
+        pkg_resources.Environment([]), lambda: None)
+
+    assert dists == [moved]
+    assert fetched == [(cache, cache)]
+    assert os.path.isdir(cache)  # download cache is not removed
+
+
+def test_fetch_new_dists_skips_ws_add_for_present_dist(tmp_path, monkeypatch):
+    req = pkg_resources.Requirement.parse('demo')
+    avail = _env_dist('1.0')
+    moved = _env_dist('1.0')
+    ws = pkg_resources.WorkingSet([])
+    ws.add(moved)
+    added = []
+    monkeypatch.setattr(
+        ws, 'add', lambda dist, replace=False: added.append(dist))
+    monkeypatch.setattr(
+        easy_install, '_move_to_eggs_dir_and_compile',
+        lambda dist, dest: moved)
+
+    dists = _fetch_new_dists(
+        req, avail, ws, '/dest', str(tmp_path),
+        lambda dist, tmp, cache: dist,
+        pkg_resources.Environment([]), lambda: None)
+
+    assert dists == [moved]
+    assert added == []

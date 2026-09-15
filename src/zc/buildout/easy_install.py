@@ -662,6 +662,69 @@ def _best_matching_dist(
     return dist
 
 
+def _fetch_new_dists(
+        requirement: pkg_resources.Requirement,
+        avail: Optional[pkg_resources.Distribution],
+        ws: pkg_resources.WorkingSet,
+        dest: Optional[str],
+        download_cache: Optional[str],
+        fetch: Callable[
+            [pkg_resources.Distribution, str, Optional[str]],
+            Optional[pkg_resources.Distribution]],
+        env: pkg_resources.Environment,
+        rescan_dest: Callable[[], None],
+        ) -> List[Union[pkg_resources.Distribution, pkg_resources.DistInfoDistribution, pkg_resources.EggInfoDistribution]]:
+    """Download, install and register a distribution for ``requirement``.
+
+    Called when no installed dist satisfies the requirement: fetches
+    ``avail`` into the download cache or a fresh temporary directory,
+    moves the result into the eggs destination directory ``dest``, adds
+    it to the working set and rescans the destination.
+    """
+    if dest is None:
+        raise zc.buildout.UserError(
+            "We don't have a distribution for %s\n"
+            "and can't install one in offline (no-install) mode.\n"
+            % requirement)
+
+    logger.info('Getting distribution for %r.', str(requirement))
+
+    if avail is None:
+        # We have no existing dist, and none is available for download.
+        raise MissingDistribution(requirement, ws)
+
+    # We may overwrite distributions, so clear importer
+    # cache.
+    sys.path_importer_cache.clear()
+
+    tmp = download_cache
+    if tmp is None:
+        tmp = tempfile.mkdtemp('get_dist')
+
+    try:
+        dist = fetch(avail, tmp, download_cache)
+
+        if dist is None:
+            raise zc.buildout.UserError(
+                "Couldn't download distribution %s." % avail)
+
+        dists = [_move_to_eggs_dir_and_compile(dist, dest)]
+        for _d in dists:
+            if _d not in ws:
+                ws.add(_d, replace=True)
+
+    finally:
+        if tmp != download_cache:
+            zc.buildout.rmtree.rmtree(tmp)
+
+    rescan_dest()
+    dist = env.best_match(requirement, ws)
+
+    logger.info("Got %s.", dist)
+
+    return dists
+
+
 class Installer(object):
 
     _versions = {}
@@ -926,46 +989,9 @@ class Installer(object):
             dist, avail = self._satisfied(requirement)
 
             if dist is None:
-                if self._dest is None:
-                    raise zc.buildout.UserError(
-                        "We don't have a distribution for %s\n"
-                        "and can't install one in offline (no-install) mode.\n"
-                        % requirement)
-
-                logger.info('Getting distribution for %r.', str(requirement))
-
-                if avail is None:
-                    # We have no existing dist, and none is available for download.
-                    raise MissingDistribution(requirement, ws)
-
-                # We may overwrite distributions, so clear importer
-                # cache.
-                sys.path_importer_cache.clear()
-
-                tmp = self._download_cache
-                if tmp is None:
-                    tmp = tempfile.mkdtemp('get_dist')
-
-                try:
-                    dist = self._fetch(avail, tmp, self._download_cache)
-
-                    if dist is None:
-                        raise zc.buildout.UserError(
-                            "Couldn't download distribution %s." % avail)
-
-                    dists = [_move_to_eggs_dir_and_compile(dist, self._dest)]
-                    for _d in dists:
-                        if _d not in ws:
-                            ws.add(_d, replace=True)
-
-                finally:
-                    if tmp != self._download_cache:
-                        zc.buildout.rmtree.rmtree(tmp)
-
-                self._env_rescan_dest()
-                dist = self._env.best_match(requirement, ws)
-
-                logger.info("Got %s.", dist)
+                dists = _fetch_new_dists(
+                    requirement, avail, ws, self._dest, self._download_cache,
+                    self._fetch, self._env, self._env_rescan_dest)
 
             else:
                 dists = [dist]
