@@ -1,0 +1,37 @@
+name: Windows iteration
+
+# Fast loop for iterating on Windows-only failures: the static trio
+# (ruff, radon, ty) on a Linux runner, then the Windows leg, and nothing
+# else. Dispatch-only — the push gate (run-tests.yml) always runs the
+# full matrix. Usage:
+#   gh workflow run windows-iter.yml --ref <branch>
+
+on:
+  workflow_dispatch:
+
+jobs:
+  static:
+    # The three static gates in one job: a single devenv setup pays for
+    # all of them. Same commands as the ruff/radon/ty jobs in
+    # run-tests.yml, so the iteration loop and the push gate agree.
+    name: static (ruff, radon, ty)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: ./.github/actions/devenv-setup
+      with:
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Run ruff
+      run: devenv shell -- make lint
+    - name: Run complexity gate
+      run: devenv shell -- make complexity
+    - name: Run ty
+      env:
+        PYTHONWARNINGS: ignore
+      run: devenv shell -- make typecheck
+
+  windows:
+    name: Windows
+    needs: static
+    uses: ./.github/workflows/windows.yml
