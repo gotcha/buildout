@@ -48,6 +48,8 @@ NORMALIZERS_EASY_INSTALL = [
     (re.compile(r'pip-\S+-'), 'pip.egg'),
     (re.compile(r'setuptools-\S+-'), 'setuptools.egg'),
     (re.compile(r'zc.buildout-\S+-'), 'zc.buildout.egg'),
+    # uv's console script is uv.exe on Windows; fold argv[0] to bare uv.
+    (re.compile(r'uv\.exe"'), 'uv"'),
     (re.compile(r'pip = \S+'), 'pip = 20.0.0'),
     (re.compile(r'setuptools = \S+'), 'setuptools = 0.7.99'),
     (re.compile(r'File "\S+one.py"'), 'File "one.py"'),
