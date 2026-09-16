@@ -982,35 +982,49 @@ class Installer:
             self._versions = normalize_versions(versions)
 
     def _make_env(self) -> Environment:
-        full_path = self._get_dest_dist_paths() + self._path
+        dist_paths = self._get_dest_dist_paths()
+        full_path = dist_paths + self._path
         env = Environment(full_path)
         # this needs to be called whenever self._env is modified (or we could
         # make an Environment subclass):
-        self._eggify_env_dest_dists(env, self._dest)
+        self._eggify_env_dist_dists(env, dist_paths)
         return env
 
     def _env_rescan_dest(self) -> None:
-        self._env.scan(self._get_dest_dist_paths())
-        self._eggify_env_dest_dists(self._env, self._dest)
+        dist_paths = self._get_dest_dist_paths()
+        self._env.scan(dist_paths)
+        self._eggify_env_dist_dists(self._env, dist_paths)
 
     def _get_dest_dist_paths(self) -> list[str]:
         dest = self._dest
         if dest is None:
-            return []
+            # Offline mode: there is no destination directory, but the
+            # eggs directory is on the path.  A plain Environment scan
+            # of it only recognizes the classic EGG-INFO layout, while
+            # wheels installed by pip or uv keep their dist-info inside
+            # the .egg directory.  Find those explicitly so offline
+            # runs can reuse what is already installed.
+            return list(set(
+                os.path.dirname(dist_info)
+                for entry in self._path
+                for dist_info in glob.glob(
+                    os.path.join(entry, '*.egg', '*.dist-info'))))
         eggs = glob.glob(os.path.join(dest, '*.egg'))
         dists = [os.path.dirname(dist_info) for dist_info in
                  glob.glob(os.path.join(dest, '*', '*.dist-info'))]
         return list(set(eggs + dists))
 
     @staticmethod
-    def _eggify_env_dest_dists(env: Environment, dest: str | None) -> None:
+    def _eggify_env_dist_dists(
+            env: Environment, dist_paths: list[str]) -> None:
         """
-        Make sure everything found under `dest` is seen as an egg, even if it's
-        some other kind of dist.
+        Make sure everything found at `dist_paths` is seen as an egg, even if
+        it's some other kind of dist.
         """
+        containers = {os.path.dirname(path) for path in dist_paths}
         for project_name in env:
             for dist in env[project_name]:
-                if os.path.dirname(_dist_location(dist)) == dest:
+                if os.path.dirname(_dist_location(dist)) in containers:
                     dist.precedence = pkg_resources.EGG_DIST
 
     def _version_conflict_information(self, name: str) -> str:
