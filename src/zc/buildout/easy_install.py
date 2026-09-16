@@ -1148,9 +1148,14 @@ class Installer:
 
     def _obtain(self, requirement: pkg_resources.Requirement, source: int | None=None) -> pkg_resources.Distribution | None:
         if self._installer == 'uv':
+            # An unset index means the default, the same fallback
+            # _get_index applies for the pip index.  The class attribute
+            # can hold the empty string here: the buildout entry point
+            # forwards the unset option verbatim.
+            index_url = self._index_url or default_index_url
             dists = _uv_available_dists(
                 requirement, source, self._versions, self._links,
-                self._index_url, self._prefer_final)
+                index_url, self._prefer_final)
         else:
             dists = _available_dists(self._index, requirement, source)
         if dists is None:
