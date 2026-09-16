@@ -2630,6 +2630,18 @@ def _open(
 
 ignore_directories = '.svn', 'CVS', '__pycache__', '.git'
 _dir_hashes = {}
+def _dir_hash_file_ignored(name: str) -> bool:
+    """Files _dir_hash must not see.
+
+    pyc/pyo are interpreter caches. SOURCES.txt is setuptools' sdist
+    manifest: any packaging run on the source tree (python -m build,
+    setup.py sdist) regenerates it with varying content while the
+    installed dist is unchanged, so hashing it flips develop-dist
+    signatures and forces spurious part reinstalls.
+    """
+    return name.endswith(('pyc', 'pyo')) or name == 'SOURCES.txt'
+
+
 def _dir_hash(dir: str) -> str:
     dir_hash = _dir_hashes.get(dir, None)
     if dir_hash is not None:
@@ -2638,7 +2650,7 @@ def _dir_hash(dir: str) -> str:
     for (dirpath, dirnames, filenames) in os.walk(dir):
         dirnames[:] = sorted(n for n in dirnames if n not in ignore_directories)
         filenames[:] = sorted(f for f in filenames
-                              if (not (f.endswith(('pyc', 'pyo')))
+                              if (not _dir_hash_file_ignored(f)
                                   and os.path.exists(os.path.join(dirpath, f)))
                           )
         for_hash = ' '.join(dirnames + filenames)

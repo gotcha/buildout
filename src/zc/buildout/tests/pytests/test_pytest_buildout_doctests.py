@@ -813,6 +813,30 @@ def test_unicode_filename_doesnt_break_hash(easy_install_env):
     from zc.buildout.buildout import _dir_hash
     _ = _dir_hash('héhé')
 
+
+def test_dir_hash_ignores_sources_txt(easy_install_env):
+    mkdir = easy_install_env['mkdir']
+    write = easy_install_env['write']
+
+    # SOURCES.txt is setuptools' sdist manifest: regenerated with varying
+    # content by any packaging run on the source tree, it must not move the
+    # hash. Otherwise packaging between two buildout runs flips develop-dist
+    # recipe signatures and forces spurious Uninstalling/Installing of parts
+    # (CI flake: test_dependencylinks_option under coverage-pytest).
+    from zc.buildout.buildout import _dir_hash, _dir_hashes
+    mkdir('pkg')
+    write('pkg', 'mod.py', "x = 1\n")
+    before = _dir_hash('pkg')
+    _dir_hashes.clear()
+    write('pkg', 'SOURCES.txt', "mod.py\n")
+    assert _dir_hash('pkg') == before
+    _dir_hashes.clear()
+    write('pkg', 'SOURCES.txt', "mod.py\nother.py\n")
+    assert _dir_hash('pkg') == before
+    _dir_hashes.clear()
+    write('pkg', 'other.py', "y = 2\n")
+    assert _dir_hash('pkg') != before
+
 def test_o_option_sets_offline(easy_install_env):
     join = easy_install_env['join']
     sample_buildout = easy_install_env['sample_buildout']
