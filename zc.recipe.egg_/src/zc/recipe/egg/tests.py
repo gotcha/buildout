@@ -115,6 +115,7 @@ def test_suite():
                     zc.buildout.testing.pkg_resources_deprecated,
                     zc.buildout.testing.warnings_warn,
                     zc.buildout.testing.ignore_root_logger,
+                    zc.buildout.testing.drop_build_output_relayed_by_pip,
                     (re.compile("(d  ((ext)?demo(needed)?|other)"
                                 r"-\d[.]\d-py)\d[.]\d{1,2}(-\S+)?[.]egg"),
                      '\\1V.V.egg'),

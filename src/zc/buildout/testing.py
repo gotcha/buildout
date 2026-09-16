@@ -246,13 +246,20 @@ class Buildout(zc.buildout.buildout.Buildout):
     Options = TestOptions
 
 def hermetic_pip_env():
-    """Cut test-spawned pips off from any package index.
+    """Cut test-spawned package installers off from any package index.
 
-    The pips the suites spawn (build isolation on sdist and editable
-    installs, ``python -m build``) resolve their build requirements
-    (setuptools, wheel) from the ambient index otherwise. With no index
-    allowed and the wheels seeded by prepare.sh in downloads/test-seed
-    as find-links, suite runs need no network index at all.
+    The installers the suites spawn (pip or uv, for build isolation on
+    sdist and editable installs, ``python -m build``) resolve their build
+    requirements (setuptools, wheel) from the ambient index otherwise.
+    With no index allowed and the wheels seeded by prepare.sh in
+    downloads/test-seed as find-links, suite runs need no network index
+    at all.
+
+    uv specifics: uv reads no ``UV_NO_INDEX`` variable, so hermeticity
+    goes through ``UV_OFFLINE`` (find-links stay readable offline); and
+    uv's cache holds symlinked wheel entries that the doctest teardown
+    (``zope.testing.setupstack.rmtree``) cannot remove, so the cache is
+    redirected to a dedicated directory that ``restore`` deletes.
 
     Returns a callable restoring the previous environment, or None when
     the seed directory is absent (tests run without prepare.sh): the
@@ -264,9 +271,14 @@ def hermetic_pip_env():
     if not os.path.isdir(seed):
         return None
     old = {name: os.environ.get(name)
-           for name in ('PIP_NO_INDEX', 'PIP_FIND_LINKS')}
+           for name in ('PIP_NO_INDEX', 'PIP_FIND_LINKS',
+                        'UV_OFFLINE', 'UV_FIND_LINKS', 'UV_CACHE_DIR')}
     os.environ['PIP_NO_INDEX'] = '1'
     os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
+    os.environ['UV_OFFLINE'] = '1'
+    os.environ['UV_FIND_LINKS'] = os.path.abspath(seed)
+    uv_cache = tempfile.mkdtemp('uv-cache')
+    os.environ['UV_CACHE_DIR'] = uv_cache
 
     def restore():
         for name, value in old.items():
@@ -274,6 +286,7 @@ def hermetic_pip_env():
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
+        rmtree(uv_cache)
 
     return restore
 
@@ -623,6 +636,21 @@ normalize_path = (
     )
 
 normalize_endings = re.compile('\r\n'), '\n'
+
+def drop_build_output_relayed_by_pip(text):
+    """Drop lines that only appear because pip relays build subprocess output.
+
+    pip relays the stdout of the sdist builds it spawns; uv does not.
+    Expectations pinning such lines (the extdemo setup.py printing the
+    environment it sees) cannot hold under ``installer = uv``. Dropping
+    them there keeps the rest of the transcript strictly checked; the
+    environment propagation itself is still proven by the egg building
+    successfully. Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return re.sub(
+        r'.*Have environment test_environment_variable:.*\n', '', text)
 
 normalize_script = (
     re.compile('(\n?)-  ([a-zA-Z_.-]+)-script.py\n-  \\2.exe\n'),

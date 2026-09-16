@@ -27,6 +27,13 @@ test-recipe: bin/test
 test-small: bin/test
 	$(HERMETIC_ENV) PYTHONWARNINGS=ignore bin/test -pvc -t buildout.txt
 
+# Second legacy-suite run with the uv pipeline: buildout_testing_installer
+# is read by easy_install as the default for the [buildout] installer
+# option and propagates into every spawned bin/buildout child, so the
+# untouched corpus exercises uv instead of pip.
+test-uv: bin/test
+	$(HERMETIC_ENV) PYTHONWARNINGS=ignore buildout_testing_installer=uv bin/test -pvc
+
 # Coverage variants of both suites. etc/coverage/sitecustomize.py on
 # PYTHONPATH starts coverage in the suite process itself and in every
 # spawned Python subprocess (bin/buildout drives, pip installs, xdist

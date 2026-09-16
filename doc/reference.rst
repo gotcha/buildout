@@ -438,6 +438,18 @@ installed, default: '.installed.cfg'
   If this is a relative path, then it's interpreted relative to the
   buildout directory.
 
+installer, default: 'pip'
+  The installer used for package installation.
+
+  With the default value ``pip``, packages are installed by running
+  ``pip install`` in a subprocess.  With ``uv``, packages are installed
+  by running ``uv pip install`` instead.  This applies to all installs
+  buildout performs, including sources listed in the ``develop``
+  option.
+
+  Requires the ``uv`` executable to be available, which it normally is
+  because ``uv`` is a declared dependency of zc.buildout.
+
 log-format, default: ''
   `Format
   <https://docs.python.org/3/library/logging.html#formatter-objects>`_

@@ -85,6 +85,10 @@ default_index_url = os.environ.get(
     'buildout_testing_index_url',
     'https://pypi.org/simple',
     )
+default_installer = os.environ.get(
+    'buildout_testing_installer',
+    'pip',
+    )
 
 logger = logging.getLogger('zc.buildout.easy_install')
 macosVersionString = re.compile(r"macosx-(\d+)\.(\d+)-(.*)")
@@ -815,6 +819,7 @@ class Installer:
     _allow_unknown_extras = False
     _namespace_packages: ClassVar[dict] = {}
     _index_url = None
+    _installer = default_installer
 
     def __init__(self,
                  dest: str | None=None,
@@ -1351,6 +1356,16 @@ def index_url(setting: str | None=None) -> str | None:
     old = Installer._index_url
     if setting is not None:
         Installer._index_url = setting
+    return old
+
+def installer(setting: str | None=None) -> str:
+    old = Installer._installer
+    if setting is not None:
+        if setting not in ('pip', 'uv'):
+            raise zc.buildout.UserError(
+                f"Invalid value for 'installer' option: {setting!r}."
+                " Valid values are 'pip' and 'uv'.")
+        Installer._installer = setting
     return old
 
 def allow_picked_versions(setting: bool | None=None) -> bool:
@@ -2242,36 +2257,41 @@ def _is_url(value: str) -> bool:
     return len(urllib.parse.urlsplit(value).scheme) > 1
 
 
+def _extra_index_url(package_index_url: str | None) -> str | None:
+    """Return the configured package index as an installer-usable URL.
+
+    pip 25+ and uv do not accept a bare directory as index, which
+    buildout does support, so a scheme-less value is converted to a
+    ``file://`` URI when the directory exists and dropped otherwise.
+    """
+    if not package_index_url:
+        return None
+    if _is_url(package_index_url):
+        return package_index_url
+    index_path = Path(package_index_url)
+    if index_path.exists():
+        return index_path.expanduser().resolve().as_uri()
+    return None
+
+
 def _pip_install_args(spec: str, dest: str, editable: bool,
                       package_index_url: str | None,
                       log_level: int) -> list[str]:
     """Assemble the ``pip install`` argument list for ``call_pip_install``.
 
-    ``package_index_url`` is the configured package index. pip 25+ does
-    not accept a bare directory as index, which buildout does support, so
-    a scheme-less value is converted to a ``file://`` URI when the
-    directory exists and dropped otherwise. ``log_level`` selects the pip
-    verbosity flag.
+    ``package_index_url`` is the configured package index, normalized by
+    ``_extra_index_url``. ``log_level`` selects the pip verbosity flag.
     """
     args = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', dest]
-    if package_index_url:
-        url: str | None = package_index_url
-        if not _is_url(url):
-            # pip 25+ does not accept a directory as index, which buildout
-            # does support.
-            index_path = Path(url)
-            if index_path.exists():
-                url = index_path.expanduser().resolve().as_uri()
-            else:
-                url = None
-        if url:
-            # We could pass the index in the '--index-url' parameter.
-            # But then some of our tests start failing when we pass an index
-            # with only a few zc.buildout distributions.  Reason is that pip
-            # will try to find setuptools there as well, as this is needed as
-            # build-system for most packages.  And this fails.
-            # So we pass the index as *extra* url.
-            args.extend(["--extra-index-url", url])
+    url = _extra_index_url(package_index_url)
+    if url:
+        # We could pass the index in the '--index-url' parameter.
+        # But then some of our tests start failing when we pass an index
+        # with only a few zc.buildout distributions.  Reason is that pip
+        # will try to find setuptools there as well, as this is needed as
+        # build-system for most packages.  And this fails.
+        # So we pass the index as *extra* url.
+        args.extend(["--extra-index-url", url])
     if log_level >= logging.INFO:
         args.append('-q')
     else:
@@ -2282,11 +2302,69 @@ def _pip_install_args(spec: str, dest: str, editable: bool,
     return args
 
 
+def _uv_sibling_executable() -> str | None:
+    """A ``uv`` executable next to ``sys.executable``, when one is there."""
+    candidate = os.path.join(os.path.dirname(sys.executable), 'uv')
+    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+        return candidate
+    return None
+
+
+def _uv_executable() -> str:
+    """Resolve the ``uv`` binary, on PATH or next to ``sys.executable``."""
+    uv = shutil.which('uv') or _uv_sibling_executable()
+    if uv is None:
+        raise zc.buildout.UserError(
+            "The 'installer' option is set to 'uv', but no 'uv' executable"
+            " was found on PATH or next to the Python executable"
+            f" ({sys.executable}).")
+    return uv
+
+
+def _uv_install_args(uv: str, spec: str, dest: str, editable: bool,
+                     package_index_url: str | None,
+                     log_level: int) -> list[str]:
+    """Assemble the ``uv pip install`` argument list for ``call_pip_install``.
+
+    Mirrors ``_pip_install_args`` (same verbosity selection and index
+    handling), but uv is a standalone binary: it installs for the
+    interpreter named by ``--python`` and has no pip-style
+    ``--no-python-version-warning`` flag to add.
+    """
+    args = [uv, 'pip', 'install', '--no-deps', '-t', dest,
+            '--python', sys.executable]
+    if log_level >= logging.INFO:
+        args.append('-q')
+    else:
+        args.append('-v')
+    url = _extra_index_url(package_index_url)
+    if url:
+        # Passed as *extra* url for the same reason as in
+        # _pip_install_args.
+        args.extend(['--extra-index-url', url])
+    if editable:
+        args.append('-e')
+    args.append(spec)
+    return args
+
+
+def _pip_install_env() -> dict[str, str]:
+    """Subprocess environment for ``python -m pip``.
+
+    ``pip_path`` goes on PYTHONPATH so the subprocess can import pip.
+    """
+    env = os.environ.copy()
+    python_path = pip_path[:]
+    python_path.append(env.get('PYTHONPATH', ''))
+    env['PYTHONPATH'] = os.pathsep.join(python_path)
+    return env
+
+
 def _run_pip(args: list[str], env: dict[str, str], dest: str, level: int) -> str:
     """Run ``pip install`` and return its output, with debug logging."""
     if level <= logging.DEBUG:
-        logger.debug('Running pip install:\n"%s"\npath=%s\n',
-                        '" "'.join(args), pip_path)
+        logger.debug('Running pip install:\n"%s"\nPYTHONPATH=%s\n',
+                        '" "'.join(args), env.get('PYTHONPATH', ''))
 
     sys.stdout.flush() # We want any pending output first
 
@@ -2416,20 +2494,25 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> str | list[s
     Call `pip install` from a subprocess to install a
     distribution specified by `spec` into `dest`.
 
+    When the `installer` option is 'uv', the subprocess is a
+    `uv pip install` invocation instead of `python -m pip`.
+
     For normal (non-editable) installs, returns all the paths inside `dest`
     created by the above.  For editable installs, it returns the package name.
     These very different return values may seem strange, but it is because
     what needs to happen afterwards is very different for the two cases.
     """
     level = logger.getEffectiveLevel()
-    args = _pip_install_args(spec, dest, editable, index_url(), level)
+    if installer() == 'uv':
+        args = _uv_install_args(
+            _uv_executable(), spec, dest, editable, index_url(), level)
+        env = os.environ.copy()
+    else:
+        args = _pip_install_args(spec, dest, editable, index_url(), level)
 
-    _maybe_add_no_python_version_warning(args)
+        _maybe_add_no_python_version_warning(args)
 
-    env = os.environ.copy()
-    python_path = pip_path[:]
-    python_path.append(env.get('PYTHONPATH', ''))
-    env['PYTHONPATH'] = os.pathsep.join(python_path)
+        env = _pip_install_env()
 
     _run_pip(args, env, dest, level)
 

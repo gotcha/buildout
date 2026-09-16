@@ -179,10 +179,12 @@ def reset_easy_install_globals():
     import zc.buildout.easy_install as _ei
     old_prefer_final = _ei.Installer._prefer_final
     old_dep_links = _ei.Installer._use_dependency_links
+    old_installer = _ei.Installer._installer
     old_tempdir = tempfile.tempdir
     yield
     _ei.Installer._prefer_final = old_prefer_final
     _ei.Installer._use_dependency_links = old_dep_links
+    _ei.Installer._installer = old_installer
     tempfile.tempdir = old_tempdir
 
 
