@@ -3692,6 +3692,7 @@ def test_suite():
             tearDown=zc.buildout.testing.buildoutTearDown,
             optionflags=doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS,
             checker=renormalizing.RENormalizing([
+              zc.buildout.testing.drop_uv_download_cache_deprecation,
               zc.buildout.testing.normalize_exception_type_for_python_2_and_3,
               zc.buildout.testing.not_found,
               zc.buildout.testing.adding_find_link,
