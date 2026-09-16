@@ -146,6 +146,16 @@ setup(name='envprobe', version='0.1', py_modules=['envprobe'])
     assert any(entry.startswith('envprobe-0.1-') for entry in entries), entries
 
 
+def test_uv_debug_line_matches_uv_exe_argv0_on_windows():
+    # The spawned buildout prints the resolved uv path as argv[0]; pip
+    # lays the console script down as uv.exe on Windows.
+    actual = (
+        'Running pip install:\n'
+        '"D:/a/buildout/venvs/python/Scripts/uv.exe" "pip" "install"'
+        ' "--no-deps" "--python" "python3.exe" "-v" "pkg"\n')
+    assert_output(actual, 'Running pip install:\n' + UV_DEBUG_LINE, N)
+
+
 def test_installer_rejects_invalid_value(easy_install_env):
     buildout = easy_install_env['buildout']
     link_server = easy_install_env['link_server']
