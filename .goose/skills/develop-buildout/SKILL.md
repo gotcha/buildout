@@ -38,6 +38,30 @@ contributor doc: `doc/ADD-A-NEWS-ITEM.rst`.
 - Classify honestly: new user-visible capability → `feature`; wrong or
   confusing existing behavior made right → `bugfix`.
 
+## Deprecations mark their tests
+
+Deprecating a feature deprecates the tests that pin it. Mark both at
+the same time or the corpus rots silently: relaxed expectations look
+like accidents, and removal day has no handle on what to delete.
+
+The convention is one tag, two placements.
+
+1. A prose note at the top of every doctest file whose subject is
+   deprecated, stating what replaces the feature, that the file's
+   expectations describe the non-deprecated mode, and where the new
+   behavior is asserted instead. See `src/zc/buildout/tests/
+   downloadcache.txt` for the shape.
+2. The literal tag `uv-deprecated` at every touched site: section
+   headers of deprecated regions, comments on mode-conditional doctest
+   guards, docstrings of mode-conditional normalizers in
+   `src/zc/buildout/testing.py`, and the news fragment. Removal day
+   runs `grep -rn uv-deprecated` and gets the exact list of files,
+   guards, and normalizers to delete.
+
+(The tag says `uv-` because the convention arrived with the
+uv-installer deprecations; reuse the literal string for any later
+deprecation so the grep stays single.)
+
 ## Linear history (rebase + fast-forward)
 
 Integration here is rebase-based. Merge commits in a topic stack are a

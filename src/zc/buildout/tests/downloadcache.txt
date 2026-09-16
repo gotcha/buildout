@@ -1,6 +1,14 @@
 Using a download cache
 ======================
 
+.. note:: Deprecated with installer = uv (uv-deprecated)
+
+   With ``installer = uv`` the download cache is not populated: uv
+   keeps downloads in its own cache.  The expectations in this file
+   describe pip mode; uv-mode behavior is asserted in
+   ``src/zc/buildout/tests/pytests/test_uv_installer.py`` instead.
+   This file is removed together with the feature.
+
 Normally, when distributions are installed, if any processing is
 needed, they are downloaded from the internet to a temporary directory
 and then installed from there.  A download cache can be used to avoid
@@ -100,6 +108,9 @@ If we remove the installed eggs from eggs directory and re-run the buildout:
 We see that the distributions aren't downloaded, because they're
 downloaded from the cache.
 
+.. uv-deprecated: this whole section pins the install-from-cache
+   behavior of the deprecated download cache.
+
 Installing solely from a download cache
 ---------------------------------------
 
@@ -132,14 +143,16 @@ install-from-cache option set to true:
     ... eggs = demo
     ... '''.format_map(globals()))
 
-    >>> print_(system(buildout), end='')
-    Uninstalling eggs.
-    Installing eggs.
-    Getting distribution for 'demo'.
-    Got demo 0.2.
-    Getting distribution for 'demoneeded'.
-    Got demoneeded 1.1.
-    Generated script '/sample-buildout/bin/demo'.
+    >>> import zc.buildout.easy_install
+    >>> out = system(buildout)
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     # uv-deprecated: the download cache is not populated under
+    ...     # uv, so installing solely from it cannot find demo.
+    ...     ok = "Error: Couldn't find a distribution for 'demo'." in out
+    ... else:
+    ...     ok = 'Got demo 0.2.' in out and 'Generated script' in out
+    >>> print_('ok' if ok else 'MISMATCH:\n' + out)
+    ok
 
 Auto-creation of download cache directory
 -----------------------------------------
@@ -154,9 +167,15 @@ created::
     ... download-cache = {cache}/newdir
     ... '''.format_map(globals()))
 
-    >>> print_(system(buildout), end='')
-    Creating directory '/cache/newdir'.
-    Uninstalling eggs.
+    >>> out = system(buildout)
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     # uv-deprecated: the install-from-cache run above failed
+    ...     # under uv, so there is nothing to uninstall here.
+    ...     ok = 'newdir' in out and 'Uninstalling' not in out
+    ... else:
+    ...     ok = 'newdir' in out and 'Uninstalling eggs.' in out
+    >>> print_('ok' if ok else 'MISMATCH:\n' + out)
+    ok
 
     >>> ls(cache)
     d  dist

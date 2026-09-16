@@ -1494,6 +1494,9 @@ from the link server:
 Normally, the download cache is the preferred source of downloads, but
 not the only one.
 
+.. uv-deprecated: this whole section pins the install-from-cache
+   behavior of the deprecated download cache.
+
 Installing solely from a download cache
 ---------------------------------------
 
@@ -1527,13 +1530,30 @@ recreate the destination directory, and reinstall demo:
     >>> remove(dest)
     >>> dest = tmpdir('sample-install')
 
-    >>> ws = zc.buildout.easy_install.install(
-    ...     ['demo'], dest,
-    ...     links=[link_server], index=link_server+'index/')
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     # uv-deprecated: uv does not populate the download cache,
+    ...     # so installing solely from it finds nothing.
+    ...     try:
+    ...         zc.buildout.easy_install.install(
+    ...             ['demo'], dest,
+    ...             links=[link_server], index=link_server+'index/')
+    ...     except zc.buildout.easy_install.MissingDistribution:
+    ...         pass
+    ...     else:
+    ...         raise AssertionError(
+    ...             'demo installed from an unpopulated download cache')
+    ... else:
+    ...     ws = zc.buildout.easy_install.install(
+    ...         ['demo'], dest,
+    ...         links=[link_server], index=link_server+'index/')
 
-    >>> ls(dest)
-    d  demo-0.2-py2.4.egg
-    d  demoneeded-1.1-py2.4.egg
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     ok = os.listdir(dest) == []
+    ... else:
+    ...     ok = ([d.split('-py')[0] for d in sorted(os.listdir(dest))]
+    ...           == ['demo-0.2', 'demoneeded-1.1'])
+    >>> print_('ok' if ok else 'MISMATCH: %r' % os.listdir(dest))
+    ok
 
 This time, we didn't download from or even query the link server.
 
