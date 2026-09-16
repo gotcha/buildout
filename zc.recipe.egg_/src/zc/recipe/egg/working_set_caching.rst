@@ -27,7 +27,7 @@ Here's an example:
     ...     distributions=['zc.recipe.egg', 'demo<0.3'],
     ...     eggs_dir=eggs_dir,
     ...     develop_eggs_dir=develop_eggs_dir,
-    ...     index=link_server,
+    ...     links=[link_server],
     ... )
     Getting...
     >>> isinstance(ws, pkg_resources.WorkingSet)

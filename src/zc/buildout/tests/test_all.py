@@ -695,6 +695,9 @@ uninstalling anything because the configuration hasn't changed.
 
 def finding_eggs_as_local_directories():
     r"""
+.. uv-deprecated: skipped when installer = uv; installing unzipped
+   eggs is an egg-only scenario that uv does not support.
+
 It is possible to set up find-links so that we could install from
 a local directory that may contained unzipped eggs.
 
@@ -937,6 +940,9 @@ All gone
 
 def add_setuptools_to_dependencies_when_namespace_packages():
     '''
+.. uv-deprecated: skipped when installer = uv; the scenarios below
+   install zipped and unzipped eggs, which uv does not support.
+
 Often, a package depends on setuptools solely by virtue of using
 namespace packages. In this situation, package authors often forget to
 declare setuptools as a dependency. This is a mistake, but,
@@ -1444,7 +1450,7 @@ Let's create a recipe egg
 
     >>> write('recipe', 'README', '')
 
-    >>> print_(system(buildout+' setup recipe bdist_egg')) # doctest: +ELLIPSIS
+    >>> print_(system(buildout+' setup recipe bdist_wheel')) # doctest: +ELLIPSIS
     Running setup script 'recipe/setup.py'.
     ...
 
@@ -1490,7 +1496,7 @@ Now, if we update the recipe egg:
     ... ''')
 
 
-    >>> print_(system(buildout+' setup recipe bdist_egg')) # doctest: +ELLIPSIS
+    >>> print_(system(buildout+' setup recipe bdist_wheel')) # doctest: +ELLIPSIS
     Running setup script 'recipe/setup.py'.
     ...
 
@@ -2346,7 +2352,7 @@ We'll create a wacky buildout extension that just announces itself when used:
     ...             },
     ...       )
     ... ''')
-    >>> print_(system(buildout+' setup '+src+' bdist_egg'), end='')
+    >>> print_(system(buildout+' setup '+src+' bdist_wheel'), end='')
     ... # doctest: +ELLIPSIS
     Running setup ...
     creating 'dist/wackyextension-1-...
@@ -2385,7 +2391,7 @@ need to make it to the download cache.
     ... setup(name='foo')
     ... ''')
 
-    >>> print_(system(buildout+' setup test bdist_egg')) # doctest: +ELLIPSIS
+    >>> print_(system(buildout+' setup test bdist_wheel')) # doctest: +ELLIPSIS
     Running setup script 'test/setup.py'.
     ...
 
@@ -2396,8 +2402,17 @@ need to make it to the download cache.
     ...          links=[join('test', 'dist')])) # doctest: +ELLIPSIS
     [foo 0.0.0 ...
 
-    >>> ls('cache')
-    -  foo-0.0.0-py2.4.egg
+    >>> # uv-deprecated: with installer = uv the download cache is not
+    >>> # populated; uv keeps downloads in its own cache.
+    >>> cached = os.listdir('cache')
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     ok = cached == []
+    ... else:
+    ...     ok = (len(cached) == 1
+    ...           and cached[0].startswith('foo-0.0.0-')
+    ...           and cached[0].endswith('.whl'))
+    >>> print_('ok' if ok else 'MISMATCH: %r' % cached)
+    ok
 
     >>> _ = zc.buildout.easy_install.download_cache(old_cache)
 
@@ -2766,7 +2781,7 @@ honoring our version specification.
     ... allow-picked-versions = false
     ...
     ... [versions]
-    ... wtf = {wtf}
+    ... {wtf}
     ... foo = 1
     ...
     ... [foo]
@@ -3838,6 +3853,25 @@ def test_suite():
                 ])
             )
         )
+
+    if zc.buildout.easy_install.installer() == 'uv':
+        # uv-deprecated: these doctests exercise egg-only scenarios:
+        # installing zipped or unzipped eggs and using them as
+        # find-links entries.  uv cannot read eggs; the seam raises a
+        # user-facing error instead (tests/pytests/test_uv_resolve.py).
+        # Remove together with the egg-only code paths.
+        egg_only_tests = {
+            'zc.buildout.tests.test_all.'
+            'add_setuptools_to_dependencies_when_namespace_packages',
+            'zc.buildout.tests.test_all.finding_eggs_as_local_directories',
+        }
+        test_suite = [
+            unittest.TestSuite(
+                test for test in suite
+                if not (isinstance(test, doctest.DocTestCase)
+                        and test.id() in egg_only_tests))
+            for suite in test_suite
+        ]
 
     docdir = os.path.join(ancestor(__file__, 5), 'doc')
     if os.path.exists(docdir) and not sys.platform.startswith('win'):

@@ -45,7 +45,7 @@ can't delete.
 
     >>> write('recipe', 'README', '')
 
-    >>> print_(system(buildout+' setup recipe bdist_egg')) # doctest: +ELLIPSIS
+    >>> print_(system(buildout+' setup recipe bdist_wheel')) # doctest: +ELLIPSIS
     Running setup script 'recipe/setup.py'.
     ...
 

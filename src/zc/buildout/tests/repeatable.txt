@@ -41,7 +41,7 @@ To see how this works, we'll create two versions of a recipe egg:
 
     >>> write('recipe', 'README', '')
 
-    >>> print_(system(buildout+' setup recipe bdist_egg')) # doctest: +ELLIPSIS
+    >>> print_(system(buildout+' setup recipe bdist_wheel')) # doctest: +ELLIPSIS
     Running setup script 'recipe/setup.py'.
     ...
 
@@ -68,7 +68,7 @@ To see how this works, we'll create two versions of a recipe egg:
     ... ''')
 
 
-    >>> print_(system(buildout+' setup recipe bdist_egg')) # doctest: +ELLIPSIS
+    >>> print_(system(buildout+' setup recipe bdist_wheel')) # doctest: +ELLIPSIS
     Running setup script 'recipe/setup.py'.
     ...
 
@@ -126,7 +126,11 @@ Running the buildout in verbose mode will help us get information
 about versions used. If we run the buildout in verbose mode without
 specifying a versions section:
 
-    >>> print_(system(buildout+' buildout:versions= -v'), end='')
+    >>> out = system(buildout+' buildout:versions= -v')
+    >>> # In uv mode, each resolve logs a "Using uv ..." line that pip
+    >>> # mode never produces; drop it to keep a single transcript.
+    >>> print_('\n'.join(l for l in out.splitlines()
+    ...                  if not l.startswith('Using uv')))
     Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
     ...
     Installing 'spam'.
