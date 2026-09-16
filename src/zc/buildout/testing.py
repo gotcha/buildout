@@ -255,9 +255,14 @@ def hermetic_pip_env():
     downloads/test-seed as find-links, suite runs need no network index
     at all.
 
-    uv specifics: uv reads no ``UV_NO_INDEX`` variable, so hermeticity
-    goes through ``UV_OFFLINE`` (find-links stay readable offline); and
-    uv's cache holds symlinked wheel entries that the doctest teardown
+    uv specifics: uv reads no ``UV_NO_INDEX`` variable, and
+    ``UV_OFFLINE`` cannot be used either: it blocks the localhost link
+    server the corpus discovers packages through once uv does the
+    resolving (``installer = uv``).  So hermeticity goes through a dead
+    ``UV_INDEX_URL``: a ``file://`` path that does not exist fails
+    instantly, never reaches the network, and find-links (the seed and
+    the link server) stay usable.  Separately, uv's cache holds
+    symlinked wheel entries that the doctest teardown
     (``zope.testing.setupstack.rmtree``) cannot remove, so the cache is
     redirected to a dedicated directory that ``restore`` deletes.
 
@@ -272,10 +277,10 @@ def hermetic_pip_env():
         return None
     old = {name: os.environ.get(name)
            for name in ('PIP_NO_INDEX', 'PIP_FIND_LINKS',
-                        'UV_OFFLINE', 'UV_FIND_LINKS', 'UV_CACHE_DIR')}
+                        'UV_INDEX_URL', 'UV_FIND_LINKS', 'UV_CACHE_DIR')}
     os.environ['PIP_NO_INDEX'] = '1'
     os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
-    os.environ['UV_OFFLINE'] = '1'
+    os.environ['UV_INDEX_URL'] = 'file:///nonexistent-hermetic-index'
     os.environ['UV_FIND_LINKS'] = os.path.abspath(seed)
     uv_cache = tempfile.mkdtemp('uv-cache')
     os.environ['UV_CACHE_DIR'] = uv_cache
@@ -466,6 +471,13 @@ class Handler(BaseHTTPRequestHandler):
             self.__server.__log = False
             return k()
 
+        self._respond(head_only=False)
+
+    def do_HEAD(self):
+        # uv issues HEAD for artifact metadata before downloading.
+        self._respond(head_only=True)
+
+    def _respond(self, head_only):
         path = os.path.abspath(os.path.join(self.tree, *self.path.split('/')))
         if not (
             ((path == self.tree) or path.startswith(self.tree+os.path.sep))
@@ -479,7 +491,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(out)))
             self.send_header('Content-Type', 'text/html')
             self.end_headers()
-            self.wfile.write(out)
+            if not head_only:
+                self.wfile.write(out)
             return
 
         self.send_response(200)
@@ -495,9 +508,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(out)))
             self.send_header('Content-Type', 'text/html')
         else:
-            with open(path, 'rb') as f:
-                out = f.read()
-            self.send_header('Content-Length', str(len(out)))
+            if head_only:
+                out = b''
+                size = os.path.getsize(path)
+            else:
+                with open(path, 'rb') as f:
+                    out = f.read()
+                size = len(out)
+            self.send_header('Content-Length', str(size))
             if path.endswith('.egg'):
                 self.send_header('Content-Type', 'application/zip')
             elif path.endswith(('.gz', '.zip')):
@@ -509,7 +527,8 @@ class Handler(BaseHTTPRequestHandler):
 
         self.end_headers()
 
-        self.wfile.write(out)
+        if not head_only:
+            self.wfile.write(out)
 
     def log_request(self, code='-', size='-'):
         # size is accepted for signature compatibility with

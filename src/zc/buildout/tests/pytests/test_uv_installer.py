@@ -224,7 +224,14 @@ def test_hermetic_env_covers_uv_and_cleans_its_cache():
     if restore is None:
         pytest.skip('downloads/test-seed absent (no prepare.sh run)')
     try:
-        assert os.environ['UV_OFFLINE'] == '1'
+        # uv honors no UV_NO_INDEX, and UV_OFFLINE would block the
+        # corpus's localhost link server once uv does the resolving, so
+        # hermeticity comes from a dead file: index URL.
+        assert os.environ['UV_INDEX_URL'] == (
+            'file:///nonexistent-hermetic-index')
+        # Not 'not in': an ambient UV_OFFLINE is the caller's own
+        # business, the harness just must not force it.
+        assert os.environ.get('UV_OFFLINE') != '1'
         assert os.environ['UV_FIND_LINKS'].endswith(
             os.path.join('downloads', 'test-seed'))
         cache = os.environ['UV_CACHE_DIR']
