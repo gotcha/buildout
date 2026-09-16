@@ -2303,10 +2303,18 @@ def _pip_install_args(spec: str, dest: str, editable: bool,
 
 
 def _uv_sibling_executable() -> str | None:
-    """A ``uv`` executable next to ``sys.executable``, when one is there."""
-    candidate = os.path.join(os.path.dirname(sys.executable), 'uv')
-    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-        return candidate
+    """A ``uv`` executable next to ``sys.executable``, when one is there.
+
+    Pip lays the console script down as ``uv.exe`` on Windows, so the
+    bare name alone misses the pip-installed binary there.
+    """
+    names = ['uv']
+    if sys.platform == 'win32':
+        names.append('uv.exe')
+    for name in names:
+        candidate = os.path.join(os.path.dirname(sys.executable), name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
     return None
 
 
