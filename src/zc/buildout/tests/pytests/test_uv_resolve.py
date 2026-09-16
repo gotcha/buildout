@@ -8,6 +8,7 @@ from pathlib import Path
 import pkg_resources
 import pytest
 
+import zc.buildout
 from zc.buildout import easy_install, uv_resolve
 from zc.buildout.uv_resolve import ResolutionError, resolve
 
@@ -389,3 +390,67 @@ def test_uv_available_dists_source_without_sdist_means_none(monkeypatch):
     req = pkg_resources.Requirement.parse('demo')
     assert easy_install._uv_available_dists(
         req, 1, {}, [], None, True) is None
+
+
+# Eggs are invisible to uv; when they are all a local directory offers,
+# the user deserves a better error than Couldn't-find-a-distribution.
+
+def _lay_eggs(directory, *names):
+    for name in names:
+        (directory / name).write_text('not really an egg')
+
+
+def test_egg_only_find_links_raise_user_error(monkeypatch, tmp_path):
+    _stub_resolve(monkeypatch, error=ResolutionError('uv failed', 'boom'))
+    _lay_eggs(tmp_path, 'spam-2-py3.12.egg')
+    req = pkg_resources.Requirement.parse('spam')
+    with pytest.raises(zc.buildout.UserError) as excinfo:
+        easy_install._uv_available_dists(
+            req, None, {}, [str(tmp_path)], None, True)
+    message = str(excinfo.value)
+    assert 'installer = uv' in message
+    assert 'legacy .egg' in message
+    assert str(tmp_path) in message
+    assert 'installer = pip' in message
+
+
+def test_egg_only_on_missing_project_too(monkeypatch, tmp_path):
+    _stub_resolve(monkeypatch, pinned=_fake_pinned(name='other'))
+    _lay_eggs(tmp_path, 'spam-1.0-py3.12.egg')
+    req = pkg_resources.Requirement.parse('spam')
+    with pytest.raises(zc.buildout.UserError):
+        easy_install._uv_available_dists(
+            req, None, {}, [str(tmp_path)], None, True)
+
+
+def test_wheel_or_sdist_alongside_egg_keeps_plain_none(monkeypatch, tmp_path):
+    _stub_resolve(monkeypatch, error=ResolutionError('uv failed', 'boom'))
+    _lay_eggs(tmp_path, 'spam-2-py3.12.egg', 'spam-1.0-py3-none-any.whl')
+    req = pkg_resources.Requirement.parse('spam')
+    assert easy_install._uv_available_dists(
+        req, None, {}, [str(tmp_path)], None, True) is None
+
+
+def test_other_project_eggs_stay_plain_none(monkeypatch, tmp_path):
+    _stub_resolve(monkeypatch, error=ResolutionError('uv failed', 'boom'))
+    _lay_eggs(tmp_path, 'spam-extra-2-py3.12.egg', 'ham-1-py3.12.egg')
+    req = pkg_resources.Requirement.parse('spam')
+    assert easy_install._uv_available_dists(
+        req, None, {}, [str(tmp_path)], None, True) is None
+
+
+def test_remote_links_are_not_scanned_for_eggs(monkeypatch):
+    _stub_resolve(monkeypatch, error=ResolutionError('uv failed', 'boom'))
+    req = pkg_resources.Requirement.parse('spam')
+    assert easy_install._uv_available_dists(
+        req, None, {}, ['http://localhost:1/links'], None, True) is None
+
+
+def test_egg_error_mentions_file_url_locations(monkeypatch, tmp_path):
+    _stub_resolve(monkeypatch, error=ResolutionError('uv failed', 'boom'))
+    _lay_eggs(tmp_path, 'spam-2-py3.12.egg')
+    req = pkg_resources.Requirement.parse('spam')
+    with pytest.raises(zc.buildout.UserError) as excinfo:
+        easy_install._uv_available_dists(
+            req, None, {}, [tmp_path.as_uri()], None, True)
+    assert 'legacy .egg' in str(excinfo.value)

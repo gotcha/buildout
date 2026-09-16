@@ -610,9 +610,11 @@ def _uv_available_dists(
     except uv_resolve.ResolutionError as err:
         logger.debug('uv could not resolve %r:\n%s', str(requirement),
                      err.stderr)
+        _raise_if_egg_only(requirement, links, index_url)
         return None
     entry = pinned.for_project(requirement.project_name)
     if entry is None:
+        _raise_if_egg_only(requirement, links, index_url)
         return None
     if source:
         if entry.sdist_url is None:
@@ -622,6 +624,55 @@ def _uv_available_dists(
         url = entry.url
     return [Distribution(
         location=url, project_name=entry.name, version=entry.version)]
+
+
+def _local_listing(location: str | None) -> list[str]:
+    """Filenames in a local find-links directory, [] for remote or missing."""
+    if not location:
+        return []
+    if '://' in location:
+        directory = uv_resolve._local_directory(location)
+        if directory is None:
+            return []
+    else:
+        directory = Path(location)
+        if not directory.is_dir():
+            return []
+    return os.listdir(directory)
+
+
+def _raise_if_egg_only(
+        requirement: pkg_resources.Requirement,
+        links: list[str],
+        index_url: str | None,
+        ) -> None:
+    """Raise a clear error when only legacy eggs offer ``requirement``.
+
+    uv cannot read the legacy .egg format, so a project offered only as
+    eggs is invisible to it and would otherwise surface as a bare
+    Couldn't-find-a-distribution.  Local find-links directories are
+    scanned (remote listings are not cheaply available): a directory
+    holding .egg artifacts for the project and no wheel or sdist
+    explains the failure.
+    """
+    prefix = canonicalize_name(requirement.project_name).replace('-', '_') + '-'
+    for location in [*links, index_url]:
+        artifacts = [
+            name for name in _local_listing(location)
+            if name.startswith(prefix)
+            # The character after the name- prefix starts the version,
+            # which keeps related projects (demo-extra) out of a
+            # listing consulted for demo.
+            and name[len(prefix):len(prefix)+1].isdigit()]
+        if (artifacts
+                and any(name.endswith('.egg') for name in artifacts)
+                and not any(name.endswith(('.whl', '.tar.gz', '.zip'))
+                            for name in artifacts)):
+            raise zc.buildout.UserError(
+                f"Cannot install {requirement} with installer = uv:"
+                f" found only legacy .egg distributions in"
+                f" {location}, and uv cannot install eggs."
+                " Provide a wheel or sdist, or use installer = pip.")
 
 
 def _best_version_dists(
