@@ -254,3 +254,45 @@ def test_drop_build_output_normalizer_is_mode_conditional(monkeypatch):
     monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
     assert testing.drop_build_output_relayed_by_pip(text) == (
         'Installing extdemo.\n')
+
+
+def test_drop_uv_requests_normalizer_is_mode_conditional(monkeypatch):
+    from zc.buildout import testing
+    text = (
+        'GET 200 /\n'
+        'GET 404 /index/demo/\n'
+        'HEAD 200 /demo-0.2-py3-none-any.whl\n'
+        'GET 200 /demo-0.2-py3-none-any.whl\n'
+        'GET 200 /demo-0.2-py3-none-any.whl\n'
+        'GET 200 /demoneeded-1.1.tar.gz\n')
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert testing.drop_uv_link_server_requests(text) == text
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    assert testing.drop_uv_link_server_requests(text) == ''
+
+
+def test_download_cache_deprecation_is_uv_only(monkeypatch, caplog):
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
+        easy_install.download_cache('/some/dir')
+    assert caplog.records == []
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
+        easy_install.download_cache('/some/dir')
+    assert len(caplog.records) == 1
+    assert 'deprecated' in caplog.records[0].getMessage()
+    assert 'download-cache' in caplog.records[0].getMessage()
+    easy_install.download_cache(None)
+
+
+def test_drop_deprecation_normalizer_is_mode_conditional(monkeypatch):
+    from zc.buildout import testing
+    text = ('Installing demo.\n'
+            'With installer = uv the download-cache is not populated; '
+            'the option is deprecated (uv keeps downloads in its own '
+            'cache).\n')
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert testing.drop_uv_download_cache_deprecation(text) == text
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    assert testing.drop_uv_download_cache_deprecation(text) == (
+        'Installing demo.\n')

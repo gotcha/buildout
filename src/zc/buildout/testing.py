@@ -671,6 +671,78 @@ def drop_build_output_relayed_by_pip(text):
     return re.sub(
         r'.*Have environment test_environment_variable:.*\n', '', text)
 
+def drop_uv_link_server_requests(text):
+    """Drop link-server request lines from transcripts in uv mode.
+
+    uv interrogates a link server differently than the vendored scraper:
+    it lists directory pages, probes the index for every project, issues
+    HEAD requests for artifact metadata, revalidates archives through
+    its cache, and serves repeats from that cache without any request at
+    all. No request sequence written for the scraper can hold under uv,
+    and uv's real fetching is asserted end to end by
+    tests/pytests/test_uv_integration.py. So in uv mode the request
+    lines are dropped on both sides of the comparison; the remaining
+    log lines (Getting distribution, Got, Develop) stay strictly
+    checked. Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return re.sub(r'(?m)^(?:GET|HEAD) \S.*\n', '', text)
+
+def drop_uv_version_chatter(text):
+    """Drop the ``Using uv ...`` debug lines in uv mode.
+
+    The seam logs the uv binary and version at debug level, once per
+    resolve and once per install; log-transcript expectations written
+    for pip have no place for those lines. Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return re.sub(r'[^\n]* DEBUG\n *Using uv [^\n]*\n', '', text)
+
+_UV_CACHE_SERVED_LINES = frozenset([
+    'GET 200 /demo-0.2-py3-none-any.whl',
+    'GET 200 /demoneeded-1.1.tar.gz',
+    'GET 200 /extdemo-1.5.tar.gz',
+    '-  demo-0.2-py3-none-any.whl',
+    '-  demoneeded-1.1.tar.gz',
+])
+
+def normalize_uv_download_cache(text):
+    """Drop lines pinning download-cache population in uv mode.
+
+    With installer = uv, wheels and sdists are fetched and kept by uv
+    itself: the download cache is not populated, and later installs
+    revalidate through uv's cache instead of being served from the
+    download cache. Expectations written for pip pin the demo wheel and
+    the demoneeded and extdemo sdists landing in, and being served
+    from, the download cache; uv mode never produces those lines.
+    Dropping them on both sides keeps the rest of the transcript
+    strictly checked. Inert under pip.
+
+    Tagged uv-deprecated: remove together with the download-cache
+    support.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return '\n'.join(
+        line for line in text.split('\n')
+        if line not in _UV_CACHE_SERVED_LINES)
+
+def drop_uv_download_cache_deprecation(text):
+    """Drop the download-cache deprecation warning lines in uv mode.
+
+    Spawned buildouts log the deprecation once per process, so every
+    transcript of a download-cache run would have to pin it. The warning
+    is asserted by a unit test instead. Inert under pip.
+
+    Tagged uv-deprecated: remove together with the download-cache
+    support.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return re.sub(r'.*the download-cache is not populated.*\n', '', text)
+
 normalize_script = (
     re.compile('(\n?)-  ([a-zA-Z_.-]+)-script.py\n-  \\2.exe\n'),
     '\\1-  \\2\n')

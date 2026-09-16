@@ -1389,6 +1389,11 @@ def download_cache(path: str | int | None=-1) -> str | None:
             # (None/0, meaning "unset") and the -1 sentinel above.
             assert isinstance(path, str)
             path = realpath(path)
+            if Installer._installer == 'uv':
+                logger.warning(
+                    'With installer = uv the download-cache is not'
+                    ' populated; the option is deprecated'
+                    ' (uv keeps downloads in its own cache).')
         Installer._download_cache = path
     return old
 
