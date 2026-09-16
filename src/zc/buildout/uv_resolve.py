@@ -164,12 +164,19 @@ def _index_args(index_url: str | None) -> list[str]:
         if not index_path.exists():
             return []
         index_url = index_path.expanduser().resolve().as_uri()
-    parts = urllib.parse.urlsplit(index_url)
-    if parts.scheme == 'file':
-        index_path = Path(urllib.request.url2pathname(parts.path))
-        if index_path.is_dir():
-            return _find_links_args(index_path)
+    directory = _local_directory(index_url)
+    if directory is not None:
+        return _find_links_args(directory)
     return ['--index-url', index_url]
+
+
+def _local_directory(url: str) -> Path | None:
+    """The path of a ``file://`` URL naming a directory, else None."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme != 'file':
+        return None
+    path = Path(urllib.request.url2pathname(parts.path))
+    return path if path.is_dir() else None
 
 
 def _find_links_args(directory: Path) -> list[str]:
