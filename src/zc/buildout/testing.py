@@ -836,6 +836,19 @@ def run_buildout_in_process(command='buildout'):
         #" log-format=%(asctime)s____%(levelname)s_%(message)s -vvv"
         " index=" + __file__ + 'nonexistent' # hide index
         )
+    if zc.buildout.easy_install.installer() == 'uv':
+        # In pip mode the vendored package index also scans the test
+        # runner's sys.path, so the documentation examples resolve the
+        # distributions they install from the repository's eggs
+        # directory. uv only consults explicit find-links and indexes,
+        # so point it at the distributions the repository's own
+        # buildout run downloads. Inert under pip.
+        repo = os.path.dirname(os.path.abspath(__file__))
+        for _ in range(3):
+            repo = os.path.dirname(repo)
+        distros = os.path.join(repo, 'downloads', 'dist')
+        if os.path.isdir(distros):
+            options += ' find-links=' + distros
     # The annotation keeps the list element type as plain str: without it
     # the inferred element type is LiteralString (from the literal default),
     # which rejects inserting the non-literal `options` string.
