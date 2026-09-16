@@ -2,8 +2,11 @@ name: Windows
 
 on:
   # Called from run-tests.yml so Windows stays in the push gate, and
-  # dispatchable on its own for Windows-only debugging loops:
+  # dispatchable on its own for Windows-only debugging loops once this
+  # file reaches the default branch (dispatch registers from there):
   #   gh workflow run windows.yml --ref <branch>
+  # Until then the Windows-only loop is windows-iter.yml, which works
+  # from any branch via its push trigger.
   workflow_call:
   workflow_dispatch:
 
