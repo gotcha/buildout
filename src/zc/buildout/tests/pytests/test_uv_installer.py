@@ -192,6 +192,20 @@ def test_uv_executable_falls_back_to_sibling_of_python(
     assert _uv_executable() == str(sibling)
 
 
+def test_uv_sibling_executable_finds_uv_exe_on_windows(
+        monkeypatch, tmp_path):
+    # pip lays the uv console script down as uv.exe on Windows; a lookup
+    # for the bare name misses the pip-installed binary there.
+    monkeypatch.setattr(easy_install.shutil, 'which', lambda name: None)
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    sibling = tmp_path / 'uv.exe'
+    sibling.write_text('binary')
+    sibling.chmod(0o755)
+    monkeypatch.setattr(sys, 'executable', str(tmp_path / 'python.exe'))
+    assert _uv_sibling_executable() == str(sibling)
+    assert _uv_executable() == str(sibling)
+
+
 def test_uv_executable_missing_raises_user_error(monkeypatch, tmp_path):
     monkeypatch.setattr(easy_install.shutil, 'which', lambda name: None)
     monkeypatch.setattr(sys, 'executable', str(tmp_path / 'python'))
