@@ -28,6 +28,18 @@ The gate fails on exactly two events: existing code got worse, or new
 code arrived above the budget. Both are commit-time signals to extract
 or simplify, not to negotiate with the baseline.
 
+## Line drift
+
+Baseline entries pin `path:Function@L<line>`, so any edit that shifts
+lines above a pinned block — even a comment-only addition — drifts
+every entry below it: the old lines print as `gone:` and the same
+blocks at their new lines read as new code held to grade B, which
+grandfathered over-ceiling functions then fail. Run `make complexity`
+after every source edit, however small, and always before pushing.
+When the drift is line numbers only (same blocks, same CCs, new
+lines), refresh the baseline as its own commit on top of the edit
+that shifted them.
+
 ## Refreshing the baseline
 
 Only after a simplification lands and the suites agree:

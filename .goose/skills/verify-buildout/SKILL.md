@@ -139,7 +139,9 @@ Alongside the tiers, `make lint` (ruff, from the devenv) is a
 seconds-fast static hygiene gate — see
 [`features/lint.md`](./features/lint.md). Next to it sits the
 complexity budget gate `make complexity` (radon, from the devenv;
-baseline `etc/complexity-baseline.json`) — see
+baseline `etc/complexity-baseline.json`, line-pinned — any
+line-shifting source edit can fail it, so it rides in every
+verification) — see
 [`features/complexity.md`](./features/complexity.md). Both complement
 the suites and never substitute for them.
    - `make test` — legacy doctest/testrunner suite (`bin/test -pvc`).

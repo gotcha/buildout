@@ -284,7 +284,10 @@ extracted function lands in the same commit paired with unit tests
 that pin its behavior — the target layer is `tests/pytests/` with
 plain asserts, not new doctests. The `make complexity` gate must stay
 green, and an accepted simplification refreshes
-`etc/complexity-baseline.json` in the same change.
+`etc/complexity-baseline.json` in the same change. The baseline pins
+functions by line number, so even a comment-only edit above a pinned
+function drifts it — a pure line-drift refresh is its own commit; the
+mechanism and gate rule live in verify-buildout's complexity feature.
 
 ## Type annotations for new code
 
