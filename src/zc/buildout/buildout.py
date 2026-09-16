@@ -35,7 +35,7 @@ from collections.abc import MutableMapping as DictMixin
 from functools import partial
 from hashlib import md5 as md5_original
 from io import StringIO, TextIOWrapper
-from typing import Any, ClassVar, NoReturn, TextIO, TypeVar, overload
+from typing import Any, ClassVar, NoReturn, TextIO, TypeVar, Union, overload
 
 import pkg_resources
 from packaging import utils as packaging_utils
@@ -234,7 +234,10 @@ class HistoryItem:
 
 # Annotated configuration data: maps section names to sections whose values
 # are SectionKey objects once annotated (plain dicts while still raw).
-ConfigData = dict[str, dict[str, SectionKey] | dict[Any, Any]]
+# A plain assignment is evaluated at import time even under
+# `from __future__ import annotations`, so keep the Union spelling: the `|`
+# form needs Python 3.10 (unsupported operand type(s) for |: GenericAlias).
+ConfigData = dict[str, Union[dict[str, SectionKey], dict[Any, Any]]]
 
 
 def _annotate(data: dict[str, dict[str, str] | dict[Any, Any]], note: str) -> dict[str, dict[str, SectionKey] | dict[Any, Any]]:
