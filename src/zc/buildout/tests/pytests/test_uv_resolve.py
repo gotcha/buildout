@@ -454,3 +454,32 @@ def test_egg_error_mentions_file_url_locations(monkeypatch, tmp_path):
         easy_install._uv_available_dists(
             req, None, {}, [tmp_path.as_uri()], None, True)
     assert 'legacy .egg' in str(excinfo.value)
+
+
+# pkg_resources adds `extra == "..."` markers to requirements pulled
+# via extras; under --no-deps the marker has no context and uv would
+# silently drop the requirement.
+
+def test_extra_only_marker_is_stripped(monkeypatch):
+    calls = _stub_resolve(monkeypatch, pinned=_fake_pinned())
+    req = pkg_resources.Requirement.parse('demo; extra == "foo"')
+    dists = easy_install._uv_available_dists(req, None, {}, [], None, True)
+    assert dists is not None
+    assert calls[0]['requirements'] == ['demo']
+
+
+def test_trailing_extra_marker_is_stripped(monkeypatch):
+    calls = _stub_resolve(monkeypatch, pinned=_fake_pinned())
+    req = pkg_resources.Requirement.parse(
+        'demo; python_version > "3" and extra == "foo"')
+    dists = easy_install._uv_available_dists(req, None, {}, [], None, True)
+    assert dists is not None
+    assert calls[0]['requirements'] == ['demo; python_version > "3"']
+
+
+def test_unrelated_markers_are_kept(monkeypatch):
+    calls = _stub_resolve(monkeypatch, pinned=_fake_pinned())
+    req = pkg_resources.Requirement.parse('demo; python_version < "3.10"')
+    dists = easy_install._uv_available_dists(req, None, {}, [], None, True)
+    assert dists is not None
+    assert calls[0]['requirements'] == ['demo; python_version < "3.10"']

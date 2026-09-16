@@ -599,7 +599,7 @@ def _uv_available_dists(
     """
     try:
         pinned = uv_resolve.resolve(
-            requirements=[str(requirement)],
+            requirements=[_without_extra_marker(requirement)],
             constraints=versions,
             links=links,
             index_url=index_url,
@@ -624,6 +624,30 @@ def _uv_available_dists(
         url = entry.url
     return [Distribution(
         location=url, project_name=entry.name, version=entry.version)]
+
+
+_EXTRA_MARKER_ONLY = re.compile(
+    r''';\s*extra == ("[^"]*"|'[^']*')\s*$''')
+_EXTRA_MARKER_TAIL = re.compile(
+    r'''\s+and\s+extra == ("[^"]*"|'[^']*')\s*$''')
+
+
+def _without_extra_marker(requirement: pkg_resources.Requirement) -> str:
+    """The requirement string without any ``extra == ...`` marker.
+
+    pkg_resources adds ``extra == "..."`` markers to requirements pulled
+    from a dist's metadata via extras. The extra is satisfied by
+    construction here: we resolve the dependency because the dist
+    carrying it was selected with that extra. uv compiles one
+    requirement at a time (--no-deps), so the marker has no extras
+    context, would evaluate False, and uv would silently drop the
+    requirement from the lock. Only the extra-only and trailing
+    ``and extra == ...`` shapes are stripped.
+    """
+    spec = str(requirement)
+    if _EXTRA_MARKER_ONLY.search(spec):
+        return _EXTRA_MARKER_ONLY.sub('', spec)
+    return _EXTRA_MARKER_TAIL.sub('', spec)
 
 
 def _local_listing(location: str | None) -> list[str]:
