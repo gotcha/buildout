@@ -80,6 +80,7 @@ Now, if we look at the buildout eggs directory:
     -  packaging.egg-link
     -  pip.egg-link
     -  setuptools.egg-link
+    -  uv.egg-link
     -  wheel.egg-link
     d  zc.buildout-1.0-pyN.N.egg
 
@@ -277,6 +278,7 @@ Then we'll get a new demo egg:
     -  packaging.egg-link
     -  pip.egg-link
     -  setuptools.egg-link
+    -  uv.egg-link
     -  wheel.egg-link
     d  zc.buildout-1.0-py2.4.egg
 

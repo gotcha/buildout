@@ -8,7 +8,10 @@
 # distribution that is already active in the sandbox.
 sandbox/bin/python:
 	uv venv --seed --python "$$(command -v python)" sandbox
-	sandbox/bin/python -mpip install 'setuptools<80' --upgrade packaging
+	# uv too: it is a zc.buildout dependency, and pip must install it
+	# (its wheel ships a binary script) — setup.py develop would fetch it
+	# as an egg and crash decoding the binary as UTF-8.
+	sandbox/bin/python -mpip install 'setuptools<80' --upgrade packaging uv
 
 sandbox/bin/buildout: sandbox/bin/python
 	sandbox/bin/python setup.py develop

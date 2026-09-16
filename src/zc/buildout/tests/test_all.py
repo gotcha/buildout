@@ -1031,6 +1031,7 @@ On the other hand, if we have a zipped egg, rather than a develop egg:
     -  packaging.egg-link
     -  pip.egg-link
     -  setuptools.egg-link
+    -  uv.egg-link
     -  wheel.egg-link
     -  zc.buildout.egg-link
 

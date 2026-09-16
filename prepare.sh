@@ -107,7 +107,8 @@ fi
 # Floor build at 1: if a package index momentarily hides pyproject_hooks,
 # an unfloored build requirement silently backtracks to build 0.9.0, which
 # lacks build.env.DefaultIsolatedEnv and fails the test suite much later.
-PIP_ARGS="$PIP_ARGS packaging build>=1"
+# uv is a dependency of zc.buildout; add it like packaging.
+PIP_ARGS="$PIP_ARGS packaging build>=1 uv"
 echo
 echo "Using arguments for pip install: $PIP_ARGS"
 # "$VENV_PYTHON" -m pip install -e .[test] -e zc.recipe.egg_[test] $PIP_ARGS
@@ -121,15 +122,18 @@ echo "pip list output:"
 
 echo
 echo "Seeding downloads/test-seed with the setuptools and wheel wheels just installed."
-echo "The test suites resolve their spawned pips' build requirements from there"
+echo "The test suites resolve their spawned installers' build requirements from there"
 echo "(see buildoutSetUp in src/zc/buildout/testing.py), so suite runs need no index."
+echo "A uv wheel is seeded as well: zc.buildout declares uv as a dependency, so"
+echo "sample buildouts resolving that requirement must find it without an index."
 SEED="$HERE/downloads/test-seed"
 mkdir -p "$SEED"
 rm -f "$SEED"/*.whl
 SEED_SETUPTOOLS=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("setuptools"))')
 SEED_WHEEL=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("wheel"))')
+SEED_UV=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("uv"))')
 "$VENV_PYTHON" -m pip download --quiet --no-deps --dest "$SEED" \
-    "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL"
+    "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL" "uv==$SEED_UV"
 ls -l "$SEED"
 
 # The spawned builds' expectations match modern setuptools: PEP 660's
