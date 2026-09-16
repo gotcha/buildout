@@ -40,7 +40,7 @@ import urllib.parse
 import warnings
 import zipfile
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from functools import cached_property
+from functools import cached_property, lru_cache
 from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -59,7 +59,7 @@ import zc.buildout.rmtree
 from zc.buildout import WINDOWS
 from zc.buildout.utils import normalize_name
 
-from . import _package_index
+from . import _package_index, uv_resolve
 
 BIN_SCRIPTS = 'Scripts' if WINDOWS else 'bin'
 
@@ -582,6 +582,48 @@ def _available_dists(
             ]
 
 
+def _uv_available_dists(
+        requirement: pkg_resources.Requirement,
+        source: int | None,
+        versions: Mapping[str, str],
+        links: list[str],
+        index_url: str | None,
+        prefer_final: bool,
+        ) -> list[pkg_resources.Distribution] | None:
+    """Return what uv resolves for ``requirement`` as a one-dist list.
+
+    ``None`` means uv found nothing satisfying the requirement, matching
+    the ``_available_dists`` contract.  The dist carries the resolved
+    artifact URL as its location: the install step hands it straight to
+    ``uv pip install``, so no separate download happens.
+    """
+    try:
+        pinned = uv_resolve.resolve(
+            requirements=[str(requirement)],
+            constraints=versions,
+            links=links,
+            index_url=index_url,
+            prefer_final=prefer_final,
+            uv=_uv_executable(),
+            python=sys.executable,
+        )
+    except uv_resolve.ResolutionError as err:
+        logger.debug('uv could not resolve %r:\n%s', str(requirement),
+                     err.stderr)
+        return None
+    entry = pinned.for_project(requirement.project_name)
+    if entry is None:
+        return None
+    if source:
+        if entry.sdist_url is None:
+            return None
+        url = entry.sdist_url
+    else:
+        url = entry.url
+    return [Distribution(
+        location=url, project_name=entry.name, version=entry.version)]
+
+
 def _best_version_dists(
         dists: list[pkg_resources.Distribution],
         ) -> list[pkg_resources.Distribution]:
@@ -1016,7 +1058,12 @@ class Installer:
             zc.buildout.rmtree.rmtree(tmp)
 
     def _obtain(self, requirement: pkg_resources.Requirement, source: int | None=None) -> pkg_resources.Distribution | None:
-        dists = _available_dists(self._index, requirement, source)
+        if self._installer == 'uv':
+            dists = _uv_available_dists(
+                requirement, source, self._versions, self._links,
+                self._index_url, self._prefer_final)
+        else:
+            dists = _available_dists(self._index, requirement, source)
         if dists is None:
             # Nothing is available.
             return None
@@ -1034,6 +1081,11 @@ class Installer:
         return _select_from_best(best, self._download_cache)
 
     def _fetch(self, dist: pkg_resources.Distribution, tmp: str, download_cache: str | None) -> pkg_resources.Distribution:
+        if self._installer == 'uv' and _is_url(_dist_location(dist)):
+            # uv fetches the resolved URL through its own cache when the
+            # install step hands it to ``uv pip install``.
+            logger.debug("Fetching %s from: %s", dist, dist.location)
+            return dist
         if (download_cache
             and (realpath(os.path.dirname(_dist_location(dist))) == download_cache)
             ):
@@ -1258,7 +1310,13 @@ class Installer:
             tmp = tempfile.mkdtemp('get_dist')
 
         try:
-            dist = self._fetch(avail, tmp, self._download_cache)
+            if self._installer == 'uv':
+                # Source builds unpack the archive locally, so unlike the
+                # install path the resolved URL must be downloaded first.
+                dist = avail.clone(location=self._index.download(
+                    _dist_location(avail), tmp))
+            else:
+                dist = self._fetch(avail, tmp, self._download_cache)
 
             build_tmp = tempfile.mkdtemp('build')
             try:
@@ -2318,6 +2376,16 @@ def _uv_sibling_executable() -> str | None:
     return None
 
 
+@lru_cache(maxsize=None)
+def _uv_version(uv: str) -> str:
+    """The ``uv --version`` output for ``uv``, for debug logging."""
+    try:
+        return subprocess.check_output(
+            [uv, '--version'], text=True, stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return 'uv (unknown version)'
+
+
 def _uv_executable() -> str:
     """Resolve the ``uv`` binary, on PATH or next to ``sys.executable``."""
     uv = shutil.which('uv') or _uv_sibling_executable()
@@ -2326,6 +2394,7 @@ def _uv_executable() -> str:
             "The 'installer' option is set to 'uv', but no 'uv' executable"
             " was found on PATH or next to the Python executable"
             f" ({sys.executable}).")
+    logger.debug('Using %s (%s)', _uv_version(uv), uv)
     return uv
 
 
