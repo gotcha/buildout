@@ -225,7 +225,8 @@ def test_hermetic_env_covers_uv_and_cleans_its_cache():
         pytest.skip('downloads/test-seed absent (no prepare.sh run)')
     try:
         assert os.environ['UV_OFFLINE'] == '1'
-        assert os.environ['UV_FIND_LINKS'].endswith('downloads/test-seed')
+        assert os.environ['UV_FIND_LINKS'].endswith(
+            os.path.join('downloads', 'test-seed'))
         cache = os.environ['UV_CACHE_DIR']
         assert os.path.isdir(cache)
         # uv's cache holds symlinked entries that doctest teardown cannot
