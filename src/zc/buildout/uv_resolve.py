@@ -73,6 +73,11 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
     ``--index-url``. With ``prefer_final`` false uv may select
     pre-releases; ``offline`` forbids network and index access. ``uv``
     and ``python`` name the uv binary and the interpreter to resolve for.
+
+    Dependencies are not compiled (``--no-deps``): the caller resolves
+    one requirement at a time and walks dependency metadata itself, so
+    a transitive requirement that configured sources cannot reach must
+    not fail the pin of the requirement being obtained.
     """
     with tempfile.TemporaryDirectory(prefix='zc-buildout-uv-') as tmp:
         workdir = Path(tmp)
@@ -82,7 +87,7 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
             encoding='utf-8')
         lock_file = workdir / 'pylock.toml'
         args = [uv, 'pip', 'compile', str(requirements_in), '-o',
-                str(lock_file), '--python', python]
+                str(lock_file), '--python', python, '--no-deps']
         for link in links:
             args.extend(['-f', link])
         if constraints:

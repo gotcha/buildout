@@ -108,7 +108,7 @@ def test_base_argv_shape(monkeypatch):
     assert args[4] == '-o'
     assert args[5].endswith('pylock.toml')
     assert Path(args[3]).parent == Path(args[5]).parent
-    assert args[6:] == ['--python', '/python']
+    assert args[6:] == ['--python', '/python', '--no-deps']
     assert texts == {'requirements': 'demo\n'}
     dist = pinned.for_project('demo')
     assert dist is not None
@@ -120,7 +120,8 @@ def test_one_find_links_per_link(monkeypatch):
     resolve(requirements=['demo'], constraints={}, links=['/a', '/b'],
             index_url=None, uv='/uv', python='/python')
     args, _texts = calls[0]
-    assert args[6:] == ['--python', '/python', '-f', '/a', '-f', '/b']
+    assert args[6:] == [
+        '--python', '/python', '--no-deps', '-f', '/a', '-f', '/b']
 
 
 def test_constraints_add_dash_c_and_file(monkeypatch):
@@ -214,6 +215,7 @@ def test_directory_index_expands_project_subdirs(monkeypatch, tmp_path):
     args, _texts = calls[0]
     root = tmp_path.expanduser().resolve()
     assert args[args.index('--python') + 2:] == [
+        '--no-deps',
         '-f', root.as_uri(),
         '-f', (root / 'demo').as_uri(),
         '-f', (root / 'other').as_uri(),
@@ -237,7 +239,7 @@ def test_missing_index_path_is_dropped(monkeypatch):
     args, _texts = calls[0]
     assert '--index-url' not in args
     assert '-f' not in args
-    assert args[6:] == ['--python', '/python']
+    assert args[6:] == ['--python', '/python', '--no-deps']
 
 
 def test_first_wheel_is_url_when_wheels_exist(monkeypatch):
