@@ -30,9 +30,10 @@ or simplify, not to negotiate with the baseline.
 
 ## Line drift
 
-Baseline entries pin `path:Function@L<line>`, so any edit that shifts
-lines above a pinned block — even a comment-only addition — drifts
-every entry below it: the old lines print as `gone:` and the same
+Blocks are keyed `path:Function`, but same-named siblings are
+disambiguated as `path:Function@L<line>` — and those line-pinned
+entries drift on any line-shifting edit above them, even a
+comment-only addition: the old lines print as `gone:` and the same
 blocks at their new lines read as new code held to grade B, which
 grandfathered over-ceiling functions then fail. Run `make complexity`
 after every source edit, however small, and always before pushing.
