@@ -2,12 +2,19 @@ name: Windows iteration
 
 # Fast loop for iterating on Windows-only failures: the static trio
 # (ruff, radon, ty) on a Linux runner, then the Windows leg, and nothing
-# else. Dispatch-only — the push gate (run-tests.yml) always runs the
-# full matrix. Usage:
+# else. The push gate (run-tests.yml) always runs the full matrix.
+#
+# Usage: push the tree under test to the scratch branch —
+#   git push gotcha HEAD:windows-iter
+# Push triggers need no default-branch registration, so this works while
+# the file exists only on topic branches. The dispatch trigger activates
+# once the file reaches the default branch:
 #   gh workflow run windows-iter.yml --ref <branch>
 
 on:
   workflow_dispatch:
+  push:
+    branches: [windows-iter]
 
 jobs:
   static:
