@@ -598,6 +598,7 @@ def _uv_available_dists(
     ``uv pip install``, so no separate download happens.
     """
     _raise_for_hg_links(requirement, links)
+    _raise_for_fragment_links(requirement, links)
     try:
         pinned = uv_resolve.resolve(
             requirements=[_without_extra_marker(requirement)],
@@ -644,6 +645,26 @@ def _raise_for_hg_links(
                 f" find-links entry {link} points at a Mercurial"
                 " repository, and uv cannot install from Mercurial."
                 " Provide a wheel or sdist, or use installer = pip.")
+
+
+def _raise_for_fragment_links(
+        requirement: pkg_resources.Requirement,
+        links: list[str],
+        ) -> None:
+    """Fail clearly when a find-links entry carries an URL fragment.
+
+    pip's scraper reads ``#egg=`` and ``#md5=`` fragments; uv rejects
+    them at parse time.  Raised before uv is spawned, so the message
+    names the fragment in buildout's vocabulary.
+    """
+    for link in links:
+        for fragment in ('#egg=', '#md5='):
+            if fragment in link:
+                raise zc.buildout.UserError(
+                    f"Cannot install {requirement} with installer = uv:"
+                    f" find-links entry {link} carries a {fragment}"
+                    " fragment, which uv does not support."
+                    " Provide a wheel or sdist, or use installer = pip.")
 
 
 _EXTRA_MARKER_ONLY = re.compile(

@@ -338,3 +338,48 @@ class TestHgFindLinksGuard:
             req, None, {},
             ['https://example.invalid/links', '/local/links'],
             None, True) is None
+
+
+class TestFragmentFindLinksGuard:
+    """``#egg=``/``#md5=`` fragments on find-links fail before uv runs."""
+
+    def _forbid_resolve(self, monkeypatch):
+        def resolve_must_not_run(*args, **kwargs):
+            raise AssertionError('uv_resolve.resolve must not run')
+        monkeypatch.setattr(
+            easy_install.uv_resolve, 'resolve', resolve_must_not_run)
+
+    def test_egg_fragment_raises_user_error(self, monkeypatch):
+        self._forbid_resolve(monkeypatch)
+        link = 'https://example.invalid/files/demo-1.0.tar.gz#egg=demo'
+        req = pkg_resources.Requirement.parse('demo')
+        with pytest.raises(zc.buildout.UserError) as excinfo:
+            easy_install._uv_available_dists(
+                req, None, {}, [link], None, True)
+        message = str(excinfo.value)
+        assert 'installer = uv' in message
+        assert '#egg=' in message
+        assert link in message
+        assert 'wheel or sdist' in message
+        assert 'installer = pip' in message
+
+    def test_md5_fragment_raises_user_error(self, monkeypatch):
+        self._forbid_resolve(monkeypatch)
+        link = 'https://example.invalid/files/demo-1.0.tar.gz#md5=0123456789abcdef0123456789abcdef'
+        req = pkg_resources.Requirement.parse('demo')
+        with pytest.raises(zc.buildout.UserError) as excinfo:
+            easy_install._uv_available_dists(
+                req, None, {}, [link], None, True)
+        message = str(excinfo.value)
+        assert '#md5=' in message
+        assert link in message
+
+    def test_fragment_free_entries_pass_the_guard(self, monkeypatch):
+        def fail_resolve(**kwargs):
+            raise easy_install.uv_resolve.ResolutionError('no', 'boom')
+        monkeypatch.setattr(easy_install.uv_resolve, 'resolve', fail_resolve)
+        req = pkg_resources.Requirement.parse('demo')
+        assert easy_install._uv_available_dists(
+            req, None, {},
+            ['https://example.invalid/files/demo-1.0.tar.gz'],
+            None, True) is None
