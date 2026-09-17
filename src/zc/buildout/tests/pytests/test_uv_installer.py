@@ -582,7 +582,8 @@ class TestErrorTranslation:
         instance._uv_stderr_tail = None
 
         def fake_available(requirement, source, versions, links, index_url,
-                           prefer_final, uv_stderr, offline=False):
+                           prefer_final, uv_stderr, offline=False,
+                           fallback_index_url=None):
             uv_stderr.append('Because demo was not found')
             return None
         monkeypatch.setattr(
@@ -617,7 +618,8 @@ def _capture_obtain_offline(monkeypatch, dest, **class_attrs):
     captured = {}
 
     def fake_available(requirement, source, versions, links, index_url,
-                       prefer_final, uv_stderr, offline=False):
+                       prefer_final, uv_stderr, offline=False,
+                       fallback_index_url=None):
         captured['offline'] = offline
         return None
     monkeypatch.setattr(easy_install, '_uv_available_dists', fake_available)
@@ -732,6 +734,89 @@ class TestInstallFromCacheMapping:
         monkeypatch.setattr(easy_install.Installer, '_download_cache', None)
         with pytest.raises(ValueError, match='no download cache'):
             easy_install.Installer(dest=str(tmp_path / 'eggs'))
+
+
+def _capture_obtain_sources(monkeypatch, index_url=None):
+    """Run ``Installer._obtain`` against a stub seam; return what it
+    forwarded as ``links``, ``index_url`` and ``fallback_index_url``."""
+    instance = easy_install.Installer.__new__(easy_install.Installer)
+    instance._installer = 'uv'
+    instance._index_url = index_url
+    instance._versions = {}
+    instance._links = ['https://example.com/configured-links']
+    instance._prefer_final = True
+    instance._uv_stderr_tail = None
+    instance._dest = None
+    captured = {}
+
+    def fake_available(requirement, source, versions, links, index_url,
+                       prefer_final, uv_stderr, offline=False,
+                       fallback_index_url=None):
+        captured.update(links=list(links), index_url=index_url,
+                        fallback_index_url=fallback_index_url)
+        return None
+    monkeypatch.setattr(easy_install, '_uv_available_dists', fake_available)
+    req = pkg_resources.Requirement.parse('demo')
+    assert instance._obtain(req) is None
+    return captured
+
+
+class TestSeamTestingSources:
+    """The hermetic harness feeds uv resolves through seam env vars."""
+
+    def test_seam_links_join_and_index_falls_back(self, monkeypatch):
+        monkeypatch.setenv(
+            'buildout_testing_seam_find_links', '/seed /other-seed')
+        monkeypatch.setenv(
+            'buildout_testing_seam_index_url',
+            'file:///nonexistent-hermetic-index')
+        captured = _capture_obtain_sources(monkeypatch)
+        assert captured['links'] == [
+            'https://example.com/configured-links', '/seed',
+            '/other-seed']
+        # An unset configured index keeps the default fallback; the
+        # seam index goes as the fallback that plugs the PyPI hole.
+        assert captured['index_url'] == easy_install.default_index_url
+        assert captured['fallback_index_url'] == (
+            'file:///nonexistent-hermetic-index')
+
+    def test_seam_index_never_shadows_a_configured_index(
+            self, monkeypatch):
+        monkeypatch.setenv(
+            'buildout_testing_seam_index_url',
+            'file:///nonexistent-hermetic-index')
+        captured = _capture_obtain_sources(
+            monkeypatch, index_url='https://example.com/simple')
+        assert captured['index_url'] == 'https://example.com/simple'
+
+    def test_seam_env_vars_unset_mean_no_injection(self, monkeypatch):
+        monkeypatch.delenv('buildout_testing_seam_find_links',
+                           raising=False)
+        monkeypatch.delenv('buildout_testing_seam_index_url',
+                           raising=False)
+        captured = _capture_obtain_sources(monkeypatch)
+        assert captured['links'] == ['https://example.com/configured-links']
+        assert captured['fallback_index_url'] is None
+
+    def test_pip_mode_never_consults_the_seam_vars(self, monkeypatch):
+        monkeypatch.setenv(
+            'buildout_testing_seam_find_links', '/seed')
+        monkeypatch.setenv(
+            'buildout_testing_seam_index_url',
+            'file:///nonexistent-hermetic-index')
+        instance = easy_install.Installer.__new__(easy_install.Installer)
+        instance._installer = 'pip'
+        instance._index = None  # never read: stubbed below
+        seen = []
+
+        def fake_available_dists(index, requirement, source):
+            seen.append((index, requirement))
+            return None
+        monkeypatch.setattr(
+            easy_install, '_available_dists', fake_available_dists)
+        req = pkg_resources.Requirement.parse('demo')
+        assert instance._obtain(req) is None
+        assert seen == [(None, req)]
 
 
 class TestAllowHostsWarning:

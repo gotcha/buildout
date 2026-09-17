@@ -90,6 +90,26 @@ default_installer = os.environ.get(
     'pip',
     )
 
+
+def _seam_testing_sources() -> tuple[list[str], str | None]:
+    """The find-links and fallback index the harness adds to uv resolves.
+
+    The hermetic harness exports ``buildout_testing_seam_find_links``
+    (the downloads/test-seed wheel directory) and
+    ``buildout_testing_seam_index_url`` (a dead index) so corpus
+    resolves stay hermetic now that the seam scrubs ambient UV_*
+    variables from the child environment it spawns uv with.  The links
+    join the configured ones verbatim; the index only fills in when the
+    configured sources carry no index, so it never shadows a configured
+    or default index.  Both are unset in production, and pip mode never
+    consults them.  Read dynamically so the harness covers in-process
+    and spawned buildouts alike.
+    """
+    return (
+        os.environ.get('buildout_testing_seam_find_links', '').split(),
+        os.environ.get('buildout_testing_seam_index_url') or None,
+    )
+
 logger = logging.getLogger('zc.buildout.easy_install')
 macosVersionString = re.compile(r"macosx-(\d+)\.(\d+)-(.*)")
 
@@ -609,6 +629,7 @@ def _uv_available_dists(
         prefer_final: bool,
         uv_stderr: list[str] | None = None,
         offline: bool = False,
+        fallback_index_url: str | None = None,
         ) -> list[pkg_resources.Distribution] | None:
     """Return what uv resolves for ``requirement`` as a one-dist list.
 
@@ -619,7 +640,9 @@ def _uv_available_dists(
     passed as ``uv_stderr``, a resolve failure appends the tail of uv's
     stderr to it, for the MissingDistribution message.  ``offline`` is
     forwarded to the seam: uv then serves the resolve from its own
-    cache, without any network access.
+    cache, without any network access.  ``fallback_index_url`` is
+    forwarded likewise: the seam puts it on the argv only when the
+    configured sources carry no index of their own.
     """
     _raise_for_hg_links(requirement, links)
     _raise_for_fragment_links(requirement, links)
@@ -631,6 +654,7 @@ def _uv_available_dists(
             index_url=index_url,
             prefer_final=prefer_final,
             offline=offline,
+            fallback_index_url=fallback_index_url,
             uv=_uv_executable(),
             python=sys.executable,
         )
@@ -1276,13 +1300,20 @@ class Installer:
             # An unset index means the default, the same fallback
             # _get_index applies for the pip index.  The class attribute
             # can hold the empty string here: the buildout entry point
-            # forwards the unset option verbatim.
+            # forwards the unset option verbatim.  The harness links
+            # join the configured ones verbatim, while its index only
+            # plugs the PyPI hole left when the configured sources carry
+            # no index of their own — both used to leak in through the
+            # ambient UV_* variables the seam now scrubs.
+            seam_links, seam_index = _seam_testing_sources()
             index_url = self._index_url or default_index_url
             uv_stderr: list[str] = []
             dists = _uv_available_dists(
-                requirement, source, self._versions, self._links,
+                requirement, source, self._versions,
+                [*self._links, *seam_links],
                 index_url, self._prefer_final, uv_stderr,
-                offline=self._uv_offline())
+                offline=self._uv_offline(),
+                fallback_index_url=seam_index)
             self._uv_stderr_tail = _tail_text(uv_stderr)
         else:
             dists = _available_dists(self._index, requirement, source)

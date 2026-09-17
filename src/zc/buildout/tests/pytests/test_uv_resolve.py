@@ -1,4 +1,5 @@
 """Unit tests for the uv pylock.toml resolver in zc.buildout.uv_resolve."""
+import os
 import shutil
 import subprocess
 import sys
@@ -259,6 +260,51 @@ def test_missing_index_path_is_dropped(monkeypatch):
     assert args[6:] == ['--python', '/python', '--no-deps']
 
 
+def test_fallback_index_fills_an_unset_index(monkeypatch):
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url=None, uv='/uv', python='/python',
+            fallback_index_url='file:///nonexistent-hermetic-index')
+    args, _texts = calls[0]
+    assert args[-2:] == [
+        '--index-url', 'file:///nonexistent-hermetic-index']
+
+
+def test_fallback_index_plugs_the_hole_behind_a_directory_index(
+        monkeypatch, tmp_path):
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url=str(tmp_path), uv='/uv', python='/python',
+            fallback_index_url='file:///nonexistent-hermetic-index')
+    args, _texts = calls[0]
+    # The directory still routes to find-links; the fallback only
+    # keeps uv from defaulting to PyPI.
+    assert '-f' in args
+    assert args[-2:] == [
+        '--index-url', 'file:///nonexistent-hermetic-index']
+
+
+def test_fallback_index_fills_a_dropped_index_path(monkeypatch):
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url='/no/such/index-dir', uv='/uv', python='/python',
+            fallback_index_url='file:///nonexistent-hermetic-index')
+    args, _texts = calls[0]
+    assert args[-2:] == [
+        '--index-url', 'file:///nonexistent-hermetic-index']
+
+
+def test_fallback_index_never_shadows_a_remote_index(monkeypatch):
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url='https://example.com/simple',
+            uv='/uv', python='/python',
+            fallback_index_url='file:///nonexistent-hermetic-index')
+    args, _texts = calls[0]
+    assert args[-2:] == ['--index-url', 'https://example.com/simple']
+    assert 'file:///nonexistent-hermetic-index' not in args
+
+
 def test_first_wheel_is_url_when_wheels_exist(monkeypatch):
     pinned = _resolve_with_lock(monkeypatch, LOCK_TWO_PACKAGES)
     dist = pinned.dists[0]
@@ -303,6 +349,70 @@ def test_nonzero_returncode_raises_resolution_error(monkeypatch):
         resolve(requirements=['demo'], constraints={}, links=[],
                 index_url=None, uv='/uv', python='/python')
     assert excinfo.value.stderr == 'boom'
+
+
+def test_child_env_drops_ambient_uv_configuration(monkeypatch):
+    for name in sorted(uv_resolve._SCRUBBED_ENV_VARS):
+        monkeypatch.setenv(name, 'injected')
+    monkeypatch.setenv('UV_CACHE_DIR', '/cache')
+    env = uv_resolve._child_env()
+    assert all(name not in env for name in uv_resolve._SCRUBBED_ENV_VARS)
+    # UV_CACHE_DIR stays: it names the store offline resolves serve
+    # from, not a source.
+    assert env['UV_CACHE_DIR'] == '/cache'
+    # The parent environment itself is untouched.
+    assert os.environ['UV_INDEX_URL'] == 'injected'
+
+
+def test_run_spawns_uv_with_the_scrubbed_environment(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(args, 0, '', '')
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    monkeypatch.setenv('UV_FIND_LINKS', '/nonexistent-ambient-links')
+    uv_resolve._run(['/uv', 'pip', 'compile'])
+    assert 'UV_FIND_LINKS' not in captured['env']
+    assert captured['env'].get('PATH') == os.environ.get('PATH')
+
+
+@requires_uv
+def test_ambient_uv_find_links_do_not_leak_into_a_resolve(
+        tmp_path, monkeypatch):
+    # Before the scrub, an exported UV_FIND_LINKS silently added
+    # sources to every resolve (probe p4b).
+    assert UV is not None
+    links_dir = tmp_path / 'links'
+    links_dir.mkdir()
+    _make_wheel(links_dir)
+    monkeypatch.setenv('UV_FIND_LINKS', str(links_dir))
+    monkeypatch.setenv('UV_CACHE_DIR', str(tmp_path / 'uv-cache'))
+    with pytest.raises(ResolutionError):
+        resolve(requirements=['demo'], constraints={}, links=[],
+                index_url='file:///nonexistent-hermetic-index',
+                uv=UV, python=sys.executable)
+
+
+@requires_uv
+def test_explicit_find_links_serve_after_the_scrub(tmp_path, monkeypatch):
+    # A bogus ambient UV_INDEX_URL/UV_FIND_LINKS pair must not break a
+    # resolve whose sources are all explicit.
+    assert UV is not None
+    links_dir = tmp_path / 'links'
+    links_dir.mkdir()
+    _make_wheel(links_dir)
+    monkeypatch.setenv('UV_FIND_LINKS', '/nonexistent-ambient-links')
+    monkeypatch.setenv('UV_INDEX_URL', 'https://index.example.invalid/')
+    monkeypatch.setenv('UV_CACHE_DIR', str(tmp_path / 'uv-cache'))
+    pinned = resolve(
+        requirements=['demo'], constraints={}, links=[str(links_dir)],
+        index_url='file:///nonexistent-hermetic-index',
+        uv=UV, python=sys.executable)
+    dist = pinned.for_project('demo')
+    assert dist is not None
+    assert dist.version == '1.0'
 
 
 @requires_uv

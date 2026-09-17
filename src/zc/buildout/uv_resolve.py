@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import tempfile
 import urllib.parse
@@ -68,7 +69,8 @@ class ResolutionError(Exception):
 def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
             links: Sequence[str], index_url: str | None,
             prefer_final: bool = True, offline: bool = False, uv: str,
-            python: str) -> PinnedSet:
+            python: str, fallback_index_url: str | None = None,
+            ) -> PinnedSet:
     """Compile ``requirements`` to a ``PinnedSet`` with ``uv pip compile``.
 
     ``constraints`` maps project names to pinned versions, ``links`` are
@@ -79,6 +81,13 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
     pre-releases; ``offline`` forbids network access, so uv serves the
     configured sources from its own cache or not at all. ``uv``
     and ``python`` name the uv binary and the interpreter to resolve for.
+
+    ``fallback_index_url`` goes on the argv as ``--index-url`` only when
+    the configured index produced none (unset, dropped, or routed to
+    find-links as a directory): without any index uv falls back to
+    PyPI.  It is how the test harness injects its dead index now that
+    the scrubbed child environment no longer leaks ``UV_INDEX_URL``;
+    production callers leave it unset.
 
     Dependencies are not compiled (``--no-deps``): the caller resolves
     one requirement at a time and walks dependency metadata itself, so
@@ -97,7 +106,7 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
         for link in links:
             args.extend(['-f', link])
         args.extend(_constraints_args(workdir, requirements, constraints))
-        args.extend(_index_args(index_url))
+        args.extend(_index_args(index_url, fallback_index_url))
         if not prefer_final:
             args.extend(['--prerelease', 'allow'])
         if offline:
@@ -120,9 +129,28 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
         return _parse_lock(lock)
 
 
+# Ambient uv configuration must not leak into a resolve: the buildout
+# configuration alone decides sources, prerelease policy, offline mode,
+# and cache use.  UV_CACHE_DIR stays: the cache is the store that
+# offline resolves serve from, and the test harness redirects it.
+_SCRUBBED_ENV_VARS = frozenset([
+    'UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_EXTRA_INDEX_URL',
+    'UV_FIND_LINKS', 'UV_PRERELEASE', 'UV_OFFLINE', 'UV_NO_CACHE',
+    'UV_INSECURE_HOST',
+])
+
+
+def _child_env() -> dict[str, str]:
+    """``os.environ`` minus the ambient uv configuration variables."""
+    return {name: value for name, value in os.environ.items()
+            if name not in _SCRUBBED_ENV_VARS}
+
+
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     """Run ``args`` with captured output; the seam monkeypatched by tests."""
-    return subprocess.run(args, capture_output=True, text=True, check=False)
+    return subprocess.run(
+        args, capture_output=True, text=True, check=False,
+        env=_child_env())
 
 
 def _constraints_args(
@@ -256,7 +284,21 @@ def _sha256(artifact: Any) -> str | None:
     return (artifact.get('hashes') or {}).get('sha256')
 
 
-def _index_args(index_url: str | None) -> list[str]:
+def _index_args(index_url: str | None,
+                fallback_index_url: str | None = None) -> list[str]:
+    """Route a configured package index to uv arguments.
+
+    ``fallback_index_url`` becomes ``--index-url`` when the configured
+    index routed to none: an argv with find-links but no index lets uv
+    default to PyPI, which the harness's dead index must plug.
+    """
+    args = _configured_index_args(index_url)
+    if fallback_index_url is not None and '--index-url' not in args:
+        args.extend(['--index-url', fallback_index_url])
+    return args
+
+
+def _configured_index_args(index_url: str | None) -> list[str]:
     """Route a configured package index to uv arguments.
 
     Normalized like ``easy_install._extra_index_url``: a scheme-less

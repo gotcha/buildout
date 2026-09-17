@@ -266,6 +266,15 @@ def hermetic_pip_env():
     (``zope.testing.setupstack.rmtree``) cannot remove, so the cache is
     redirected to a dedicated directory that ``restore`` deletes.
 
+    Seam specifics: ``uv pip compile`` no longer honors the ambient
+    ``UV_INDEX_URL``/``UV_FIND_LINKS`` — the seam scrubs them from the
+    child environment so the configuration alone decides sources — so
+    the seed and the dead index are injected as explicit seam arguments
+    through ``buildout_testing_seam_find_links`` and
+    ``buildout_testing_seam_index_url``.  The ambient variables stay
+    set for the ``uv pip install`` step, whose build isolation still
+    reads them.
+
     Returns a callable restoring the previous environment, or None when
     the seed directory is absent (tests run without prepare.sh): the
     ambient environment is then left alone, the pre-seed behavior.
@@ -277,11 +286,16 @@ def hermetic_pip_env():
         return None
     old = {name: os.environ.get(name)
            for name in ('PIP_NO_INDEX', 'PIP_FIND_LINKS',
-                        'UV_INDEX_URL', 'UV_FIND_LINKS', 'UV_CACHE_DIR')}
+                        'UV_INDEX_URL', 'UV_FIND_LINKS', 'UV_CACHE_DIR',
+                        'buildout_testing_seam_find_links',
+                        'buildout_testing_seam_index_url')}
     os.environ['PIP_NO_INDEX'] = '1'
     os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
     os.environ['UV_INDEX_URL'] = 'file:///nonexistent-hermetic-index'
     os.environ['UV_FIND_LINKS'] = os.path.abspath(seed)
+    os.environ['buildout_testing_seam_find_links'] = os.path.abspath(seed)
+    os.environ['buildout_testing_seam_index_url'] = (
+        'file:///nonexistent-hermetic-index')
     uv_cache = tempfile.mkdtemp('uv-cache')
     os.environ['UV_CACHE_DIR'] = uv_cache
 
