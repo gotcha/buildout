@@ -879,3 +879,129 @@ class TestPypircWarning:
         with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
             easy_install.installer('pip')
         assert caplog.records == []
+
+
+def _make_dist(
+    project_name: str = 'demo',
+    version: str = '0.3',
+    precedence: int = pkg_resources.EGG_DIST,
+) -> pkg_resources.Distribution:
+    """Fabricate the dist the install step would have produced."""
+    return pkg_resources.Distribution(
+        project_name=project_name, version=version, precedence=precedence)
+
+
+def _capture_get_dist(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    installer_mode: str,
+    requirement_text: str = 'demo',
+    precedence: int = pkg_resources.EGG_DIST,
+    allow_picked: bool = True,
+) -> tuple[easy_install.Installer, list, list[logging.LogRecord]]:
+    """Run ``Installer._get_dist`` with the seam and the install step
+    stubbed; return the installer, the installed dists, and the records
+    logged on ``zc.buildout.easy_install``.
+
+    The stubbed seam (``_uv_available_dists`` or ``_available_dists``)
+    offers one dist, so selection flows through ``_obtain`` exactly as in
+    a real run, and the reporting in ``_get_dist`` sees the seam's pick.
+    """
+    monkeypatch.setattr(easy_install.Installer, '_installer', installer_mode)
+    monkeypatch.setattr(
+        easy_install.Installer, '_allow_picked_versions', allow_picked)
+    monkeypatch.setattr(easy_install.Installer, '_picked_versions', {})
+    monkeypatch.delenv('buildout_testing_seam_find_links', raising=False)
+    monkeypatch.delenv('buildout_testing_seam_index_url', raising=False)
+    dist = _make_dist(precedence=precedence)
+    if installer_mode == 'uv':
+        monkeypatch.setattr(
+            easy_install, '_uv_available_dists',
+            lambda *args, **kwargs: [dist])
+    else:
+        monkeypatch.setattr(
+            easy_install, '_available_dists',
+            lambda index, requirement, source: [dist])
+
+    def fake_fetch_new_dists(requirement, avail, ws, dest, download_cache,
+                             fetch, env, rescan_dest, detail=None):
+        # The dist the seam picked is the dist that gets installed.
+        assert avail is dist
+        return [dist]
+
+    monkeypatch.setattr(easy_install, '_fetch_new_dists', fake_fetch_new_dists)
+    installer = easy_install.Installer(dest=str(tmp_path))
+    requirement = pkg_resources.Requirement.parse(requirement_text)
+    ws = pkg_resources.WorkingSet([])
+    with caplog.at_level('DEBUG', logger='zc.buildout.easy_install'):
+        dists = installer._get_dist(requirement, ws)
+    return installer, dists, caplog.records
+
+
+class TestPickedVersionsParity:
+    """uv mode reports picked versions exactly like pip mode.
+
+    The corpus (tests/easy_install.txt, tests/repeatable.txt) already
+    runs these scenarios in both modes.  These tests lock the wiring at
+    unit level, so a future refactor of the uv seam cannot drop the
+    picked-version report without a failure here.
+    """
+
+    def test_uv_reports_picked_version(
+            self, monkeypatch, tmp_path, caplog):
+        installer, dists, records = _capture_get_dist(
+            monkeypatch, tmp_path, caplog, 'uv')
+        assert 'Picked: demo = 0.3' in [r.getMessage() for r in records]
+        assert installer._picked_versions == {'demo': '0.3'}
+        assert [d.version for d in dists] == ['0.3']
+
+    def test_pip_reports_picked_version(
+            self, monkeypatch, tmp_path, caplog):
+        installer, dists, records = _capture_get_dist(
+            monkeypatch, tmp_path, caplog, 'pip')
+        assert 'Picked: demo = 0.3' in [r.getMessage() for r in records]
+        assert installer._picked_versions == {'demo': '0.3'}
+        assert [d.version for d in dists] == ['0.3']
+
+    def test_uv_not_allowed_raises_with_guidance(
+            self, monkeypatch, tmp_path, caplog):
+        with pytest.raises(zc.buildout.UserError) as excinfo:
+            _capture_get_dist(
+                monkeypatch, tmp_path, caplog, 'uv', allow_picked=False)
+        assert str(excinfo.value) == (
+            easy_install.NOT_PICKED_AND_NOT_ALLOWED.format(
+                name='demo', version='0.3'))
+
+    def test_uv_and_pip_raise_identical_message(
+            self, monkeypatch, tmp_path, caplog):
+        messages = []
+        for mode in ('uv', 'pip'):
+            dest = tmp_path / mode
+            dest.mkdir()
+            with pytest.raises(zc.buildout.UserError) as excinfo:
+                _capture_get_dist(
+                    monkeypatch, dest, caplog, mode, allow_picked=False)
+            messages.append(str(excinfo.value))
+        assert messages[0] == messages[1]
+        assert messages[0] == (
+            easy_install.NOT_PICKED_AND_NOT_ALLOWED.format(
+                name='demo', version='0.3'))
+
+    def test_uv_pinned_requirement_is_not_picked(
+            self, monkeypatch, tmp_path, caplog):
+        installer, _dists, records = _capture_get_dist(
+            monkeypatch, tmp_path, caplog, 'uv',
+            requirement_text='demo ==0.3')
+        assert [r.getMessage() for r in records
+                if 'Picked' in r.getMessage()] == []
+        assert installer._picked_versions == {}
+
+    def test_uv_develop_dist_is_not_picked(
+            self, monkeypatch, tmp_path, caplog):
+        installer, _dists, records = _capture_get_dist(
+            monkeypatch, tmp_path, caplog, 'uv',
+            precedence=pkg_resources.DEVELOP_DIST)
+        assert [r.getMessage() for r in records
+                if 'Picked' in r.getMessage()] == []
+        assert installer._picked_versions == {}
