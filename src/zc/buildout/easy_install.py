@@ -958,6 +958,26 @@ def _cache_links_and_index(
     return links, index
 
 
+def _cache_mode_links_and_index(
+        installer: str,
+        install_from_cache: bool,
+        download_cache: str | None,
+        links: tuple[str, ...] | list[str],
+        index: str | None,
+        ) -> tuple[tuple[str, ...] | list[str], str | None]:
+    """Apply the install-from-cache restriction, pip mode only.
+
+    With installer = uv, install-from-cache maps onto uv's own cache
+    instead (``Installer._obtain`` resolves with ``--offline``): the
+    pip download-cache restriction has no uv equivalent, so the
+    configured sources pass through unchanged.
+    """
+    if installer == 'uv':
+        return links, index
+    return _cache_links_and_index(
+        install_from_cache, download_cache, links, index)
+
+
 def _prepare_links(
         links: tuple[str, ...] | list[str],
         download_cache: str | None,
@@ -1050,8 +1070,9 @@ class Installer:
         self._allow_hosts = allow_hosts
         self._allow_unknown_extras = allow_unknown_extras
 
-        links, index = _cache_links_and_index(
-            self._install_from_cache, self._download_cache, links, index)
+        links, index = _cache_mode_links_and_index(
+            self._installer, self._install_from_cache,
+            self._download_cache, links, index)
 
         if use_dependency_links is not None:
             self._use_dependency_links = use_dependency_links
@@ -1240,6 +1261,16 @@ class Installer:
         finally:
             zc.buildout.rmtree.rmtree(tmp)
 
+    def _uv_offline(self) -> bool:
+        """True when the uv seam must resolve with ``--offline``.
+
+        The buildout offline option reaches the seam through the class
+        flag; install-from-cache maps onto the same path, uv serving
+        the resolve from its own cache.  A None destination keeps its
+        own no-install semantics and does not imply ``--offline``.
+        """
+        return self._offline or self._install_from_cache
+
     def _obtain(self, requirement: pkg_resources.Requirement, source: int | None=None) -> pkg_resources.Distribution | None:
         if self._installer == 'uv':
             # An unset index means the default, the same fallback
@@ -1248,13 +1279,10 @@ class Installer:
             # forwards the unset option verbatim.
             index_url = self._index_url or default_index_url
             uv_stderr: list[str] = []
-            # The buildout offline option reaches the seam through the
-            # class flag; a None destination keeps its own no-install
-            # semantics and does not imply --offline.
             dists = _uv_available_dists(
                 requirement, source, self._versions, self._links,
                 index_url, self._prefer_final, uv_stderr,
-                offline=self._offline)
+                offline=self._uv_offline())
             self._uv_stderr_tail = _tail_text(uv_stderr)
         else:
             dists = _available_dists(self._index, requirement, source)

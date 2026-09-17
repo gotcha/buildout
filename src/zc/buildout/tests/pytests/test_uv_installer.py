@@ -603,44 +603,49 @@ class TestErrorTranslation:
             "Error: Couldn't find a distribution for 'demo'.\n")
 
 
+def _capture_obtain_offline(monkeypatch, dest, **class_attrs):
+    """Run ``Installer._obtain`` against a stub seam; return what it
+    forwarded as the ``offline`` argument."""
+    instance = easy_install.Installer.__new__(easy_install.Installer)
+    instance._installer = 'uv'
+    instance._index_url = None
+    instance._versions = {}
+    instance._links = []
+    instance._prefer_final = True
+    instance._uv_stderr_tail = None
+    instance._dest = dest
+    captured = {}
+
+    def fake_available(requirement, source, versions, links, index_url,
+                       prefer_final, uv_stderr, offline=False):
+        captured['offline'] = offline
+        return None
+    monkeypatch.setattr(easy_install, '_uv_available_dists', fake_available)
+    for name, value in class_attrs.items():
+        monkeypatch.setattr(easy_install.Installer, name, value)
+    req = pkg_resources.Requirement.parse('demo')
+    assert instance._obtain(req) is None
+    return captured['offline']
+
+
 class TestOfflineForwarding:
     """buildout -o reaches the uv seam as ``--offline``."""
 
-    def _obtain_offline(self, monkeypatch, dest, class_offline):
-        instance = easy_install.Installer.__new__(easy_install.Installer)
-        instance._installer = 'uv'
-        instance._index_url = None
-        instance._versions = {}
-        instance._links = []
-        instance._prefer_final = True
-        instance._uv_stderr_tail = None
-        instance._dest = dest
-        captured = {}
-
-        def fake_available(requirement, source, versions, links, index_url,
-                           prefer_final, uv_stderr, offline=False):
-            captured['offline'] = offline
-            return None
-        monkeypatch.setattr(
-            easy_install, '_uv_available_dists', fake_available)
-        monkeypatch.setattr(
-            easy_install.Installer, '_offline', class_offline)
-        req = pkg_resources.Requirement.parse('demo')
-        assert instance._obtain(req) is None
-        return captured['offline']
-
     def test_buildout_offline_option_reaches_the_seam(self, monkeypatch,
                                                       tmp_path):
-        assert self._obtain_offline(monkeypatch, str(tmp_path), True) is True
+        assert _capture_obtain_offline(
+            monkeypatch, str(tmp_path), _offline=True) is True
 
     def test_no_destination_alone_does_not_forward_offline(
             self, monkeypatch):
         # A None destination is the API-level no-install mode; it keeps
         # its own semantics and does not put --offline on the uv argv.
-        assert self._obtain_offline(monkeypatch, None, False) is False
+        assert _capture_obtain_offline(
+            monkeypatch, None, _offline=False) is False
 
     def test_online_run_does_not_forward_offline(self, monkeypatch, tmp_path):
-        assert self._obtain_offline(monkeypatch, str(tmp_path), False) is False
+        assert _capture_obtain_offline(
+            monkeypatch, str(tmp_path), _offline=False) is False
 
     def test_pip_mode_never_forwards_offline(self, monkeypatch):
         # Pip mode keeps its historical no-install offline semantics:
@@ -693,6 +698,40 @@ class TestOfflineForwarding:
         assert easy_install.offline() is False
         assert easy_install.offline(True) is False
         assert easy_install.offline() is True
+
+
+class TestInstallFromCacheMapping:
+    """install-from-cache maps onto uv's own cache through --offline."""
+
+    def test_install_from_cache_resolves_offline(self, monkeypatch,
+                                                 tmp_path):
+        assert _capture_obtain_offline(
+            monkeypatch, str(tmp_path), _offline=False,
+            _install_from_cache=True) is True
+
+    def test_uv_install_from_cache_keeps_links_and_index(
+            self, monkeypatch, tmp_path):
+        # The pip-mode download-cache restriction has no uv equivalent:
+        # uv serves from its own cache, so the configured sources stay.
+        monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+        monkeypatch.setattr(
+            easy_install.Installer, '_install_from_cache', True)
+        monkeypatch.setattr(easy_install.Installer, '_download_cache', None)
+        installer = easy_install.Installer(
+            dest=str(tmp_path / 'eggs'),
+            links=('https://example.com/links',),
+            index='https://example.com/simple')
+        assert list(installer._links) == ['https://example.com/links']
+        assert installer._index_url == 'https://example.com/simple'
+
+    def test_pip_install_from_cache_still_requires_download_cache(
+            self, monkeypatch, tmp_path):
+        monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+        monkeypatch.setattr(
+            easy_install.Installer, '_install_from_cache', True)
+        monkeypatch.setattr(easy_install.Installer, '_download_cache', None)
+        with pytest.raises(ValueError, match='no download cache'):
+            easy_install.Installer(dest=str(tmp_path / 'eggs'))
 
 
 class TestPypircWarning:
