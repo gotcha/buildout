@@ -95,15 +95,7 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
                 str(lock_file), '--python', python, '--no-deps']
         for link in links:
             args.extend(['-f', link])
-        constraint_lines = []
-        if constraints:
-            constraint_lines = _validated_constraint_lines(
-                requirements, constraints)
-        if constraint_lines:
-            constraints_txt = workdir / 'constraints.txt'
-            constraints_txt.write_text(''.join(constraint_lines),
-                                       encoding='utf-8')
-            args.extend(['-c', str(constraints_txt)])
+        args.extend(_constraints_args(workdir, requirements, constraints))
         args.extend(_index_args(index_url))
         if not prefer_final:
             args.extend(['--prerelease', 'allow'])
@@ -126,6 +118,22 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     """Run ``args`` with captured output; the seam monkeypatched by tests."""
     return subprocess.run(args, capture_output=True, text=True, check=False)
+
+
+def _constraints_args(
+        workdir: Path,
+        requirements: Sequence[str],
+        constraints: Mapping[str, str],
+        ) -> list[str]:
+    """The ``-c constraints.txt`` arguments, empty when nothing valid pins."""
+    if not constraints:
+        return []
+    lines = _validated_constraint_lines(requirements, constraints)
+    if not lines:
+        return []
+    constraints_txt = workdir / 'constraints.txt'
+    constraints_txt.write_text(''.join(lines), encoding='utf-8')
+    return ['-c', str(constraints_txt)]
 
 
 def _validated_constraint_lines(
@@ -190,27 +198,33 @@ def _constraint_line(name: str, constraint: str) -> str:
 
 def _parse_lock(data: dict[str, Any]) -> PinnedSet:
     """Build the ``PinnedSet`` from parsed ``pylock.toml`` data."""
-    dists: list[PinnedDist] = []
-    for package in data.get('packages', []):
-        try:
-            wheels = package.get('wheels') or []
-            sdist = package.get('sdist') or {}
-            if wheels:
-                url = wheels[0]['url']
-                sha256 = _sha256(wheels[0])
-            else:
-                url = sdist['url']
-                sha256 = _sha256(sdist)
-            dists.append(PinnedDist(
-                name=package['name'], version=package['version'], url=url,
-                sha256=sha256, sdist_url=sdist.get('url'),
-                sdist_sha256=_sha256(sdist)))
-        except (KeyError, IndexError) as err:
-            raise ResolutionError(
-                'uv produced a pylock.toml with an unexpected shape:'
-                f' {err!r} in the entry for'
-                f' {package.get("name")!r}') from err
-    return PinnedSet(tuple(dists))
+    return PinnedSet(tuple(
+        _parse_package(package) for package in data.get('packages', [])))
+
+
+def _parse_package(package: Any) -> PinnedDist:
+    """One lock package entry as a ``PinnedDist``.
+
+    A lock whose shape differs from what uv 0.12 writes raises a
+    ResolutionError with context, never a raw KeyError or IndexError.
+    """
+    try:
+        wheels = package.get('wheels') or []
+        sdist = package.get('sdist') or {}
+        if wheels:
+            url = wheels[0]['url']
+            sha256 = _sha256(wheels[0])
+        else:
+            url = sdist['url']
+            sha256 = _sha256(sdist)
+        return PinnedDist(
+            name=package['name'], version=package['version'], url=url,
+            sha256=sha256, sdist_url=sdist.get('url'),
+            sdist_sha256=_sha256(sdist))
+    except (KeyError, IndexError) as err:
+        raise ResolutionError(
+            'uv produced a pylock.toml with an unexpected shape:'
+            f' {err!r} in the entry for {package.get("name")!r}') from err
 
 
 def _sha256(artifact: Any) -> str | None:

@@ -394,6 +394,24 @@ class IncompatibleConstraintError(zc.buildout.UserError):
 IncompatibleVersionError = IncompatibleConstraintError # Backward compatibility
 
 
+def _raise_if_junk_uv_constraint(
+        installer: str,
+        constraint: str,
+        requirement: pkg_resources.Requirement,
+        ) -> None:
+    """uv mode reports a junk [versions] pin with the disallowed-pin error.
+
+    ``_constrained_requirement`` lets a value that is no valid specifier
+    escape as a bare InvalidSpecifier traceback; under installer = uv the
+    parity error is the IncompatibleConstraintError a valid but
+    disallowed pin gets.
+    """
+    if installer == 'uv' and not uv_resolve._is_valid_constraint(constraint):
+        raise IncompatibleConstraintError(
+            f"The requirement ({str(requirement)!r}) is not allowed "
+            f"by your [versions] constraint ({constraint})")
+
+
 def _constrained_requirement(constraint: str, requirement: pkg_resources.Requirement) -> pkg_resources.Requirement:
     assert isinstance(requirement, pkg_resources.Requirement)
     if constraint[0] not in '<>':
@@ -615,8 +633,7 @@ def _uv_available_dists(
     except uv_resolve.ResolutionError as err:
         logger.debug('uv could not resolve %r:\n%s', str(requirement),
                      err.stderr)
-        if uv_stderr is not None:
-            uv_stderr.extend(_stderr_tail(err.stderr))
+        _note_uv_failure(uv_stderr, err.stderr)
         _raise_if_egg_only(requirement, links, index_url)
         return None
     entry = pinned.for_project(requirement.project_name)
@@ -640,6 +657,19 @@ def _stderr_tail(stderr: str) -> list[str]:
     the tail keeps the user-facing error short while preserving it.
     """
     return [line for line in stderr.splitlines() if line.strip()][-2:]
+
+
+def _note_uv_failure(note: list[str] | None, stderr: str) -> None:
+    """Append the tail of uv's ``stderr`` to ``note`` when collecting."""
+    if note is not None:
+        note.extend(_stderr_tail(stderr))
+
+
+def _tail_text(lines: list[str]) -> str | None:
+    """Collected uv stderr tail lines as one text, None when empty."""
+    if not lines:
+        return None
+    return '\n'.join(lines)
 
 
 def _raise_for_hg_links(
@@ -1216,7 +1246,7 @@ class Installer:
             dists = _uv_available_dists(
                 requirement, source, self._versions, self._links,
                 index_url, self._prefer_final, uv_stderr)
-            self._uv_stderr_tail = '\n'.join(uv_stderr) or None
+            self._uv_stderr_tail = _tail_text(uv_stderr)
         else:
             dists = _available_dists(self._index, requirement, source)
         if dists is None:
@@ -1346,14 +1376,8 @@ class Installer:
         canonical_name = canonicalize_name(requirement.project_name)
         constraint = self._versions.get(canonical_name)
         if constraint:
-            if (self._installer == 'uv'
-                    and not uv_resolve._is_valid_constraint(constraint)):
-                # A junk pin escapes _constrained_requirement as a bare
-                # InvalidSpecifier traceback; uv mode reports it with the
-                # same error as a valid but disallowed pin.
-                raise IncompatibleConstraintError(
-                    f"The requirement ({str(requirement)!r}) is not allowed "
-                    f"by your [versions] constraint ({constraint})")
+            _raise_if_junk_uv_constraint(
+                self._installer, constraint, requirement)
             try:
                 requirement = _constrained_requirement(constraint,
                                                        requirement)
@@ -1592,17 +1616,22 @@ def installer(setting: str | None=None) -> str:
             raise zc.buildout.UserError(
                 f"Invalid value for 'installer' option: {setting!r}."
                 " Valid values are 'pip' and 'uv'.")
-        if (setting == 'uv'
-                and os.path.exists(os.path.expanduser('~/.pypirc'))):
-            # setuptools reads index credentials from ~/.pypirc; uv does
-            # not, so a config that authenticated through it silently
-            # loses its credentials.  Detection stays an existence check
-            # on purpose: no PyPIConfig port.
-            logger.warning(
-                'With installer = uv, credentials in ~/.pypirc are not'
-                ' used; uv reads them from ~/.netrc instead.')
+        _warn_if_pypirc_with_uv(setting)
         Installer._installer = setting
     return old
+
+
+def _warn_if_pypirc_with_uv(setting: str) -> None:
+    """Advise .netrc when uv mode meets a ~/.pypirc.
+
+    setuptools reads index credentials from ~/.pypirc; uv does not, so a
+    config that authenticated through it silently loses its credentials.
+    Detection stays an existence check on purpose: no PyPIConfig port.
+    """
+    if setting == 'uv' and os.path.exists(os.path.expanduser('~/.pypirc')):
+        logger.warning(
+            'With installer = uv, credentials in ~/.pypirc are not'
+            ' used; uv reads them from ~/.netrc instead.')
 
 def allow_picked_versions(setting: bool | None=None) -> bool:
     old = Installer._allow_picked_versions
@@ -2472,6 +2501,13 @@ class VersionConflict(zc.buildout.UserError):
         return '\n'.join(result)
 
 
+def _uv_detail_suffix(detail: str | None) -> str:
+    """The ``  uv: ``-prefixed lines a MissingDistribution appends."""
+    if not detail:
+        return ''
+    return ''.join(f'\n  uv: {line}' for line in detail.splitlines())
+
+
 class MissingDistribution(zc.buildout.UserError):
 
     def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet,
@@ -2482,15 +2518,11 @@ class MissingDistribution(zc.buildout.UserError):
         # In uv mode, the tail of uv's stderr, so the cause class (not
         # found, unsatisfiable, ...) survives the debug-level demote.
         self.detail = detail
+        self._suffix = _uv_detail_suffix(detail)
 
     def __str__(self) -> str:
         req, _ws = self.data
-        message = f"Couldn't find a distribution for {str(req)!r}."
-        if self.detail:
-            tail = '\n'.join(f'  uv: {line}'
-                             for line in self.detail.splitlines())
-            message = f'{message}\n{tail}'
-        return message
+        return f"Couldn't find a distribution for {str(req)!r}.{self._suffix}"
 
 def _is_url(value: str) -> bool:
     """True when ``value`` carries a real URL scheme.
