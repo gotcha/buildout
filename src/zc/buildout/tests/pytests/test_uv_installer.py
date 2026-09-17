@@ -442,6 +442,16 @@ hashes = { sha256 = "aaaa" }
         assert box['constraints'] == 'demo==1.0\n'
         assert len(caplog.records) == 1
 
+    def test_empty_pin_is_skipped_like_pip(self, monkeypatch, caplog):
+        # Installer._constrain skips a falsy [versions] value, so pip
+        # mode treats an empty pin as no pin at all, without a warning.
+        box = self._record_constraints(monkeypatch)
+        with caplog.at_level('WARNING', logger='zc.buildout.uv_resolve'):
+            pinned = self._resolve(['demo'], {'demo': '', 'wtf': '{wtf}'})
+        assert pinned.for_project('demo').version == '1.0'
+        assert 'constraints' not in box
+        assert len(caplog.records) == 1  # only the junk warning for wtf
+
     def test_junk_for_resolved_project_raises_parity_error(
             self, monkeypatch):
         def resolve_must_not_run(args):

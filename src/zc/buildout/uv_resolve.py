@@ -159,19 +159,38 @@ def _validated_constraint_lines(
         resolved[canonicalize_name(name)] = requirement
     lines = []
     for name, constraint in constraints.items():
+        if not constraint:
+            # pip parity: Installer._constrain skips a falsy [versions]
+            # value, so an empty pin is no pin at all, for any project.
+            continue
         if _is_valid_constraint(constraint):
             lines.append(_constraint_line(name, constraint))
             continue
-        requirement = resolved.get(canonicalize_name(name))
-        if requirement is not None:
-            from zc.buildout.easy_install import IncompatibleConstraintError
-            raise IncompatibleConstraintError(
-                f"The requirement ({requirement!r}) is not allowed "
-                f"by your [versions] constraint ({constraint})")
-        logger.warning(
-            'Ignoring [versions] entry %s = %s:'
-            ' not a valid version specifier.', name, constraint)
+        _reject_junk_constraint(resolved, name, constraint)
     return lines
+
+
+def _reject_junk_constraint(
+        resolved: Mapping[str, str],
+        name: str,
+        constraint: str,
+        ) -> None:
+    """Report a [versions] entry that is no valid specifier.
+
+    An invalid pin for a project being resolved raises the same
+    IncompatibleConstraintError pip mode raises for a disallowed pin;
+    for any other project the entry is skipped with a warning, since
+    pip mode never applies it.
+    """
+    requirement = resolved.get(canonicalize_name(name))
+    if requirement is not None:
+        from zc.buildout.easy_install import IncompatibleConstraintError
+        raise IncompatibleConstraintError(
+            f"The requirement ({requirement!r}) is not allowed "
+            f"by your [versions] constraint ({constraint})")
+    logger.warning(
+        'Ignoring [versions] entry %s = %s:'
+        ' not a valid version specifier.', name, constraint)
 
 
 def _is_valid_constraint(constraint: str) -> bool:
