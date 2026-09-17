@@ -1325,6 +1325,14 @@ class Installer:
         canonical_name = canonicalize_name(requirement.project_name)
         constraint = self._versions.get(canonical_name)
         if constraint:
+            if (self._installer == 'uv'
+                    and not uv_resolve._is_valid_constraint(constraint)):
+                # A junk pin escapes _constrained_requirement as a bare
+                # InvalidSpecifier traceback; uv mode reports it with the
+                # same error as a valid but disallowed pin.
+                raise IncompatibleConstraintError(
+                    f"The requirement ({str(requirement)!r}) is not allowed "
+                    f"by your [versions] constraint ({constraint})")
             try:
                 requirement = _constrained_requirement(constraint,
                                                        requirement)

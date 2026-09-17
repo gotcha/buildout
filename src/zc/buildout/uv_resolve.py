@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import tempfile
 import urllib.parse
@@ -11,7 +12,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.utils import canonicalize_name
+
+logger = logging.getLogger(__name__)
 
 try:
     import tomllib
@@ -90,12 +95,14 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
                 str(lock_file), '--python', python, '--no-deps']
         for link in links:
             args.extend(['-f', link])
+        constraint_lines = []
         if constraints:
+            constraint_lines = _validated_constraint_lines(
+                requirements, constraints)
+        if constraint_lines:
             constraints_txt = workdir / 'constraints.txt'
-            constraints_txt.write_text(
-                ''.join(_constraint_line(name, constraint)
-                        for name, constraint in constraints.items()),
-                encoding='utf-8')
+            constraints_txt.write_text(''.join(constraint_lines),
+                                       encoding='utf-8')
             args.extend(['-c', str(constraints_txt)])
         args.extend(_index_args(index_url))
         if not prefer_final:
@@ -114,6 +121,54 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     """Run ``args`` with captured output; the seam monkeypatched by tests."""
     return subprocess.run(args, capture_output=True, text=True, check=False)
+
+
+def _validated_constraint_lines(
+        requirements: Sequence[str],
+        constraints: Mapping[str, str],
+        ) -> list[str]:
+    """Constraints-file lines for a [versions] mapping, junk filtered out.
+
+    The whole mapping is handed to every compile, so one entry that is
+    no valid specifier would abort unrelated resolutions with uv's
+    constraints-file parse error.  pip mode only ever applies the entry
+    for the project being installed, so an invalid entry for another
+    project is skipped with a warning here, while an invalid entry for
+    a project being resolved raises the same IncompatibleConstraintError
+    pip mode raises for a disallowed pin.
+    """
+    resolved: dict[str, str] = {}
+    for requirement in requirements:
+        try:
+            name = Requirement(requirement).name
+        except InvalidRequirement:
+            continue
+        resolved[canonicalize_name(name)] = requirement
+    lines = []
+    for name, constraint in constraints.items():
+        if _is_valid_constraint(constraint):
+            lines.append(_constraint_line(name, constraint))
+            continue
+        requirement = resolved.get(canonicalize_name(name))
+        if requirement is not None:
+            from zc.buildout.easy_install import IncompatibleConstraintError
+            raise IncompatibleConstraintError(
+                f"The requirement ({requirement!r}) is not allowed "
+                f"by your [versions] constraint ({constraint})")
+        logger.warning(
+            'Ignoring [versions] entry %s = %s:'
+            ' not a valid version specifier.', name, constraint)
+    return lines
+
+
+def _is_valid_constraint(constraint: str) -> bool:
+    """True when ``constraint`` parses as the specifier uv is handed."""
+    text = constraint if constraint[:1] in '<>=' else f'=={constraint}'
+    try:
+        SpecifierSet(text)
+    except InvalidSpecifier:
+        return False
+    return True
 
 
 def _constraint_line(name: str, constraint: str) -> str:

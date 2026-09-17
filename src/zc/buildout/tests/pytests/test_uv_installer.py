@@ -383,3 +383,112 @@ class TestFragmentFindLinksGuard:
             req, None, {},
             ['https://example.invalid/files/demo-1.0.tar.gz'],
             None, True) is None
+
+
+class TestJunkVersionsHardening:
+    """Junk [versions] entries no longer abort unrelated uv resolutions."""
+
+    LOCK = '''\
+lock-version = "1.0"
+created-by = "uv"
+
+[[packages]]
+name = "demo"
+version = "1.0"
+
+[[packages.wheels]]
+url = "https://files.example.com/demo-1.0-py3-none-any.whl"
+hashes = { sha256 = "aaaa" }
+'''
+
+    def _record_constraints(self, monkeypatch):
+        """Stub ``uv_resolve._run``; return a box for the constraints text."""
+        import subprocess
+        from pathlib import Path
+
+        from zc.buildout import uv_resolve
+        box = {}
+
+        def fake_run(args):
+            if '-c' in args:
+                box['constraints'] = Path(
+                    args[args.index('-c') + 1]).read_text()
+            Path(args[args.index('-o') + 1]).write_text(self.LOCK)
+            return subprocess.CompletedProcess(args, 0, '', '')
+
+        monkeypatch.setattr(uv_resolve, '_run', fake_run)
+        return box
+
+    def _resolve(self, requirements, constraints):
+        from zc.buildout import uv_resolve
+        return uv_resolve.resolve(
+            requirements=requirements, constraints=constraints,
+            links=[], index_url=None, uv='/uv', python=sys.executable)
+
+    def test_junk_for_other_project_is_skipped_with_warning(
+            self, monkeypatch, caplog):
+        box = self._record_constraints(monkeypatch)
+        with caplog.at_level('WARNING', logger='zc.buildout.uv_resolve'):
+            pinned = self._resolve(['demo'], {'wtf': '{wtf}'})
+        assert pinned.for_project('demo').version == '1.0'
+        # No valid line survives, so no constraints file reaches uv.
+        assert 'constraints' not in box
+        assert len(caplog.records) == 1
+        message = caplog.records[0].getMessage()
+        assert 'wtf' in message
+        assert '{wtf}' in message
+
+    def test_valid_lines_survive_alongside_junk(self, monkeypatch, caplog):
+        box = self._record_constraints(monkeypatch)
+        with caplog.at_level('WARNING', logger='zc.buildout.uv_resolve'):
+            self._resolve(['demo'], {'demo': '1.0', 'wtf': '{wtf}'})
+        assert box['constraints'] == 'demo==1.0\n'
+        assert len(caplog.records) == 1
+
+    def test_junk_for_resolved_project_raises_parity_error(
+            self, monkeypatch):
+        from zc.buildout import uv_resolve
+
+        def resolve_must_not_run(args):
+            raise AssertionError('uv must not be spawned')
+        monkeypatch.setattr(uv_resolve, '_run', resolve_must_not_run)
+        with pytest.raises(
+                easy_install.IncompatibleConstraintError) as excinfo:
+            self._resolve(['demo'], {'demo': '{wtf}'})
+        assert str(excinfo.value) == (
+            "The requirement ('demo') is not allowed"
+            " by your [versions] constraint ({wtf})")
+
+    def test_junk_match_is_canonicalized(self, monkeypatch):
+        from zc.buildout import uv_resolve
+        monkeypatch.setattr(
+            uv_resolve, '_run',
+            lambda args: (_ for _ in ()).throw(AssertionError('no uv')))
+        with pytest.raises(easy_install.IncompatibleConstraintError):
+            self._resolve(['Demo'], {'demo': '{wtf}'})
+
+    def _bare_installer(self, installer, versions):
+        instance = easy_install.Installer.__new__(easy_install.Installer)
+        instance._installer = installer
+        instance._versions = versions
+        return instance
+
+    def test_constrain_reports_junk_pin_in_uv_mode(self):
+        instance = self._bare_installer('uv', {'demo': '{wtf}'})
+        with pytest.raises(
+                easy_install.IncompatibleConstraintError) as excinfo:
+            instance._constrain(pkg_resources.Requirement.parse('demo>=1'))
+        assert str(excinfo.value) == (
+            "The requirement ('demo>=1') is not allowed"
+            " by your [versions] constraint ({wtf})")
+
+    def test_constrain_ignores_junk_for_other_projects(self):
+        instance = self._bare_installer('uv', {'wtf': '{wtf}'})
+        req = pkg_resources.Requirement.parse('demo')
+        assert instance._constrain(req) == req
+
+    def test_constrain_pip_mode_keeps_invalid_specifier(self):
+        from packaging import specifiers
+        instance = self._bare_installer('pip', {'demo': '{wtf}'})
+        with pytest.raises(specifiers.InvalidSpecifier):
+            instance._constrain(pkg_resources.Requirement.parse('demo'))
