@@ -1,13 +1,15 @@
 """Unit tests for the uv installer fork in zc.buildout.easy_install."""
 import logging
 import os
+import subprocess
 import sys
+from pathlib import Path
 
 import pkg_resources
 import pytest
 
 import zc.buildout
-from zc.buildout import easy_install
+from zc.buildout import easy_install, uv_resolve
 from zc.buildout.easy_install import (
     _extra_index_url,
     _pip_install_env,
@@ -403,10 +405,6 @@ hashes = { sha256 = "aaaa" }
 
     def _record_constraints(self, monkeypatch):
         """Stub ``uv_resolve._run``; return a box for the constraints text."""
-        import subprocess
-        from pathlib import Path
-
-        from zc.buildout import uv_resolve
         box = {}
 
         def fake_run(args):
@@ -420,7 +418,6 @@ hashes = { sha256 = "aaaa" }
         return box
 
     def _resolve(self, requirements, constraints):
-        from zc.buildout import uv_resolve
         return uv_resolve.resolve(
             requirements=requirements, constraints=constraints,
             links=[], index_url=None, uv='/uv', python=sys.executable)
@@ -447,8 +444,6 @@ hashes = { sha256 = "aaaa" }
 
     def test_junk_for_resolved_project_raises_parity_error(
             self, monkeypatch):
-        from zc.buildout import uv_resolve
-
         def resolve_must_not_run(args):
             raise AssertionError('uv must not be spawned')
         monkeypatch.setattr(uv_resolve, '_run', resolve_must_not_run)
@@ -460,7 +455,6 @@ hashes = { sha256 = "aaaa" }
             " by your [versions] constraint ({wtf})")
 
     def test_junk_match_is_canonicalized(self, monkeypatch):
-        from zc.buildout import uv_resolve
         monkeypatch.setattr(
             uv_resolve, '_run',
             lambda args: (_ for _ in ()).throw(AssertionError('no uv')))
@@ -492,3 +486,108 @@ hashes = { sha256 = "aaaa" }
         instance = self._bare_installer('pip', {'demo': '{wtf}'})
         with pytest.raises(specifiers.InvalidSpecifier):
             instance._constrain(pkg_resources.Requirement.parse('demo'))
+
+
+class TestErrorTranslation:
+    """uv failures surface in buildout vocabulary, never as raw errors."""
+
+    def test_parse_lock_missing_url_raises_resolution_error(self):
+        with pytest.raises(uv_resolve.ResolutionError) as excinfo:
+            uv_resolve._parse_lock({'packages': [
+                {'name': 'demo', 'version': '1.0', 'wheels': [{}]}]})
+        message = str(excinfo.value)
+        assert 'pylock.toml' in message
+        assert "'url'" in message
+        assert 'demo' in message
+
+    def test_parse_lock_missing_name_raises_resolution_error(self):
+        with pytest.raises(uv_resolve.ResolutionError) as excinfo:
+            uv_resolve._parse_lock({'packages': [
+                {'version': '1.0',
+                 'sdist': {'url': 'https://x/demo-1.0.tar.gz'}}]})
+        message = str(excinfo.value)
+        assert 'pylock.toml' in message
+        assert "'name'" in message
+
+    def test_resolve_translates_invalid_toml(self, monkeypatch):
+        def fake_run(args):
+            Path(args[args.index('-o') + 1]).write_text('not [valid toml')
+            return subprocess.CompletedProcess(args, 0, '', 'shim stderr')
+        monkeypatch.setattr(uv_resolve, '_run', fake_run)
+        with pytest.raises(uv_resolve.ResolutionError) as excinfo:
+            uv_resolve.resolve(
+                requirements=['demo'], constraints={}, links=[],
+                index_url=None, uv='/uv', python=sys.executable)
+        assert 'pylock.toml' in str(excinfo.value)
+        assert excinfo.value.stderr == 'shim stderr'
+
+    def test_uv_available_dists_captures_stderr_tail(self, monkeypatch):
+        def fail_resolve(**kwargs):
+            raise uv_resolve.ResolutionError('no', 'first\n\nsecond\nthird')
+        monkeypatch.setattr(uv_resolve, 'resolve', fail_resolve)
+        tail = []
+        result = easy_install._uv_available_dists(
+            pkg_resources.Requirement.parse('demo'), None, {}, [], None,
+            True, tail)
+        assert result is None
+        assert tail == ['second', 'third']
+
+    def test_stderr_tail_skips_blank_lines(self):
+        assert easy_install._stderr_tail('one\n\n two \nthree\n') == [
+            ' two ', 'three']
+
+    def test_missing_distribution_without_detail_is_unchanged(self):
+        err = easy_install.MissingDistribution(
+            pkg_resources.Requirement.parse('demo'),
+            pkg_resources.WorkingSet([]))
+        assert str(err) == "Couldn't find a distribution for 'demo'."
+
+    def test_missing_distribution_carries_uv_stderr_tail(self):
+        err = easy_install.MissingDistribution(
+            pkg_resources.Requirement.parse('demo'),
+            pkg_resources.WorkingSet([]),
+            detail='error: No solution found\nBecause demo was not found')
+        assert str(err) == (
+            "Couldn't find a distribution for 'demo'.\n"
+            '  uv: error: No solution found\n'
+            '  uv: Because demo was not found')
+
+    def test_fetch_new_dists_passes_detail_to_missing_distribution(
+            self, tmp_path):
+        with pytest.raises(easy_install.MissingDistribution) as excinfo:
+            easy_install._fetch_new_dists(
+                pkg_resources.Requirement.parse('demo'), None,
+                pkg_resources.WorkingSet([]), str(tmp_path), None,
+                lambda *args: None, pkg_resources.Environment([]),
+                lambda: None, detail='Because demo was not found')
+        assert '  uv: Because demo was not found' in str(excinfo.value)
+
+    def test_obtain_collects_uv_stderr_tail(self, monkeypatch):
+        instance = easy_install.Installer.__new__(easy_install.Installer)
+        instance._installer = 'uv'
+        instance._index_url = None
+        instance._versions = {}
+        instance._links = []
+        instance._prefer_final = True
+        instance._uv_stderr_tail = None
+
+        def fake_available(requirement, source, versions, links, index_url,
+                           prefer_final, uv_stderr):
+            uv_stderr.append('Because demo was not found')
+            return None
+        monkeypatch.setattr(
+            easy_install, '_uv_available_dists', fake_available)
+        req = pkg_resources.Requirement.parse('demo')
+        assert instance._obtain(req) is None
+        assert instance._uv_stderr_tail == 'Because demo was not found'
+
+    def test_drop_uv_resolution_stderr_tail_is_mode_conditional(
+            self, monkeypatch):
+        from zc.buildout import testing
+        text = ("Error: Couldn't find a distribution for 'demo'.\n"
+                '  uv: Because demo was not found\n')
+        monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+        assert testing.drop_uv_resolution_stderr_tail(text) == text
+        monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+        assert testing.drop_uv_resolution_stderr_tail(text) == (
+            "Error: Couldn't find a distribution for 'demo'.\n")

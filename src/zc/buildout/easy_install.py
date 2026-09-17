@@ -589,13 +589,16 @@ def _uv_available_dists(
         links: list[str],
         index_url: str | None,
         prefer_final: bool,
+        uv_stderr: list[str] | None = None,
         ) -> list[pkg_resources.Distribution] | None:
     """Return what uv resolves for ``requirement`` as a one-dist list.
 
     ``None`` means uv found nothing satisfying the requirement, matching
     the ``_available_dists`` contract.  The dist carries the resolved
     artifact URL as its location: the install step hands it straight to
-    ``uv pip install``, so no separate download happens.
+    ``uv pip install``, so no separate download happens.  When a list is
+    passed as ``uv_stderr``, a resolve failure appends the tail of uv's
+    stderr to it, for the MissingDistribution message.
     """
     _raise_for_hg_links(requirement, links)
     _raise_for_fragment_links(requirement, links)
@@ -612,6 +615,8 @@ def _uv_available_dists(
     except uv_resolve.ResolutionError as err:
         logger.debug('uv could not resolve %r:\n%s', str(requirement),
                      err.stderr)
+        if uv_stderr is not None:
+            uv_stderr.extend(_stderr_tail(err.stderr))
         _raise_if_egg_only(requirement, links, index_url)
         return None
     entry = pinned.for_project(requirement.project_name)
@@ -626,6 +631,15 @@ def _uv_available_dists(
         url = entry.url
     return [Distribution(
         location=url, project_name=entry.name, version=entry.version)]
+
+
+def _stderr_tail(stderr: str) -> list[str]:
+    """The last non-empty lines of ``stderr``, at most two.
+
+    uv's own wording explains the cause class (not found, unsatisfiable);
+    the tail keeps the user-facing error short while preserving it.
+    """
+    return [line for line in stderr.splitlines() if line.strip()][-2:]
 
 
 def _raise_for_hg_links(
@@ -836,13 +850,16 @@ def _fetch_new_dists(
             pkg_resources.Distribution | None],
         env: pkg_resources.Environment,
         rescan_dest: Callable[[], None],
+        detail: str | None = None,
         ) -> list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]:
     """Download, install and register a distribution for ``requirement``.
 
     Called when no installed dist satisfies the requirement: fetches
     ``avail`` into the download cache or a fresh temporary directory,
     moves the result into the eggs destination directory ``dest``, adds
-    it to the working set and rescans the destination.
+    it to the working set and rescans the destination.  ``detail`` is
+    extra context for the MissingDistribution error (the tail of uv's
+    stderr in uv mode).
     """
     if dest is None:
         raise zc.buildout.UserError(
@@ -853,7 +870,7 @@ def _fetch_new_dists(
 
     if avail is None:
         # We have no existing dist, and none is available for download.
-        raise MissingDistribution(requirement, ws)
+        raise MissingDistribution(requirement, ws, detail)
 
     # We may overwrite distributions, so clear importer
     # cache.
@@ -1018,6 +1035,7 @@ class Installer:
         self._index = _get_index(index, links, self._allow_hosts)
         self._requirements_and_constraints = []
         self._check_picked = check_picked
+        self._uv_stderr_tail: str | None = None
 
         if versions is not None:
             self._versions = normalize_versions(versions)
@@ -1194,9 +1212,11 @@ class Installer:
             # can hold the empty string here: the buildout entry point
             # forwards the unset option verbatim.
             index_url = self._index_url or default_index_url
+            uv_stderr: list[str] = []
             dists = _uv_available_dists(
                 requirement, source, self._versions, self._links,
-                index_url, self._prefer_final)
+                index_url, self._prefer_final, uv_stderr)
+            self._uv_stderr_tail = '\n'.join(uv_stderr) or None
         else:
             dists = _available_dists(self._index, requirement, source)
         if dists is None:
@@ -1254,7 +1274,8 @@ class Installer:
             if dist is None:
                 dists = _fetch_new_dists(
                     requirement, avail, ws, self._dest, self._download_cache,
-                    self._fetch, self._env, self._env_rescan_dest)
+                    self._fetch, self._env, self._env_rescan_dest,
+                    detail=self._uv_stderr_tail)
 
             else:
                 dists = [dist]
@@ -2444,14 +2465,23 @@ class VersionConflict(zc.buildout.UserError):
 
 class MissingDistribution(zc.buildout.UserError):
 
-    def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet) -> None:
+    def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet,
+                 detail: str | None = None) -> None:
         sorted_dists = list(ws)
         sorted_dists.sort()
         self.data = req, sorted_dists
+        # In uv mode, the tail of uv's stderr, so the cause class (not
+        # found, unsatisfiable, ...) survives the debug-level demote.
+        self.detail = detail
 
     def __str__(self) -> str:
         req, _ws = self.data
-        return f"Couldn't find a distribution for {str(req)!r}."
+        message = f"Couldn't find a distribution for {str(req)!r}."
+        if self.detail:
+            tail = '\n'.join(f'  uv: {line}'
+                             for line in self.detail.splitlines())
+            message = f'{message}\n{tail}'
+        return message
 
 def _is_url(value: str) -> bool:
     """True when ``value`` carries a real URL scheme.

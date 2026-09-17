@@ -26,13 +26,13 @@ import manuel.capture
 import manuel.doctest
 import manuel.testing
 import pkg_resources
-from build import ProjectBuilder
 from build.env import DefaultIsolatedEnv
 from zope.testing import renormalizing, setupstack
 
 import zc.buildout.easy_install
 import zc.buildout.rmtree
 import zc.buildout.testing
+from build import ProjectBuilder
 from zc.buildout.buildout import print_
 from zc.buildout.tests import (
     create_sample_eggs,
@@ -3669,6 +3669,7 @@ def test_suite():
                 zc.buildout.testing.normalize_uv_download_cache,
                 zc.buildout.testing.drop_uv_version_chatter,
                 zc.buildout.testing.drop_uv_download_cache_deprecation,
+                zc.buildout.testing.drop_uv_resolution_stderr_tail,
                 zc.buildout.testing.normalize_exception_type_for_python_2_and_3,
                 zc.buildout.testing.normalize_open_in_generated_script,
                 zc.buildout.testing.adding_find_link,
@@ -3728,6 +3729,7 @@ def test_suite():
                 zc.buildout.testing.pkg_resources_deprecated,
                 zc.buildout.testing.warnings_warn,
                 zc.buildout.testing.ignore_root_logger,
+                zc.buildout.testing.drop_uv_resolution_stderr_tail,
                 zc.buildout.testing.ignore_native_namespace_warning_1,
                 zc.buildout.testing.ignore_native_namespace_warning_2,
                 zc.buildout.testing.ignore_native_namespace_warning_3,

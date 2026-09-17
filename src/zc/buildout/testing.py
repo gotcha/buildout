@@ -729,6 +729,19 @@ def normalize_uv_download_cache(text):
         line for line in text.split('\n')
         if line not in _UV_CACHE_SERVED_LINES)
 
+def drop_uv_resolution_stderr_tail(text):
+    """Drop the uv stderr tail lines of a MissingDistribution in uv mode.
+
+    With installer = uv, a distribution uv cannot find reports the tail
+    of uv's stderr after the Couldn't-find-a-distribution line, so the
+    cause class stays visible; uv's wording is uv's own and changes
+    between releases, so transcripts written for pip drop those lines.
+    Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return re.sub(r'(?m)^  uv: [^\n]*\n', '', text)
+
 def drop_uv_download_cache_deprecation(text):
     """Drop the download-cache deprecation warning lines in uv mode.
 

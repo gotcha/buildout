@@ -60,7 +60,7 @@ class PinnedSet:
 class ResolutionError(Exception):
     """``uv pip compile`` failed; ``stderr`` carries its captured stderr."""
 
-    def __init__(self, message: str, stderr: str) -> None:
+    def __init__(self, message: str, stderr: str = '') -> None:
         super().__init__(message)
         self.stderr: str = stderr
 
@@ -114,7 +114,12 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
             raise ResolutionError(
                 f'uv pip compile exited with status {completed.returncode}',
                 completed.stderr)
-        lock = tomllib.loads(lock_file.read_text(encoding='utf-8'))
+        try:
+            lock = tomllib.loads(lock_file.read_text(encoding='utf-8'))
+        except tomllib.TOMLDecodeError as err:
+            raise ResolutionError(
+                f'uv produced an unparsable pylock.toml: {err}',
+                completed.stderr) from err
         return _parse_lock(lock)
 
 
@@ -187,18 +192,24 @@ def _parse_lock(data: dict[str, Any]) -> PinnedSet:
     """Build the ``PinnedSet`` from parsed ``pylock.toml`` data."""
     dists: list[PinnedDist] = []
     for package in data.get('packages', []):
-        wheels = package.get('wheels') or []
-        sdist = package.get('sdist') or {}
-        if wheels:
-            url = wheels[0]['url']
-            sha256 = _sha256(wheels[0])
-        else:
-            url = sdist['url']
-            sha256 = _sha256(sdist)
-        dists.append(PinnedDist(
-            name=package['name'], version=package['version'], url=url,
-            sha256=sha256, sdist_url=sdist.get('url'),
-            sdist_sha256=_sha256(sdist)))
+        try:
+            wheels = package.get('wheels') or []
+            sdist = package.get('sdist') or {}
+            if wheels:
+                url = wheels[0]['url']
+                sha256 = _sha256(wheels[0])
+            else:
+                url = sdist['url']
+                sha256 = _sha256(sdist)
+            dists.append(PinnedDist(
+                name=package['name'], version=package['version'], url=url,
+                sha256=sha256, sdist_url=sdist.get('url'),
+                sdist_sha256=_sha256(sdist)))
+        except (KeyError, IndexError) as err:
+            raise ResolutionError(
+                'uv produced a pylock.toml with an unexpected shape:'
+                f' {err!r} in the entry for'
+                f' {package.get("name")!r}') from err
     return PinnedSet(tuple(dists))
 
 
