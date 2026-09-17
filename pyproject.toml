@@ -54,6 +54,13 @@ select = [
 ]
 ignore = []
 
+[tool.ruff.lint.isort]
+# The local `build/` tree (created by prepare.sh's sdist step, gitignored
+# and absent from clean checkouts and CI mounts) would otherwise flip the
+# `build` package between first-party and third-party depending on the
+# machine state. Pin it so I001 means the same thing everywhere.
+known-third-party = ["build"]
+
 [tool.ruff.lint.per-file-ignores]
 # Ported doctest writes a buildout.cfg containing `${...}` substitutions
 # and applies `% dict` for legacy reasons; a mapping argument with no

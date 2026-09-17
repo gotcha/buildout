@@ -26,13 +26,13 @@ import manuel.capture
 import manuel.doctest
 import manuel.testing
 import pkg_resources
+from build import ProjectBuilder
 from build.env import DefaultIsolatedEnv
 from zope.testing import renormalizing, setupstack
 
 import zc.buildout.easy_install
 import zc.buildout.rmtree
 import zc.buildout.testing
-from build import ProjectBuilder
 from zc.buildout.buildout import print_
 from zc.buildout.tests import (
     create_sample_eggs,
