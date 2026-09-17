@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import pkg_resources
 import pytest
@@ -806,7 +807,8 @@ class TestSeamTestingSources:
             'file:///nonexistent-hermetic-index')
         instance = easy_install.Installer.__new__(easy_install.Installer)
         instance._installer = 'pip'
-        instance._index = None  # never read: stubbed below
+        # Passed to the _available_dists stub below, never dereferenced.
+        instance._index = cast(Any, None)
         seen = []
 
         def fake_available_dists(index, requirement, source):
