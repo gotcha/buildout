@@ -734,6 +734,35 @@ class TestInstallFromCacheMapping:
             easy_install.Installer(dest=str(tmp_path / 'eggs'))
 
 
+class TestAllowHostsWarning:
+    """A non-default allow-hosts warns under uv: uv has no host filter."""
+
+    def _check(self, monkeypatch, caplog, allow_hosts, installer):
+        from zc.buildout import buildout as buildout_module
+        monkeypatch.setattr(easy_install.Installer, '_installer', installer)
+        logger = logging.getLogger('zc.buildout')
+        with caplog.at_level('WARNING', logger='zc.buildout'):
+            buildout_module._check_allow_hosts_with_uv(allow_hosts, logger)
+        return caplog.records
+
+    def test_non_default_allow_hosts_warns_under_uv(
+            self, monkeypatch, caplog):
+        records = self._check(monkeypatch, caplog, ('example.com',), 'uv')
+        assert len(records) == 1
+        message = records[0].getMessage()
+        assert 'allow-hosts' in message
+        assert 'installer = uv' in message
+
+    def test_default_allow_hosts_is_silent_under_uv(
+            self, monkeypatch, caplog):
+        assert self._check(monkeypatch, caplog, ('*',), 'uv') == []
+
+    def test_non_default_allow_hosts_is_silent_under_pip(
+            self, monkeypatch, caplog):
+        assert self._check(
+            monkeypatch, caplog, ('example.com',), 'pip') == []
+
+
 class TestPypircWarning:
     """installer = uv warns when ~/.pypirc exists: uv reads ~/.netrc."""
 

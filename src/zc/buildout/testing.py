@@ -747,6 +747,19 @@ def drop_uv_resolution_stderr_tail(text):
         return text
     return re.sub(r'(?m)^  uv: [^\n]*\n', '', text)
 
+def drop_uv_allow_hosts_warning(text):
+    """Drop the allow-hosts warning lines in uv mode.
+
+    Spawned buildouts warn once per run when allow-hosts differs from
+    the default under ``installer = uv``, so every transcript of such a
+    run would have to pin it.  The warning itself is asserted by unit
+    and corpus tests.  Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return re.sub(r'(?m)^.*allow-hosts option is not enforced.*\n', '', text)
+
+
 def drop_uv_download_cache_deprecation(text):
     """Drop the download-cache deprecation warning lines in uv mode.
 

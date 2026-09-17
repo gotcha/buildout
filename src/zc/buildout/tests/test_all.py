@@ -3328,6 +3328,28 @@ def offline_run_with_a_missing_part_egg_installs_nothing():
     <BLANKLINE>
     """
 
+def allow_hosts_warning_is_uv_only():
+    r"""
+    With ``installer = uv``, a non-default allow-hosts prints a warning:
+    uv has no host allow-list.  Pip mode enforces it silently.
+
+    >>> write('buildout.cfg',
+    ... '''
+    ... [buildout]
+    ... parts =
+    ... allow-hosts = example.com
+    ... ''')
+
+    >>> import zc.buildout.easy_install
+    >>> out = system(buildout)
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     ok = 'allow-hosts option is not enforced' in out
+    ... else:
+    ...     ok = 'allow-hosts' not in out
+    >>> print_('ok' if ok else 'MISMATCH:\n' + out)
+    ok
+    """
+
 def offline_option_is_forwarded_only_in_uv_mode():
     r"""
     The easy_install offline flag drives the uv seam: with it set, a uv
@@ -3755,6 +3777,7 @@ def test_suite():
                 zc.buildout.testing.normalize_uv_download_cache,
                 zc.buildout.testing.drop_uv_version_chatter,
                 zc.buildout.testing.drop_uv_download_cache_deprecation,
+                zc.buildout.testing.drop_uv_allow_hosts_warning,
                 zc.buildout.testing.drop_uv_resolution_stderr_tail,
                 zc.buildout.testing.normalize_exception_type_for_python_2_and_3,
                 zc.buildout.testing.normalize_open_in_generated_script,

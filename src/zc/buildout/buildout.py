@@ -686,6 +686,23 @@ def _check_install_from_cache(
         zc.buildout.easy_install.install_from_cache(True)
 
 
+def _check_allow_hosts_with_uv(
+        allow_hosts: tuple[str, ...],
+        logger: logging.Logger,
+        ) -> None:
+    """Warn that a non-default allow-hosts is not enforced under uv.
+
+    uv has no host allow-list; its ``--allow-insecure-host`` is TLS
+    policy, not filtering, so there is nothing to map the option onto.
+    """
+    if allow_hosts != ('*',) and zc.buildout.easy_install.installer() == 'uv':
+        logger.warning(
+            'With installer = uv, the allow-hosts option is not'
+            ' enforced: uv has no host allow-list'
+            ' (its --allow-insecure-host flag is TLS policy,'
+            ' not filtering).')
+
+
 def _use_default_options(options: Mapping[str, str]) -> None:
     """"Use" each of the defaults so they aren't reported as unused options."""
     for name in _buildout_default_options:
@@ -1236,6 +1253,8 @@ class Buildout(DictMixin):
             _setup_download_cache(download_cache)
 
             _check_install_from_cache(options, self.offline)
+
+            _check_allow_hosts_with_uv(self._allow_hosts, self._logger)
 
             _use_default_options(options)
 
