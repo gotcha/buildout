@@ -1592,6 +1592,15 @@ def installer(setting: str | None=None) -> str:
             raise zc.buildout.UserError(
                 f"Invalid value for 'installer' option: {setting!r}."
                 " Valid values are 'pip' and 'uv'.")
+        if (setting == 'uv'
+                and os.path.exists(os.path.expanduser('~/.pypirc'))):
+            # setuptools reads index credentials from ~/.pypirc; uv does
+            # not, so a config that authenticated through it silently
+            # loses its credentials.  Detection stays an existence check
+            # on purpose: no PyPIConfig port.
+            logger.warning(
+                'With installer = uv, credentials in ~/.pypirc are not'
+                ' used; uv reads them from ~/.netrc instead.')
         Installer._installer = setting
     return old
 

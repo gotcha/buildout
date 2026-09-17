@@ -591,3 +591,34 @@ class TestErrorTranslation:
         monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
         assert testing.drop_uv_resolution_stderr_tail(text) == (
             "Error: Couldn't find a distribution for 'demo'.\n")
+
+
+class TestPypircWarning:
+    """installer = uv warns when ~/.pypirc exists: uv reads ~/.netrc."""
+
+    def test_warns_when_pypirc_exists(self, monkeypatch, caplog, tmp_path):
+        (tmp_path / '.pypirc').write_text('[pypi]\n')
+        monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+        with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
+            easy_install.installer('uv')
+        assert len(caplog.records) == 1
+        message = caplog.records[0].getMessage()
+        assert '.pypirc' in message
+        assert '.netrc' in message
+        assert easy_install.installer() == 'uv'
+
+    def test_silent_when_pypirc_absent(self, monkeypatch, caplog, tmp_path):
+        monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+        with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
+            easy_install.installer('uv')
+        assert caplog.records == []
+
+    def test_silent_when_setting_pip(self, monkeypatch, caplog, tmp_path):
+        (tmp_path / '.pypirc').write_text('[pypi]\n')
+        monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+        with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
+            easy_install.installer('pip')
+        assert caplog.records == []
