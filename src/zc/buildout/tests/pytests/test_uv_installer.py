@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 
+import pkg_resources
 import pytest
 
 import zc.buildout
@@ -296,3 +297,44 @@ def test_drop_deprecation_normalizer_is_mode_conditional(monkeypatch):
     monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
     assert testing.drop_uv_download_cache_deprecation(text) == (
         'Installing demo.\n')
+
+
+class TestHgFindLinksGuard:
+    """Mercurial find-links entries fail before uv is spawned."""
+
+    def _forbid_resolve(self, monkeypatch):
+        def resolve_must_not_run(*args, **kwargs):
+            raise AssertionError('uv_resolve.resolve must not run')
+        monkeypatch.setattr(
+            easy_install.uv_resolve, 'resolve', resolve_must_not_run)
+
+    def test_hg_plus_entry_raises_user_error(self, monkeypatch):
+        self._forbid_resolve(monkeypatch)
+        req = pkg_resources.Requirement.parse('demo')
+        with pytest.raises(zc.buildout.UserError) as excinfo:
+            easy_install._uv_available_dists(
+                req, None, {}, ['hg+https://example.invalid/repo'], None,
+                True)
+        message = str(excinfo.value)
+        assert 'installer = uv' in message
+        assert 'hg+https://example.invalid/repo' in message
+        assert 'wheel or sdist' in message
+        assert 'installer = pip' in message
+
+    def test_hg_scheme_entry_raises_user_error(self, monkeypatch):
+        self._forbid_resolve(monkeypatch)
+        req = pkg_resources.Requirement.parse('demo')
+        with pytest.raises(zc.buildout.UserError) as excinfo:
+            easy_install._uv_available_dists(
+                req, None, {}, ['hg:ssh://example.invalid/repo'], None, True)
+        assert 'hg:ssh://example.invalid/repo' in str(excinfo.value)
+
+    def test_plain_entries_pass_the_guard(self, monkeypatch):
+        def fail_resolve(**kwargs):
+            raise easy_install.uv_resolve.ResolutionError('no', 'boom')
+        monkeypatch.setattr(easy_install.uv_resolve, 'resolve', fail_resolve)
+        req = pkg_resources.Requirement.parse('demo')
+        assert easy_install._uv_available_dists(
+            req, None, {},
+            ['https://example.invalid/links', '/local/links'],
+            None, True) is None

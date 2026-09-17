@@ -597,6 +597,7 @@ def _uv_available_dists(
     artifact URL as its location: the install step hands it straight to
     ``uv pip install``, so no separate download happens.
     """
+    _raise_for_hg_links(requirement, links)
     try:
         pinned = uv_resolve.resolve(
             requirements=[_without_extra_marker(requirement)],
@@ -624,6 +625,25 @@ def _uv_available_dists(
         url = entry.url
     return [Distribution(
         location=url, project_name=entry.name, version=entry.version)]
+
+
+def _raise_for_hg_links(
+        requirement: pkg_resources.Requirement,
+        links: list[str],
+        ) -> None:
+    """Fail clearly when a find-links entry points at Mercurial.
+
+    uv cannot clone Mercurial repositories; without the guard the entry
+    surfaces as uv's own requirement-parse error.  Raised before uv is
+    spawned, so the message names the entry in buildout's vocabulary.
+    """
+    for link in links:
+        if link.startswith(('hg:', 'hg+')):
+            raise zc.buildout.UserError(
+                f"Cannot install {requirement} with installer = uv:"
+                f" find-links entry {link} points at a Mercurial"
+                " repository, and uv cannot install from Mercurial."
+                " Provide a wheel or sdist, or use installer = pip.")
 
 
 _EXTRA_MARKER_ONLY = re.compile(
