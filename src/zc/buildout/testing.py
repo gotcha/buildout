@@ -306,6 +306,11 @@ def buildoutSetUp(test):
         lambda: zc.buildout.easy_install.prefer_final(prefer_final)
         )
 
+    offline = zc.buildout.easy_install.offline()
+    register_teardown(
+        lambda: zc.buildout.easy_install.offline(offline)
+        )
+
     here = os.getcwd()
     register_teardown(lambda: os.chdir(here))
 

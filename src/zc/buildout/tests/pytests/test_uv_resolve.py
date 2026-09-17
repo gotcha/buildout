@@ -168,12 +168,28 @@ def test_prefer_final_default_adds_no_prerelease_flag(monkeypatch):
     assert '--prerelease' not in args
 
 
-def test_offline_adds_offline_and_no_index(monkeypatch):
+def test_offline_adds_offline_without_no_index(monkeypatch):
     calls = _record_run(monkeypatch)
     resolve(requirements=['demo'], constraints={}, links=[], index_url=None,
             offline=True, uv='/uv', python='/python')
     args, _texts = calls[0]
-    assert args[-2:] == ['--offline', '--no-index']
+    assert args[-1] == '--offline'
+    assert '--no-index' not in args
+
+
+def test_offline_keeps_index_and_find_links_in_the_source_set(
+        monkeypatch, tmp_path):
+    # Probes p8, p11, and p12: --no-index blinds a warm registry cache,
+    # while --offline alone lets it serve the configured sources.
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={},
+            links=['https://example.com/links'],
+            index_url='https://example.com/simple',
+            offline=True, uv='/uv', python='/python')
+    args, _texts = calls[0]
+    assert args[args.index('-f') + 1] == 'https://example.com/links'
+    assert args[args.index('--index-url') + 1] == 'https://example.com/simple'
+    assert args[-1] == '--offline'
 
 
 def test_online_default_adds_no_offline_flags(monkeypatch):

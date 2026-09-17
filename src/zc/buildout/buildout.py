@@ -1162,6 +1162,7 @@ class Buildout(DictMixin):
                 buildout_section['find-links'], buildout_section['allow-hosts'])
             self._logger = logging.getLogger('zc.buildout')
             self.offline = bool_option(buildout_section, 'offline')
+            zc.buildout.easy_install.offline(self.offline)
             self.newest = ((not self.offline) and
                            bool_option(buildout_section, 'newest')
                            )

@@ -76,7 +76,8 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
     package index, normalized like ``easy_install._extra_index_url``: a
     directory goes to uv as find-links, a plain URL as its
     ``--index-url``. With ``prefer_final`` false uv may select
-    pre-releases; ``offline`` forbids network and index access. ``uv``
+    pre-releases; ``offline`` forbids network access, so uv serves the
+    configured sources from its own cache or not at all. ``uv``
     and ``python`` name the uv binary and the interpreter to resolve for.
 
     Dependencies are not compiled (``--no-deps``): the caller resolves
@@ -100,7 +101,11 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
         if not prefer_final:
             args.extend(['--prerelease', 'allow'])
         if offline:
-            args.extend(['--offline', '--no-index'])
+            # --offline alone: the index and find-links stay in the
+            # source set and a warm uv cache serves them with zero
+            # network access; --no-index would blind the registry
+            # cache (probes p8, p11, p12).
+            args.append('--offline')
         completed = _run(args)
         if completed.returncode != 0:
             raise ResolutionError(

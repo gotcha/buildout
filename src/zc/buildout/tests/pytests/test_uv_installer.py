@@ -582,7 +582,7 @@ class TestErrorTranslation:
         instance._uv_stderr_tail = None
 
         def fake_available(requirement, source, versions, links, index_url,
-                           prefer_final, uv_stderr):
+                           prefer_final, uv_stderr, offline=False):
             uv_stderr.append('Because demo was not found')
             return None
         monkeypatch.setattr(
@@ -601,6 +601,98 @@ class TestErrorTranslation:
         monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
         assert testing.drop_uv_resolution_stderr_tail(text) == (
             "Error: Couldn't find a distribution for 'demo'.\n")
+
+
+class TestOfflineForwarding:
+    """buildout -o reaches the uv seam as ``--offline``."""
+
+    def _obtain_offline(self, monkeypatch, dest, class_offline):
+        instance = easy_install.Installer.__new__(easy_install.Installer)
+        instance._installer = 'uv'
+        instance._index_url = None
+        instance._versions = {}
+        instance._links = []
+        instance._prefer_final = True
+        instance._uv_stderr_tail = None
+        instance._dest = dest
+        captured = {}
+
+        def fake_available(requirement, source, versions, links, index_url,
+                           prefer_final, uv_stderr, offline=False):
+            captured['offline'] = offline
+            return None
+        monkeypatch.setattr(
+            easy_install, '_uv_available_dists', fake_available)
+        monkeypatch.setattr(
+            easy_install.Installer, '_offline', class_offline)
+        req = pkg_resources.Requirement.parse('demo')
+        assert instance._obtain(req) is None
+        return captured['offline']
+
+    def test_buildout_offline_option_reaches_the_seam(self, monkeypatch,
+                                                      tmp_path):
+        assert self._obtain_offline(monkeypatch, str(tmp_path), True) is True
+
+    def test_no_destination_alone_does_not_forward_offline(
+            self, monkeypatch):
+        # A None destination is the API-level no-install mode; it keeps
+        # its own semantics and does not put --offline on the uv argv.
+        assert self._obtain_offline(monkeypatch, None, False) is False
+
+    def test_online_run_does_not_forward_offline(self, monkeypatch, tmp_path):
+        assert self._obtain_offline(monkeypatch, str(tmp_path), False) is False
+
+    def test_pip_mode_never_forwards_offline(self, monkeypatch):
+        # Pip mode keeps its historical no-install offline semantics:
+        # the flag only exists on the uv branch.
+        instance = easy_install.Installer.__new__(easy_install.Installer)
+        instance._installer = 'pip'
+        # never read: _available_dists below is stubbed
+        instance._index = None  # ty: ignore[invalid-assignment]
+        monkeypatch.setattr(easy_install.Installer, '_offline', True)
+        seen = []
+
+        def fake_available_dists(index, requirement, source):
+            seen.append(requirement)
+            return None
+        monkeypatch.setattr(
+            easy_install, '_available_dists', fake_available_dists)
+        req = pkg_resources.Requirement.parse('demo')
+        assert instance._obtain(req) is None
+        assert seen == [req]
+
+    def test_uv_available_dists_forwards_offline_to_resolve(
+            self, monkeypatch):
+        seen = {}
+
+        def fake_resolve(**kwargs):
+            seen.update(kwargs)
+            raise uv_resolve.ResolutionError('no')
+        monkeypatch.setattr(uv_resolve, 'resolve', fake_resolve)
+        result = easy_install._uv_available_dists(
+            pkg_resources.Requirement.parse('demo'), None, {}, [], None,
+            True, offline=True)
+        assert result is None
+        assert seen['offline'] is True
+
+    def test_uv_available_dists_defaults_to_online(self, monkeypatch):
+        seen = {}
+
+        def fake_resolve(**kwargs):
+            seen.update(kwargs)
+            raise uv_resolve.ResolutionError('no')
+        monkeypatch.setattr(uv_resolve, 'resolve', fake_resolve)
+        result = easy_install._uv_available_dists(
+            pkg_resources.Requirement.parse('demo'), None, {}, [], None,
+            True)
+        assert result is None
+        assert seen['offline'] is False
+
+    def test_offline_setter_round_trip(self, monkeypatch):
+        monkeypatch.setattr(easy_install.Installer, '_offline', False)
+        assert easy_install.offline() is False
+        assert easy_install.offline(True) is False
+        assert easy_install.offline() is True
 
 
 class TestPypircWarning:

@@ -3271,6 +3271,92 @@ def error_building_in_offline_mode_if_dont_have_needed_dist():
     <BLANKLINE>
     """
 
+def offline_run_with_a_missing_recipe_installs_nothing():
+    r"""
+    An offline run that would have to install a recipe fails with the
+    offline message instead of touching the network, with the pip and
+    the uv installer alike.
+
+    >>> write('buildout.cfg',
+    ... '''
+    ... [buildout]
+    ... parts = foo
+    ... offline = true
+    ...
+    ... [foo]
+    ... recipe = not-installed-recipe
+    ... ''')
+
+    >>> print_('XX'); print_(system(buildout), end='') # doctest: +ELLIPSIS
+    X...
+    While:
+      Installing.
+      Getting section foo.
+      Initializing section foo.
+      Installing recipe not-installed-recipe.
+      Getting distribution for 'not-installed-recipe'.
+    Error: We don't have a distribution for not-installed-recipe
+    and can't install one in offline (no-install) mode.
+    <BLANKLINE>
+    """
+
+def offline_run_with_a_missing_part_egg_installs_nothing():
+    r"""
+    An offline run that would have to install a part egg fails with the
+    offline message instead of touching the network, with the pip and
+    the uv installer alike.
+
+    >>> write('buildout.cfg',
+    ... '''
+    ... [buildout]
+    ... parts = eggs
+    ... offline = true
+    ... find-links = {link_server}
+    ...
+    ... [eggs]
+    ... recipe = zc.recipe.egg
+    ... eggs = demo
+    ... '''.format_map(globals()))
+
+    >>> print_('XX'); print_(system(buildout), end='') # doctest: +ELLIPSIS
+    X...
+    While:
+      Installing eggs.
+      Getting distribution for 'demo'.
+    Error: We don't have a distribution for demo
+    and can't install one in offline (no-install) mode.
+    <BLANKLINE>
+    """
+
+def offline_option_is_forwarded_only_in_uv_mode():
+    r"""
+    The easy_install offline flag drives the uv seam: with it set, a uv
+    resolve is served by uv's own cache alone, so a distribution that
+    only the link server carries is refused.  Pip mode never consults
+    the flag; its offline mode stays the no-install destination mode.
+
+    >>> import zc.buildout.easy_install
+    >>> dest = tmpdir('offline-flag')
+    >>> _ = zc.buildout.easy_install.offline(True)
+    >>> try:
+    ...     try:
+    ...         ws = zc.buildout.easy_install.install(
+    ...             ['demo'], dest,
+    ...             links=[link_server], index=link_server+'index/')
+    ...     except zc.buildout.UserError:
+    ...         result = 'refused'
+    ...     else:
+    ...         result = 'installed'
+    ... finally:
+    ...         _ = zc.buildout.easy_install.offline(False)
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     ok = result == 'refused'
+    ... else:
+    ...     ok = result == 'installed'
+    >>> print_('ok' if ok else 'MISMATCH: ' + result)
+    ok
+    """
+
 def test_buildout_section_shorthand_for_command_line_assignments():
     r"""
     >>> write('buildout.cfg', '')

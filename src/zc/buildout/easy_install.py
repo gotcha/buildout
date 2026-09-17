@@ -608,6 +608,7 @@ def _uv_available_dists(
         index_url: str | None,
         prefer_final: bool,
         uv_stderr: list[str] | None = None,
+        offline: bool = False,
         ) -> list[pkg_resources.Distribution] | None:
     """Return what uv resolves for ``requirement`` as a one-dist list.
 
@@ -616,7 +617,9 @@ def _uv_available_dists(
     artifact URL as its location: the install step hands it straight to
     ``uv pip install``, so no separate download happens.  When a list is
     passed as ``uv_stderr``, a resolve failure appends the tail of uv's
-    stderr to it, for the MissingDistribution message.
+    stderr to it, for the MissingDistribution message.  ``offline`` is
+    forwarded to the seam: uv then serves the resolve from its own
+    cache, without any network access.
     """
     _raise_for_hg_links(requirement, links)
     _raise_for_fragment_links(requirement, links)
@@ -627,6 +630,7 @@ def _uv_available_dists(
             links=links,
             index_url=index_url,
             prefer_final=prefer_final,
+            offline=offline,
             uv=_uv_executable(),
             python=sys.executable,
         )
@@ -1017,6 +1021,7 @@ class Installer:
     _picked_versions: ClassVar[dict] = {}
     _download_cache = None
     _install_from_cache = False
+    _offline = False
     _prefer_final = True
     _use_dependency_links = True
     _allow_picked_versions = True
@@ -1243,9 +1248,13 @@ class Installer:
             # forwards the unset option verbatim.
             index_url = self._index_url or default_index_url
             uv_stderr: list[str] = []
+            # The buildout offline option reaches the seam through the
+            # class flag; a None destination keeps its own no-install
+            # semantics and does not imply --offline.
             dists = _uv_available_dists(
                 requirement, source, self._versions, self._links,
-                index_url, self._prefer_final, uv_stderr)
+                index_url, self._prefer_final, uv_stderr,
+                offline=self._offline)
             self._uv_stderr_tail = _tail_text(uv_stderr)
         else:
             dists = _available_dists(self._index, requirement, source)
@@ -1589,6 +1598,12 @@ def install_from_cache(setting: bool | None=None) -> bool:
     old = Installer._install_from_cache
     if setting is not None:
         Installer._install_from_cache = bool(setting)
+    return old
+
+def offline(setting: bool | None=None) -> bool:
+    old = Installer._offline
+    if setting is not None:
+        Installer._offline = bool(setting)
     return old
 
 def prefer_final(setting: bool | None=None) -> bool:
