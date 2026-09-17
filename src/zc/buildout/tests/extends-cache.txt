@@ -397,12 +397,18 @@ Error: Couldn't download 'http://localhost/base.cfg' in offline mode.
 ... extends = {server_url}base.cfg
 ... install-from-cache = true
 ... """)
->>> print_(system(buildout))
-While:
-  Installing.
-  Checking for upgrades.
-An internal error occurred ...
-ValueError: install_from_cache set to true with no download cache
+>>> import zc.buildout.easy_install
+>>> out = system(buildout)
+>>> if zc.buildout.easy_install.installer() == 'uv':
+...     # With installer = uv the download-cache requirement has no
+...     # equivalent: install-from-cache maps onto uv's own cache, so
+...     # the run proceeds and only reports the unused option.
+...     ok = "Section `buildout` contains unused option(s): 'foo'." in out
+... else:
+...     ok = ('ValueError: install_from_cache set to true with no'
+...           ' download cache') in out
+>>> print_('ok' if ok else 'MISMATCH:\n' + out)
+ok
 
 >>> rmdir('home', '.buildout')
 
