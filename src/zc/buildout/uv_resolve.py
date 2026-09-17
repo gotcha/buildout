@@ -77,8 +77,10 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
     extra find-links locations, and ``index_url`` is the configured
     package index, normalized like ``easy_install._extra_index_url``: a
     directory goes to uv as find-links, a plain URL as its
-    ``--index-url``. With ``prefer_final`` false uv may select
-    pre-releases; ``offline`` forbids network access, so uv serves the
+    ``--index-url``. ``prefer_final`` maps to ``--prerelease``
+    explicitly: ``if-necessary`` when true, ``allow`` when false, so
+    uv may select pre-releases only then; ``offline`` forbids network
+    access, so uv serves the
     configured sources from its own cache or not at all. ``uv``
     and ``python`` name the uv binary and the interpreter to resolve for.
 
@@ -107,8 +109,11 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
             args.extend(['-f', link])
         args.extend(_constraints_args(workdir, requirements, constraints))
         args.extend(_index_args(index_url, fallback_index_url))
-        if not prefer_final:
-            args.extend(['--prerelease', 'allow'])
+        # Explicit both ways (probes p3, p6, p7): if-necessary is the
+        # uv default today, but naming it pins the mapping against uv
+        # default drift.
+        args.extend(['--prerelease',
+                     'allow' if not prefer_final else 'if-necessary'])
         if offline:
             # --offline alone: the index and find-links stay in the
             # source set and a warm uv cache serves them with zero

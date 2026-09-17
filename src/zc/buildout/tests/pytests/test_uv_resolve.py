@@ -110,7 +110,8 @@ def test_base_argv_shape(monkeypatch):
     assert args[4] == '-o'
     assert args[5].endswith('pylock.toml')
     assert Path(args[3]).parent == Path(args[5]).parent
-    assert args[6:] == ['--python', '/python', '--no-deps']
+    assert args[6:] == ['--python', '/python', '--no-deps',
+                        '--prerelease', 'if-necessary']
     assert texts == {'requirements': 'demo\n'}
     dist = pinned.for_project('demo')
     assert dist is not None
@@ -123,7 +124,8 @@ def test_one_find_links_per_link(monkeypatch):
             index_url=None, uv='/uv', python='/python')
     args, _texts = calls[0]
     assert args[6:] == [
-        '--python', '/python', '--no-deps', '-f', '/a', '-f', '/b']
+        '--python', '/python', '--no-deps', '-f', '/a', '-f', '/b',
+        '--prerelease', 'if-necessary']
 
 
 def test_constraints_add_dash_c_and_file(monkeypatch):
@@ -161,12 +163,12 @@ def test_prefer_final_false_allows_prereleases(monkeypatch):
     assert args[-2:] == ['--prerelease', 'allow']
 
 
-def test_prefer_final_default_adds_no_prerelease_flag(monkeypatch):
+def test_prefer_final_true_emits_if_necessary(monkeypatch):
     calls = _record_run(monkeypatch)
     resolve(requirements=['demo'], constraints={}, links=[], index_url=None,
             uv='/uv', python='/python')
     args, _texts = calls[0]
-    assert '--prerelease' not in args
+    assert args[-2:] == ['--prerelease', 'if-necessary']
 
 
 def test_offline_adds_offline_without_no_index(monkeypatch):
@@ -208,7 +210,7 @@ def test_directory_index_routes_to_find_links(monkeypatch, tmp_path):
             index_url=str(tmp_path), uv='/uv', python='/python')
     args, _texts = calls[0]
     expected = tmp_path.expanduser().resolve().as_uri()
-    assert args[-2:] == ['-f', expected]
+    assert args[args.index('-f') + 1] == expected
     assert '--index-url' not in args
 
 
@@ -219,7 +221,7 @@ def test_file_uri_directory_index_routes_to_find_links(
     resolve(requirements=['demo'], constraints={}, links=[],
             index_url=uri, uv='/uv', python='/python')
     args, _texts = calls[0]
-    assert args[-2:] == ['-f', uri]
+    assert args[args.index('-f') + 1] == uri
     assert '--index-url' not in args
 
 
@@ -237,6 +239,7 @@ def test_directory_index_expands_project_subdirs(monkeypatch, tmp_path):
         '-f', root.as_uri(),
         '-f', (root / 'demo').as_uri(),
         '-f', (root / 'other').as_uri(),
+        '--prerelease', 'if-necessary',
     ]
 
 
@@ -246,7 +249,7 @@ def test_remote_index_routes_to_index_url(monkeypatch):
             index_url='https://example.com/simple',
             uv='/uv', python='/python')
     args, _texts = calls[0]
-    assert args[-2:] == ['--index-url', 'https://example.com/simple']
+    assert args[args.index('--index-url') + 1] == 'https://example.com/simple'
     assert '-f' not in args
 
 
@@ -257,7 +260,8 @@ def test_missing_index_path_is_dropped(monkeypatch):
     args, _texts = calls[0]
     assert '--index-url' not in args
     assert '-f' not in args
-    assert args[6:] == ['--python', '/python', '--no-deps']
+    assert args[6:] == ['--python', '/python', '--no-deps',
+                        '--prerelease', 'if-necessary']
 
 
 def test_fallback_index_fills_an_unset_index(monkeypatch):
@@ -266,8 +270,8 @@ def test_fallback_index_fills_an_unset_index(monkeypatch):
             index_url=None, uv='/uv', python='/python',
             fallback_index_url='file:///nonexistent-hermetic-index')
     args, _texts = calls[0]
-    assert args[-2:] == [
-        '--index-url', 'file:///nonexistent-hermetic-index']
+    assert args[args.index('--index-url') + 1] == (
+        'file:///nonexistent-hermetic-index')
 
 
 def test_fallback_index_plugs_the_hole_behind_a_directory_index(
@@ -280,8 +284,8 @@ def test_fallback_index_plugs_the_hole_behind_a_directory_index(
     # The directory still routes to find-links; the fallback only
     # keeps uv from defaulting to PyPI.
     assert '-f' in args
-    assert args[-2:] == [
-        '--index-url', 'file:///nonexistent-hermetic-index']
+    assert args[args.index('--index-url') + 1] == (
+        'file:///nonexistent-hermetic-index')
 
 
 def test_fallback_index_fills_a_dropped_index_path(monkeypatch):
@@ -290,8 +294,8 @@ def test_fallback_index_fills_a_dropped_index_path(monkeypatch):
             index_url='/no/such/index-dir', uv='/uv', python='/python',
             fallback_index_url='file:///nonexistent-hermetic-index')
     args, _texts = calls[0]
-    assert args[-2:] == [
-        '--index-url', 'file:///nonexistent-hermetic-index']
+    assert args[args.index('--index-url') + 1] == (
+        'file:///nonexistent-hermetic-index')
 
 
 def test_fallback_index_never_shadows_a_remote_index(monkeypatch):
@@ -301,7 +305,7 @@ def test_fallback_index_never_shadows_a_remote_index(monkeypatch):
             uv='/uv', python='/python',
             fallback_index_url='file:///nonexistent-hermetic-index')
     args, _texts = calls[0]
-    assert args[-2:] == ['--index-url', 'https://example.com/simple']
+    assert args[args.index('--index-url') + 1] == 'https://example.com/simple'
     assert 'file:///nonexistent-hermetic-index' not in args
 
 
@@ -413,6 +417,43 @@ def test_explicit_find_links_serve_after_the_scrub(tmp_path, monkeypatch):
     dist = pinned.for_project('demo')
     assert dist is not None
     assert dist.version == '1.0'
+
+
+@requires_uv
+def test_prefer_final_true_picks_the_stable_release(tmp_path, monkeypatch):
+    # Probes p3/p7 parity: the links dir holds a stable and a
+    # prerelease; prefer-final picks the stable one.
+    assert UV is not None
+    links_dir = tmp_path / 'links'
+    links_dir.mkdir()
+    _make_wheel(links_dir, version='1.0')
+    _make_wheel(links_dir, version='2.0a1')
+    monkeypatch.setenv('UV_CACHE_DIR', str(tmp_path / 'uv-cache'))
+    pinned = resolve(
+        requirements=['demo'], constraints={}, links=[str(links_dir)],
+        index_url=None, offline=True, prefer_final=True,
+        uv=UV, python=sys.executable)
+    dist = pinned.for_project('demo')
+    assert dist is not None
+    assert dist.version == '1.0'
+
+
+@requires_uv
+def test_prefer_final_false_picks_the_prerelease(tmp_path, monkeypatch):
+    # Probe p6 parity: prefer-final off lets uv select the prerelease.
+    assert UV is not None
+    links_dir = tmp_path / 'links'
+    links_dir.mkdir()
+    _make_wheel(links_dir, version='1.0')
+    _make_wheel(links_dir, version='2.0a1')
+    monkeypatch.setenv('UV_CACHE_DIR', str(tmp_path / 'uv-cache'))
+    pinned = resolve(
+        requirements=['demo'], constraints={}, links=[str(links_dir)],
+        index_url=None, offline=True, prefer_final=False,
+        uv=UV, python=sys.executable)
+    dist = pinned.for_project('demo')
+    assert dist is not None
+    assert dist.version == '2.0a1'
 
 
 @requires_uv
