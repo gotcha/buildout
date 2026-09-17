@@ -77,19 +77,19 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
     extra find-links locations, and ``index_url`` is the configured
     package index, normalized like ``easy_install._extra_index_url``: a
     directory goes to uv as find-links, a plain URL as its
-    ``--index-url``. ``prefer_final`` maps to ``--prerelease``
+    ``--default-index``. ``prefer_final`` maps to ``--prerelease``
     explicitly: ``if-necessary`` when true, ``allow`` when false, so
     uv may select pre-releases only then; ``offline`` forbids network
-    access, so uv serves the
-    configured sources from its own cache or not at all. ``uv``
-    and ``python`` name the uv binary and the interpreter to resolve for.
+    access, so uv serves the configured sources from its own cache or
+    not at all. ``uv`` and ``python`` name the uv binary and the
+    interpreter to resolve for.
 
-    ``fallback_index_url`` goes on the argv as ``--index-url`` only when
-    the configured index produced none (unset, dropped, or routed to
-    find-links as a directory): without any index uv falls back to
-    PyPI.  It is how the test harness injects its dead index now that
-    the scrubbed child environment no longer leaks ``UV_INDEX_URL``;
-    production callers leave it unset.
+    ``fallback_index_url`` goes on the argv as ``--default-index``
+    only when the configured index produced none (unset, dropped, or
+    routed to find-links as a directory): without any index uv falls
+    back to PyPI.  It is how the test harness injects its dead index
+    now that the scrubbed child environment no longer leaks
+    ``UV_INDEX_URL``; production callers leave it unset.
 
     Dependencies are not compiled (``--no-deps``): the caller resolves
     one requirement at a time and walks dependency metadata itself, so
@@ -293,13 +293,14 @@ def _index_args(index_url: str | None,
                 fallback_index_url: str | None = None) -> list[str]:
     """Route a configured package index to uv arguments.
 
-    ``fallback_index_url`` becomes ``--index-url`` when the configured
-    index routed to none: an argv with find-links but no index lets uv
-    default to PyPI, which the harness's dead index must plug.
+    ``fallback_index_url`` becomes ``--default-index`` when the
+    configured index routed to none: an argv with find-links but no
+    index lets uv default to PyPI, which the harness's dead index must
+    plug.
     """
     args = _configured_index_args(index_url)
-    if fallback_index_url is not None and '--index-url' not in args:
-        args.extend(['--index-url', fallback_index_url])
+    if fallback_index_url is not None and '--default-index' not in args:
+        args.extend(['--default-index', fallback_index_url])
     return args
 
 
@@ -309,9 +310,11 @@ def _configured_index_args(index_url: str | None) -> list[str]:
     Normalized like ``easy_install._extra_index_url``: a scheme-less
     value naming an existing directory becomes its ``file://`` URI, a
     scheme-less nonexistent path is dropped. uv refuses a plain
-    directory tree as ``--index-url`` but accepts it as ``--find-links``,
-    so directories go on the argv as ``-f``; real PEP 503 simple indexes
-    keep ``--index-url``.
+    directory tree as ``--default-index`` but accepts it as
+    ``--find-links``, so directories go on the argv as ``-f``; real
+    PEP 503 simple indexes keep ``--default-index`` (``--index-url``
+    is deprecated at the uv 0.12 floor; ``--default-index`` is its
+    replacement).
     """
     if not index_url:
         return []
@@ -323,7 +326,7 @@ def _configured_index_args(index_url: str | None) -> list[str]:
     directory = _local_directory(index_url)
     if directory is not None:
         return _find_links_args(directory)
-    return ['--index-url', index_url]
+    return ['--default-index', index_url]
 
 
 def _local_directory(url: str) -> Path | None:

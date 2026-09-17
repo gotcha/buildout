@@ -191,7 +191,7 @@ def test_offline_keeps_index_and_find_links_in_the_source_set(
             offline=True, uv='/uv', python='/python')
     args, _texts = calls[0]
     assert args[args.index('-f') + 1] == 'https://example.com/links'
-    assert args[args.index('--index-url') + 1] == 'https://example.com/simple'
+    assert args[args.index('--default-index') + 1] == 'https://example.com/simple'
     assert args[-1] == '--offline'
 
 
@@ -211,7 +211,7 @@ def test_directory_index_routes_to_find_links(monkeypatch, tmp_path):
     args, _texts = calls[0]
     expected = tmp_path.expanduser().resolve().as_uri()
     assert args[args.index('-f') + 1] == expected
-    assert '--index-url' not in args
+    assert '--default-index' not in args
 
 
 def test_file_uri_directory_index_routes_to_find_links(
@@ -222,7 +222,7 @@ def test_file_uri_directory_index_routes_to_find_links(
             index_url=uri, uv='/uv', python='/python')
     args, _texts = calls[0]
     assert args[args.index('-f') + 1] == uri
-    assert '--index-url' not in args
+    assert '--default-index' not in args
 
 
 def test_directory_index_expands_project_subdirs(monkeypatch, tmp_path):
@@ -249,7 +249,7 @@ def test_remote_index_routes_to_index_url(monkeypatch):
             index_url='https://example.com/simple',
             uv='/uv', python='/python')
     args, _texts = calls[0]
-    assert args[args.index('--index-url') + 1] == 'https://example.com/simple'
+    assert args[args.index('--default-index') + 1] == 'https://example.com/simple'
     assert '-f' not in args
 
 
@@ -258,7 +258,7 @@ def test_missing_index_path_is_dropped(monkeypatch):
     resolve(requirements=['demo'], constraints={}, links=[],
             index_url='/no/such/index-dir', uv='/uv', python='/python')
     args, _texts = calls[0]
-    assert '--index-url' not in args
+    assert '--default-index' not in args
     assert '-f' not in args
     assert args[6:] == ['--python', '/python', '--no-deps',
                         '--prerelease', 'if-necessary']
@@ -270,7 +270,7 @@ def test_fallback_index_fills_an_unset_index(monkeypatch):
             index_url=None, uv='/uv', python='/python',
             fallback_index_url='file:///nonexistent-hermetic-index')
     args, _texts = calls[0]
-    assert args[args.index('--index-url') + 1] == (
+    assert args[args.index('--default-index') + 1] == (
         'file:///nonexistent-hermetic-index')
 
 
@@ -284,7 +284,7 @@ def test_fallback_index_plugs_the_hole_behind_a_directory_index(
     # The directory still routes to find-links; the fallback only
     # keeps uv from defaulting to PyPI.
     assert '-f' in args
-    assert args[args.index('--index-url') + 1] == (
+    assert args[args.index('--default-index') + 1] == (
         'file:///nonexistent-hermetic-index')
 
 
@@ -294,7 +294,7 @@ def test_fallback_index_fills_a_dropped_index_path(monkeypatch):
             index_url='/no/such/index-dir', uv='/uv', python='/python',
             fallback_index_url='file:///nonexistent-hermetic-index')
     args, _texts = calls[0]
-    assert args[args.index('--index-url') + 1] == (
+    assert args[args.index('--default-index') + 1] == (
         'file:///nonexistent-hermetic-index')
 
 
@@ -305,7 +305,7 @@ def test_fallback_index_never_shadows_a_remote_index(monkeypatch):
             uv='/uv', python='/python',
             fallback_index_url='file:///nonexistent-hermetic-index')
     args, _texts = calls[0]
-    assert args[args.index('--index-url') + 1] == 'https://example.com/simple'
+    assert args[args.index('--default-index') + 1] == 'https://example.com/simple'
     assert 'file:///nonexistent-hermetic-index' not in args
 
 
