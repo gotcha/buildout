@@ -656,6 +656,19 @@ normalize_path = (
 
 normalize_endings = re.compile('\r\n'), '\n'
 
+# zc.buildout declares ``tomli; python_version < "3.11"`` (uv_resolve's TOML
+# reader falls back to it where the stdlib lacks tomllib). On 3.9 and 3.10
+# the toolchain closure in easy_install.buildout_and_setuptools_dists gains a
+# tomli dist, and the sample bootstrap writes a tomli.egg-link into the eggs
+# directory. Listings that pin the toolchain egg-links cannot hold on both
+# sides of the 3.11 boundary, so drop the conditional line; the rest of the
+# listing stays strictly checked. Inert where tomli is not installed.
+# A (pattern, replacement) pair rather than a function so the pytest
+# harness (tests/pytests/conftest.py apply_normalizers) applies it too.
+drop_tomli_egg_link = (
+    re.compile(r'(?m)^-  tomli\.egg-link\n'), '',
+    )
+
 def drop_build_output_relayed_by_pip(text):
     """Drop lines that only appear because pip relays build subprocess output.
 
