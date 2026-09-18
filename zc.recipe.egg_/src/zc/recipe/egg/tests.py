@@ -47,6 +47,7 @@ def test_suite():
                zc.buildout.testing.normalize_endings,
                zc.buildout.testing.normalize_script,
                zc.buildout.testing.normalize_egg_py,
+               zc.buildout.testing.drop_tomli_egg_link,
                zc.buildout.tests.normalize_bang,
                zc.buildout.testing.not_found,
                zc.buildout.testing.easyinstall_deprecated,
