@@ -73,6 +73,7 @@ known-third-party = ["build"]
 # pkg_resources deprecation surfaces.
 "src/zc/buildout/__init__.py" = ["F401", "E402", "I001"]
 "src/zc/buildout/easy_install.py" = ["F401"]
+"src/zc/buildout/install_backend.py" = ["F401"]
 "src/zc/buildout/patches.py" = ["F401"]
 "zc.recipe.egg_/src/zc/recipe/egg/__init__.py" = ["F401"]
 # Packaging entry point: name and version assignments ahead of the
