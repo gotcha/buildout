@@ -57,6 +57,12 @@ from setuptools.wheel import Wheel
 import zc.buildout
 import zc.buildout.rmtree
 from zc.buildout import WINDOWS
+from zc.buildout.errors import (
+    IncompatibleConstraintError,
+    IncompatibleVersionError,
+    MissingDistribution,
+    VersionConflict,
+)
 from zc.buildout.utils import normalize_name
 
 from . import _package_index, uv_resolve
@@ -405,13 +411,6 @@ def dist_needs_pkg_resources(dist: pkg_resources.DistInfoDistribution | pkg_reso
         'setuptools' not in {r.project_name for r in dist.requires()} and
         namespace_packages_need_pkg_resources(dist)
     )
-
-
-class IncompatibleConstraintError(zc.buildout.UserError):
-    """A specified version is incompatible with a given requirement.
-    """
-
-IncompatibleVersionError = IncompatibleConstraintError # Backward compatibility
 
 
 def _raise_if_junk_uv_constraint(
@@ -2553,50 +2552,6 @@ handler = logging.NullHandler()
 root_logger.addHandler(handler)
 """
 
-
-class VersionConflict(zc.buildout.UserError):
-
-    def __init__(self, err: pkg_resources.VersionConflict, ws: Iterable[pkg_resources.Distribution]) -> None:
-        ws = list(ws)
-        ws.sort()
-        self.err, self.ws = err, ws
-
-    def __str__(self) -> str:
-        result = ["There is a version conflict."]
-        if len(self.err.args) == 2:
-            existing_dist, req = self.err.args
-            result.append(f"We already have: {existing_dist}")
-            for dist in self.ws:
-                if req in dist.requires():
-                    result.append(f"but {dist} requires {str(req)!r}.")
-        else:
-            # The error argument is already a nice error string.
-            result.append(self.err.args[0])
-        return '\n'.join(result)
-
-
-def _uv_detail_suffix(detail: str | None) -> str:
-    """The ``  uv: ``-prefixed lines a MissingDistribution appends."""
-    if not detail:
-        return ''
-    return ''.join(f'\n  uv: {line}' for line in detail.splitlines())
-
-
-class MissingDistribution(zc.buildout.UserError):
-
-    def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet,
-                 detail: str | None = None) -> None:
-        sorted_dists = list(ws)
-        sorted_dists.sort()
-        self.data = req, sorted_dists
-        # In uv mode, the tail of uv's stderr, so the cause class (not
-        # found, unsatisfiable, ...) survives the debug-level demote.
-        self.detail = detail
-        self._suffix = _uv_detail_suffix(detail)
-
-    def __str__(self) -> str:
-        req, _ws = self.data
-        return f"Couldn't find a distribution for {str(req)!r}.{self._suffix}"
 
 def _is_url(value: str) -> bool:
     """True when ``value`` carries a real URL scheme.
