@@ -1789,3 +1789,31 @@ def test_detect_distutils_scripts_ignores_directory_without_egg_link(
     easy_install._detect_distutils_scripts(str(directory))
 
     assert scripts == {}
+
+
+def test_eggify_offline_dist_tolerates_path_spelling_differences(tmp_path):
+    """The offline env scan must eggify wheel-style eggs however spelled.
+
+    _get_dest_dist_paths globs the configured path entries verbatim, while
+    pkg_resources normalizes scanned locations (realpath everywhere, plus
+    normcase case-folding on Windows). When the spellings diverge — a
+    symlinked path entry here, a case-folded drive letter on Windows — the
+    container membership check must still recognize the dist as installed,
+    or offline runs treat it as a develop dist and part signatures flip
+    from egg basename to directory hash (gh run 35217914643:
+    recipe_upgrade reinstalling instead of updating on Windows).
+    """
+    real_eggs = tmp_path / 'real-eggs'
+    dist_info = real_eggs / 'recipe-1-py3.10.egg' / 'recipe-1.dist-info'
+    dist_info.mkdir(parents=True)
+    (dist_info / 'METADATA').write_text(
+        'Metadata-Version: 2.1\nName: recipe\nVersion: 1\n')
+    linked_eggs = tmp_path / 'linked-eggs'
+    linked_eggs.symlink_to(real_eggs)
+
+    installer = easy_install.Installer(
+        None, (), None, sys.executable, path=[str(linked_eggs)])
+    env = installer._make_env()
+
+    [dist] = env['recipe']
+    assert dist.precedence == pkg_resources.EGG_DIST
