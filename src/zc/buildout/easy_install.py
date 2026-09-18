@@ -1109,11 +1109,21 @@ class Installer:
         """
         Make sure everything found at `dist_paths` is seen as an egg, even if
         it's some other kind of dist.
+
+        Both sides go through pkg_resources.normalize_path: the scan
+        normalizes dist locations (realpath, plus normcase case-folding on
+        Windows) while dist_paths keep the configured spelling, so raw
+        string comparison silently misses — leaving wheel-installed dists
+        at DEVELOP_DIST precedence, which flips offline part signatures
+        from egg basename to directory hash.
         """
-        containers = {os.path.dirname(path) for path in dist_paths}
+        containers = {pkg_resources.normalize_path(os.path.dirname(path))
+                      for path in dist_paths}
         for project_name in env:
             for dist in env[project_name]:
-                if os.path.dirname(_dist_location(dist)) in containers:
+                location = pkg_resources.normalize_path(
+                    os.path.dirname(_dist_location(dist)))
+                if location in containers:
                     dist.precedence = pkg_resources.EGG_DIST
 
     def _version_conflict_information(self, name: str) -> str:
