@@ -29,6 +29,7 @@ import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from urllib.request import urlopen
 
 import pkg_resources
@@ -261,7 +262,10 @@ def hermetic_pip_env():
     resolving (``installer = uv``).  So hermeticity goes through a dead
     ``UV_INDEX_URL``: a ``file://`` path that does not exist fails
     instantly, never reaches the network, and find-links (the seed and
-    the link server) stay usable.  Separately, uv's cache holds
+    the link server) stay usable.  The URL must spell a native path,
+    because uv converts it back with ``to_file_path`` and rejects a
+    drive-letterless path outright on Windows, turning the dead index
+    into a hard resolution error.  Separately, uv's cache holds
     symlinked wheel entries that the doctest teardown
     (``zope.testing.setupstack.rmtree``) cannot remove, so the cache is
     redirected to a dedicated directory that ``restore`` deletes.
@@ -291,13 +295,17 @@ def hermetic_pip_env():
                         'buildout_testing_seam_index_url')}
     os.environ['PIP_NO_INDEX'] = '1'
     os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
-    os.environ['UV_INDEX_URL'] = 'file:///nonexistent-hermetic-index'
     os.environ['UV_FIND_LINKS'] = os.path.abspath(seed)
     os.environ['buildout_testing_seam_find_links'] = os.path.abspath(seed)
     os.environ['buildout_testing_seam_index_url'] = (
         'file:///nonexistent-hermetic-index')
     uv_cache = tempfile.mkdtemp('uv-cache')
     os.environ['UV_CACHE_DIR'] = uv_cache
+    # Path(...).as_uri() spells the dead index natively, which Windows
+    # needs (see the docstring); under the fresh cache the index path
+    # is nonexistent by construction.
+    os.environ['UV_INDEX_URL'] = (
+        Path(uv_cache) / 'nonexistent-hermetic-index').as_uri()
 
     def restore():
         for name, value in old.items():
