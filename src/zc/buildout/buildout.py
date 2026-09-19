@@ -46,6 +46,7 @@ import zc.buildout.download
 import zc.buildout.easy_install
 from zc.buildout import _activity
 from zc.buildout.rmtree import rmtree
+from zc.buildout.utils import _bool_names, _print_options, bool_option, print_
 
 try:
     hashed = md5_original(b'test')
@@ -66,15 +67,6 @@ def commands(cls: type[Buildout]) -> type[Buildout]:
             cls.COMMANDS.add(name)
     return cls
 
-
-def _print_options(sep: str=' ', end: str='\n', file: TextIO | None=None) -> tuple[str, str, TextIO | None]:
-    return sep, end, file
-
-def print_(*args: Any, **kw: Any) -> None:
-    sep, end, file = _print_options(**kw)
-    if file is None:
-        file = sys.stdout
-    file.write(sep.join(map(str, args))+end)
 
 realpath = zc.buildout.easy_install.realpath
 
@@ -3147,15 +3139,3 @@ def main(args: list[str] | None=None) -> None:
 
     finally:
         logging.shutdown()
-
-
-_bool_names = {'true': True, 'false': False, True: True, False: False}
-def bool_option(options: Options | dict[str, str], name: str, default: str | bool | None=None) -> bool:
-    value = options.get(name, default)
-    if value is None:
-        raise KeyError(name)
-    try:
-        return _bool_names[value]
-    except KeyError:
-        raise zc.buildout.UserError(
-            f'Invalid value for {name!r} option: {value!r}')
