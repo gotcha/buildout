@@ -604,11 +604,17 @@ class TestErrorTranslation:
 
 
 class TestPypircWarning:
-    """installer = uv warns when ~/.pypirc exists: uv reads ~/.netrc."""
+    """installer = uv warns when ~/.pypirc exists: uv reads ~/.netrc.
+
+    The home directory is patched through both HOME and USERPROFILE:
+    ``os.path.expanduser`` reads HOME on POSIX but only USERPROFILE on
+    Windows.
+    """
 
     def test_warns_when_pypirc_exists(self, monkeypatch, caplog, tmp_path):
         (tmp_path / '.pypirc').write_text('[pypi]\n')
         monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setenv('USERPROFILE', str(tmp_path))
         monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
         with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
             easy_install.installer('uv')
@@ -620,6 +626,7 @@ class TestPypircWarning:
 
     def test_silent_when_pypirc_absent(self, monkeypatch, caplog, tmp_path):
         monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setenv('USERPROFILE', str(tmp_path))
         monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
         with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
             easy_install.installer('uv')
@@ -628,6 +635,7 @@ class TestPypircWarning:
     def test_silent_when_setting_pip(self, monkeypatch, caplog, tmp_path):
         (tmp_path / '.pypirc').write_text('[pypi]\n')
         monkeypatch.setenv('HOME', str(tmp_path))
+        monkeypatch.setenv('USERPROFILE', str(tmp_path))
         monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
         with caplog.at_level('WARNING', logger='zc.buildout.easy_install'):
             easy_install.installer('pip')
