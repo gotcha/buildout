@@ -1,0 +1,2 @@
+Patch ``USERPROFILE`` alongside ``HOME`` in the ``.pypirc`` warning tests:
+``os.path.expanduser`` reads only ``USERPROFILE`` on Windows. [gotcha]
