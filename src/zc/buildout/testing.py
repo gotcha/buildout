@@ -297,8 +297,6 @@ def hermetic_pip_env():
     os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
     os.environ['UV_FIND_LINKS'] = os.path.abspath(seed)
     os.environ['buildout_testing_seam_find_links'] = os.path.abspath(seed)
-    os.environ['buildout_testing_seam_index_url'] = (
-        'file:///nonexistent-hermetic-index')
     uv_cache = tempfile.mkdtemp('uv-cache')
     os.environ['UV_CACHE_DIR'] = uv_cache
     # Path(...).as_uri() spells the dead index natively, which Windows
@@ -306,6 +304,11 @@ def hermetic_pip_env():
     # is nonexistent by construction.
     os.environ['UV_INDEX_URL'] = (
         Path(uv_cache) / 'nonexistent-hermetic-index').as_uri()
+    # The seam fallback index reaches the same uv conversion (it is the
+    # --default-index fallback of in-process resolves), so it gets the
+    # same native, nonexistent-by-construction spelling.
+    os.environ['buildout_testing_seam_index_url'] = (
+        Path(uv_cache) / 'nonexistent-hermetic-seam-index').as_uri()
 
     def restore():
         for name, value in old.items():
