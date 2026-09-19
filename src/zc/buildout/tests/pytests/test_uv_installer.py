@@ -243,6 +243,14 @@ def test_hermetic_env_covers_uv_and_cleans_its_cache():
         assert index_path.is_absolute()
         assert not index_path.exists()
         assert index_path.parent == Path(os.environ['UV_CACHE_DIR'])
+        # The seam fallback index feeds every in-process uv resolve the
+        # same dead spelling; it must convert natively too.
+        seam_url = os.environ['buildout_testing_seam_index_url']
+        assert urlsplit(seam_url).scheme == 'file'
+        seam_path = Path(url2pathname(urlsplit(seam_url).path))
+        assert seam_path.is_absolute()
+        assert not seam_path.exists()
+        assert seam_path.parent == Path(os.environ['UV_CACHE_DIR'])
         # Not 'not in': an ambient UV_OFFLINE is the caller's own
         # business, the harness just must not force it.
         assert os.environ.get('UV_OFFLINE') != '1'
