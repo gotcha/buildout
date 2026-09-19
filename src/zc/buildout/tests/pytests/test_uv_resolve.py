@@ -309,6 +309,42 @@ def test_fallback_index_never_shadows_a_remote_index(monkeypatch):
     assert 'file:///nonexistent-hermetic-index' not in args
 
 
+def test_native_spelled_file_url_index_routes_to_find_links(
+        monkeypatch, tmp_path):
+    # The shape zc.buildout.testing exports in buildout_testing_index_url:
+    # 'file://' + a native tempfile.mkdtemp() path, 'file://C:\...' on
+    # Windows, where the drive letter lands in the URL netloc.
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url='file://' + str(tmp_path), uv='/uv', python='/python')
+    args, _texts = calls[0]
+    assert args[args.index('-f') + 1] == Path(str(tmp_path)).as_uri()
+    assert '--default-index' not in args
+
+
+def test_windows_drive_file_url_without_local_dir_falls_back(monkeypatch):
+    # A drive-spelled file URL whose directory does not exist must not
+    # crash the resolver; it falls back to --default-index like any file
+    # URL that names no local directory.
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url='file://C:\\no\\such\\buildout-index',
+            uv='/uv', python='/python')
+    args, _texts = calls[0]
+    assert args[args.index('--default-index') + 1] == (
+        'file://C:\\no\\such\\buildout-index')
+    assert '-f' not in args
+
+
+def test_empty_file_url_falls_back_to_default_index(monkeypatch):
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url='file://', uv='/uv', python='/python')
+    args, _texts = calls[0]
+    assert args[args.index('--default-index') + 1] == 'file://'
+    assert '-f' not in args
+
+
 def test_first_wheel_is_url_when_wheels_exist(monkeypatch):
     pinned = _resolve_with_lock(monkeypatch, LOCK_TWO_PACKAGES)
     dist = pinned.dists[0]
