@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 import pkg_resources
 import pytest
@@ -230,9 +232,17 @@ def test_hermetic_env_covers_uv_and_cleans_its_cache():
     try:
         # uv honors no UV_NO_INDEX, and UV_OFFLINE would block the
         # corpus's localhost link server once uv does the resolving, so
-        # hermeticity comes from a dead file: index URL.
-        assert os.environ['UV_INDEX_URL'] == (
-            'file:///nonexistent-hermetic-index')
+        # hermeticity comes from a dead file: index URL.  uv converts
+        # the URL back to a local path and rejects a drive-letterless
+        # spelling outright on Windows ("Expected a file URL"), so the
+        # dead index must spell a native path.  Anchoring it under the
+        # fresh cache makes it nonexistent by construction.
+        index_url = os.environ['UV_INDEX_URL']
+        assert urlsplit(index_url).scheme == 'file'
+        index_path = Path(url2pathname(urlsplit(index_url).path))
+        assert index_path.is_absolute()
+        assert not index_path.exists()
+        assert index_path.parent == Path(os.environ['UV_CACHE_DIR'])
         # Not 'not in': an ambient UV_OFFLINE is the caller's own
         # business, the harness just must not force it.
         assert os.environ.get('UV_OFFLINE') != '1'
