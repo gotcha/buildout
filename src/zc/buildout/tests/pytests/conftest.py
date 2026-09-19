@@ -192,6 +192,33 @@ def reset_easy_install_globals():
     tempfile.tempdir = old_tempdir
 
 
+@pytest.fixture(autouse=True)
+def reset_zc_buildout_logger_propagation():
+    """Restore the propagate flags of zc.buildout loggers after each test.
+
+    Buildout._setup_logging sets propagate=False on the 'zc.buildout'
+    logger, and a few ported doctests do the same on
+    'zc.buildout.easy_install'.  Without a restore, one test's flag
+    leaks into its xdist worker and starves every later caplog capture
+    under the namespace: pytest < 9 attaches its capture handler only
+    to the root logger, so records emitted behind a False flag never
+    reach it (they surface on stderr via logging.lastResort instead).
+    The 3.9 CI leg runs pytest 8.4.2, the newest pytest that still
+    supports 3.9.
+    """
+    import logging
+
+    saved = {
+        name: logger.propagate
+        for name, logger in logging.Logger.manager.loggerDict.items()
+        if isinstance(logger, logging.Logger)
+        and (name == 'zc.buildout' or name.startswith('zc.buildout.'))
+    }
+    yield
+    for name, propagate in saved.items():
+        logging.getLogger(name).propagate = propagate
+
+
 @pytest.fixture(scope='session')
 def _sample_eggs_cache(tmp_path_factory):
     """Sample-eggs tree built once per test-run process (xdist worker).
