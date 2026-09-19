@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 import tempfile
 import urllib.parse
@@ -274,12 +275,26 @@ def _index_args(index_url: str | None) -> list[str]:
     return ['--index-url', index_url]
 
 
+_WINDOWS_DRIVE = re.compile(r'[A-Za-z]:($|[\\/])')
+
+
 def _local_directory(url: str) -> Path | None:
-    """The path of a ``file://`` URL naming a directory, else None."""
+    """The path of a ``file://`` URL naming a directory, else None.
+
+    ``file://`` glued to a native Windows path (``file://C:\\index``)
+    lands the drive in the URL netloc; reassemble the native spelling.
+    Only absolute paths are returned: callers render the result with
+    ``Path.as_uri``, which refuses relative paths.
+    """
     parts = urllib.parse.urlsplit(url)
     if parts.scheme != 'file':
         return None
-    path = Path(urllib.request.url2pathname(parts.path))
+    if _WINDOWS_DRIVE.match(parts.netloc):
+        path = Path(urllib.parse.unquote(parts.netloc + parts.path))
+    else:
+        path = Path(urllib.request.url2pathname(parts.path))
+    if not path.is_absolute():
+        return None
     return path if path.is_dir() else None
 
 
