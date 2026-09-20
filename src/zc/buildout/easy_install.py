@@ -702,6 +702,51 @@ def _available_dists(
             ]
 
 
+def _uv_resolve_requirements(
+        requirements: Sequence[pkg_resources.Requirement],
+        versions: Mapping[str, str],
+        links: list[str],
+        index_url: str | None,
+        prefer_final: bool,
+        uv_stderr: list[str] | None = None,
+        offline: bool = False,
+        fallback_index_url: str | None = None,
+        ) -> uv_resolve.PinnedSet | None:
+    """One ``uv pip compile`` for several requirements.
+
+    Returns the pinned set from the lock; ``None`` means uv could not
+    resolve.  The compile still runs with ``--no-deps``, so each
+    requirement's pin is what the lock carries today; full-closure
+    compiles arrive with a later phase.  The remaining arguments are
+    forwarded to the seam exactly as ``_uv_available_dists`` forwards
+    them, and a resolve failure appends the tail of uv's stderr to
+    ``uv_stderr`` when a list is passed.
+    """
+    for requirement in requirements:
+        _raise_for_hg_links(requirement, links)
+        _raise_for_fragment_links(requirement, links)
+    try:
+        return uv_resolve.resolve(
+            requirements=[_without_extra_marker(requirement)
+                          for requirement in requirements],
+            constraints=versions,
+            links=links,
+            index_url=index_url,
+            prefer_final=prefer_final,
+            offline=offline,
+            fallback_index_url=fallback_index_url,
+            uv=_uv_executable(),
+            python=sys.executable,
+        )
+    except uv_resolve.ResolutionError as err:
+        logger.debug('uv could not resolve %r:\n%s',
+                     ', '.join(str(requirement)
+                               for requirement in requirements),
+                     err.stderr)
+        _note_uv_failure(uv_stderr, err.stderr)
+        return None
+
+
 def _uv_available_dists(
         requirement: pkg_resources.Requirement,
         source: int | None,
@@ -726,24 +771,10 @@ def _uv_available_dists(
     forwarded likewise: the seam puts it on the argv only when the
     configured sources carry no index of their own.
     """
-    _raise_for_hg_links(requirement, links)
-    _raise_for_fragment_links(requirement, links)
-    try:
-        pinned = uv_resolve.resolve(
-            requirements=[_without_extra_marker(requirement)],
-            constraints=versions,
-            links=links,
-            index_url=index_url,
-            prefer_final=prefer_final,
-            offline=offline,
-            fallback_index_url=fallback_index_url,
-            uv=_uv_executable(),
-            python=sys.executable,
-        )
-    except uv_resolve.ResolutionError as err:
-        logger.debug('uv could not resolve %r:\n%s', str(requirement),
-                     err.stderr)
-        _note_uv_failure(uv_stderr, err.stderr)
+    pinned = _uv_resolve_requirements(
+        [requirement], versions, links, index_url, prefer_final,
+        uv_stderr, offline=offline, fallback_index_url=fallback_index_url)
+    if pinned is None:
         _raise_if_egg_only(requirement, links, index_url)
         return None
     entry = pinned.for_project(requirement.project_name)

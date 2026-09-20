@@ -406,6 +406,56 @@ class TestFragmentFindLinksGuard:
             None, True) is None
 
 
+class TestUvResolveRequirements:
+    """The multi-requirement resolve seam behind ``_uv_available_dists``."""
+
+    def test_requirements_reach_resolve_in_order(self, monkeypatch):
+        captured = {}
+
+        def fake_resolve(**kwargs):
+            captured.update(kwargs)
+            return uv_resolve.PinnedSet(())
+
+        monkeypatch.setattr(uv_resolve, 'resolve', fake_resolve)
+        reqs = [pkg_resources.Requirement.parse('demo'),
+                pkg_resources.Requirement.parse('other')]
+        result = easy_install._uv_resolve_requirements(
+            reqs, {'demo': '1.0'}, ['https://example.invalid/links'],
+            'https://example.invalid/index', False, offline=True,
+            fallback_index_url='https://example.invalid/fallback')
+        assert result is not None
+        assert captured['requirements'] == ['demo', 'other']
+        assert captured['constraints'] == {'demo': '1.0'}
+        assert captured['links'] == ['https://example.invalid/links']
+        assert captured['index_url'] == 'https://example.invalid/index'
+        assert captured['prefer_final'] is False
+        assert captured['offline'] is True
+        assert (captured['fallback_index_url']
+                == 'https://example.invalid/fallback')
+
+    def test_resolve_error_returns_none_and_notes_stderr(self, monkeypatch):
+        def fail_resolve(**kwargs):
+            raise uv_resolve.ResolutionError('no', 'first\n\nsecond\nthird')
+        monkeypatch.setattr(uv_resolve, 'resolve', fail_resolve)
+        tail = []
+        result = easy_install._uv_resolve_requirements(
+            [pkg_resources.Requirement.parse('demo')], {}, [], None, True,
+            tail)
+        assert result is None
+        assert tail == ['second', 'third']
+
+    def test_guard_fails_on_a_later_requirement(self, monkeypatch):
+        def resolve_must_not_run(*args, **kwargs):
+            raise AssertionError('uv_resolve.resolve must not run')
+        monkeypatch.setattr(uv_resolve, 'resolve', resolve_must_not_run)
+        reqs = [pkg_resources.Requirement.parse('demo'),
+                pkg_resources.Requirement.parse('other')]
+        with pytest.raises(zc.buildout.UserError) as excinfo:
+            easy_install._uv_resolve_requirements(
+                reqs, {}, ['hg+https://example.invalid/repo'], None, True)
+        assert 'hg+https://example.invalid/repo' in str(excinfo.value)
+
+
 class TestJunkVersionsHardening:
     """Junk [versions] entries no longer abort unrelated uv resolutions."""
 
