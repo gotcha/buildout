@@ -31,8 +31,27 @@ test-small: bin/test
 # is read by easy_install as the default for the [buildout] installer
 # option and propagates into every spawned bin/buildout child, so the
 # untouched corpus exercises uv instead of pip.
-test-uv: bin/test
-	$(HERMETIC_ENV) PYTHONWARNINGS=ignore buildout_testing_installer=uv bin/test -pvc
+#
+# UV_VERSION pins the uv under test (the uv matrix in test-uv.yml): the
+# pin target installs that release into a repo-local tool dir with the
+# ambient uv, and the recipe puts its bin dir first on PATH for the
+# suite. easy_install._uv_executable resolves `uv` on PATH first, so
+# every spawned child runs the pin. The bootstrap (bin/test) keeps the
+# ambient uv: the pin targets the code under test, not the toolchain
+# building the checkout. UV_TOOL_DIR moves with UV_TOOL_BIN_DIR because
+# `uv tool install` keys tool environments by package name: two pinned
+# versions in the default dir would clobber each other.
+UV_PIN_DIR = $(CURDIR)/.uv-pin
+
+$(UV_PIN_DIR)/uv-%/bin/uv:
+	UV_TOOL_DIR="$(UV_PIN_DIR)/uv-$*/tools" \
+		UV_TOOL_BIN_DIR="$(UV_PIN_DIR)/uv-$*/bin" \
+		uv tool install --reinstall "uv==$*"
+
+test-uv: bin/test $(if $(UV_VERSION),$(UV_PIN_DIR)/uv-$(UV_VERSION)/bin/uv,)
+	$(HERMETIC_ENV) PYTHONWARNINGS=ignore buildout_testing_installer=uv \
+		$(if $(UV_VERSION),PATH="$(UV_PIN_DIR)/uv-$(UV_VERSION)/bin:$$PATH",) \
+		bin/test -pvc
 
 # Coverage variants of both suites. etc/coverage/sitecustomize.py on
 # PYTHONPATH starts coverage in the suite process itself and in every

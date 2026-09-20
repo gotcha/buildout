@@ -20,6 +20,10 @@ class Job:
     # make test-uv, which self-contains buildout_testing_installer=uv
     installer: str = "pip"
     pip_install: tuple[str, ...] = ()
+    # pinned uv release under test (the uv version matrix); threaded as
+    # UV_VERSION, which the Makefile's test-uv target turns into a
+    # repo-local `uv tool install` first on PATH
+    uv: str = ""
 
 
 FAMILIES = ("setuptools", "python", "pip", "scripts", "static", "coverage", "uv")
@@ -32,12 +36,17 @@ VALID_FAMILIES = FAMILIES + ("module",)
 FAMILY_MINUTES = {"coverage": 15, "pip": 8, "python": 7, "setuptools": 4, "scripts": 1, "static": 1, "uv": 35}
 
 
-def _scripts_commands(makefile: str) -> tuple[tuple[str, ...], ...]:
+def _scripts_commands(makefile: str, check_downloads: bool = True) -> tuple[tuple[str, ...], ...]:
+    # installer = uv does not populate the buildout download cache (uv
+    # keeps downloads in its own cache), so uv cells assert on eggs only
+    checks = 'test -n "$(ls -A sandbox/eggs)"'
+    if check_downloads:
+        checks += ' && test -n "$(ls -A sandbox/downloads/dist)"'
     return (
         ("make", "-f", makefile, "sandbox/bin/buildout"),
         ("sh", "-c", "sandbox/bin/buildout -v -c .github/workflows/scripts-${PYTHON_VERSION}.cfg annotate buildout"),
         ("sh", "-c", "sandbox/bin/buildout -c .github/workflows/scripts-${PYTHON_VERSION}.cfg"),
-        ("sh", "-c", 'test -n "$(ls -A sandbox/eggs)" && test -n "$(ls -A sandbox/downloads/dist)"'),
+        ("sh", "-c", checks),
     )
 
 
@@ -160,6 +169,38 @@ def _build_jobs() -> tuple[Job, ...]:
             for py in ("3.9", "3.11", "3.12", "3.13", "3.14")
         ),
         Job(name="mac-uv", python="3.10", commands=(("make", "test-uv"),), family="uv", installer="uv"),
+        # the uv version matrix: the legacy suite through the uv pipeline
+        # with the uv under test pinned (UV_VERSION) to the earliest
+        # supported 0.12.x (the setup.py floor) and the five most recent,
+        # on the most recent setuptools (81.0.0 caps the declared
+        # setuptools<82 range)
+        *(
+            Job(
+                name=f"uv-{uv}",
+                python="3.12",
+                commands=(("make", "test-uv"),),
+                family="uv",
+                setuptools="81.0.0",
+                installer="uv",
+                uv=uv,
+            )
+            for uv in ("0.12.11", "0.12.13", "0.12.14", "0.12.15", "0.12.16", "0.12.17")
+        ),
+        # the uv variant of run-tests.yml's generate-scripts: same
+        # packages and pythons, with buildout_testing_installer=uv set
+        # between bootstrap and the buildout runs (see main.py's _run)
+        *(
+            Job(
+                name=f"scripts-uv-{pkg}-py{py}",
+                python=py,
+                commands=_scripts_commands(".github/workflows/Makefile-scripts", check_downloads=False),
+                family="scripts",
+                package=pkg,
+                installer="uv",
+            )
+            for py in ("3.9", "3.10", "3.11", "3.12", "3.13", "3.14")
+            for pkg in ("zest.releaser", "pyspf")
+        ),
         Job(name="coverage-legacy", python="3.12", commands=(("make", "coverage"),), family="coverage"),
         Job(name="coverage-pytest", python="3.12", commands=(("make", "coverage-pytest"),), family="coverage"),
         Job(name="coverage-unittests", python="3.12", commands=(("make", "coverage-unittests"),), family="coverage"),

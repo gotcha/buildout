@@ -15,11 +15,16 @@ on:
 # for the [buildout] installer option, so every spawned buildout child
 # resolves and installs with uv instead of pip.
 # The pip matrix is not mirrored: the uv pipeline never spawns pip, so
-# PIP_VERSION varies nothing in the code under test. The Windows job is
-# not mirrored either: it has no devenv, hence no uv on PATH.
+# PIP_VERSION varies nothing in the code under test.
+# The uv job pins the uv under test through UV_VERSION (see the Makefile
+# test-uv target): the earliest supported 0.12.x (the setup.py floor)
+# and the five most recent, on the most recent setuptools (81.0.0 caps
+# the declared setuptools<82 range). The other jobs exercise the
+# devenv-provided uv.
 # Provisioning follows the same contract as run-tests.yml: GitHub
 # actions only bootstrap the repo-owned environment (actions/checkout
 # plus .github/actions/devenv-setup); every tool comes from the devenv.
+# The Windows leg calls windows.yml instead: no Nix on Windows runners.
 
 jobs:
   setuptools:
@@ -83,6 +88,44 @@ jobs:
         --option languages.python.version:string "${{matrix.python-version}}"
         -- make test-uv
 
+  uv:
+    name: uv ${{ matrix.uv-version }}
+    needs: python
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04]
+        python-version: ["3.12"]
+        # the most recent setuptools the bootstrap supports: >= 82
+        # drops pkg_resources, which dev.py still imports
+        setuptools-version: ["81.0.0"]
+        # the earliest supported 0.12.x plus the five most recent
+        # (0.12.11 is the setup.py floor: earlier 0.12.x serve their
+        # own cache on --offline resolves)
+        uv-version: ["0.12.11", "0.12.13", "0.12.14", "0.12.15", "0.12.16", "0.12.17"]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: ./.github/actions/devenv-setup
+      with:
+        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
+        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
+        # means this step is skipped entirely.
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Run tests (uv installer)
+      env:
+        PYTHONWARNINGS: ignore
+        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
+        # the Makefile test-uv target installs this pin and puts it
+        # first on PATH for the suite
+        UV_VERSION: ${{matrix.uv-version}}
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make test-uv
+
   mac:
     name: Mac
     needs: python
@@ -111,3 +154,59 @@ jobs:
         devenv shell
         --option languages.python.version:string "${{matrix.python-version}}"
         -- make test-uv
+
+  windows:
+    # These tests are the slowest, so start them immediately after the
+    # first batch has finished. Windows needs no uv provisioning: uv is
+    # a declared zc.buildout dependency, so the venv pip install lays
+    # uv.exe next to the Python executable, where
+    # easy_install._uv_executable finds it after the PATH miss.
+    name: Windows (uv installer)
+    needs: setuptools
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    uses: ./.github/workflows/windows.yml
+    with:
+      installer: uv
+
+  generate-scripts:
+    # The uv variant of run-tests.yml's generate-scripts: same packages
+    # and pythons, with buildout_testing_installer=uv on the buildout
+    # runs. installer = uv does not populate the buildout download cache
+    # (uv keeps downloads in its own cache), so the check asserts on the
+    # eggs only.
+    name: Scripts Python ${{ matrix.python-version }} (uv installer)
+    needs: python
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    strategy:
+      matrix:
+        package: [zest.releaser, pyspf]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        os: ["ubuntu-22.04"]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: ./.github/actions/devenv-setup
+      with:
+        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
+        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
+        # means this step is skipped entirely.
+        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Setup buildout virtualenv
+      run: >-
+        devenv shell
+        --option languages.python.version:string "${{matrix.python-version}}"
+        -- make -f .github/workflows/Makefile-scripts sandbox/bin/buildout
+    - name: Run buildout
+      env:
+        PYTHONWARNINGS: ignore
+        PACKAGE: ${{matrix.package}}
+        PYTHON_VERSION: ${{matrix.python-version}}
+        buildout_testing_installer: uv
+      run: |
+        sandbox/bin/buildout -v -c .github/workflows/scripts-${PYTHON_VERSION}.cfg annotate buildout
+        sandbox/bin/buildout -c .github/workflows/scripts-${PYTHON_VERSION}.cfg
+    - name: Check eggs
+      run: |
+        ls -al sandbox/eggs
+        test -n "$(ls -A sandbox/eggs)"
