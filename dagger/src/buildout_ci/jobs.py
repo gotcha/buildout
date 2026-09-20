@@ -16,17 +16,20 @@ class Job:
     setuptools: str = "75.8.2"
     pip: str = ""
     package: str = ""
+    # the [buildout] installer the cell exercises; "uv" rows run
+    # make test-uv, which self-contains buildout_testing_installer=uv
+    installer: str = "pip"
     pip_install: tuple[str, ...] = ()
 
 
-FAMILIES = ("setuptools", "python", "pip", "scripts", "static", "coverage")
+FAMILIES = ("setuptools", "python", "pip", "scripts", "static", "coverage", "uv")
 
 # valid --family values: the repo families plus the harness's own
 # module family (kept out of FAMILIES: it runs no repo workflow job)
 VALID_FAMILIES = FAMILIES + ("module",)
 
 # rough duration hints for scheduling only, not gates
-FAMILY_MINUTES = {"coverage": 15, "pip": 8, "python": 7, "setuptools": 4, "scripts": 1, "static": 1}
+FAMILY_MINUTES = {"coverage": 15, "pip": 8, "python": 7, "setuptools": 4, "scripts": 1, "static": 1, "uv": 35}
 
 
 def _scripts_commands(makefile: str) -> tuple[tuple[str, ...], ...]:
@@ -121,6 +124,42 @@ def _build_jobs() -> tuple[Job, ...]:
         ),
         # named after the macos workflow job: same make targets, but in a Linux container
         Job(name="mac", python="3.10", commands=make_and_pytest, family="python"),
+        # the test-uv.yml parallel set: the legacy suite through the uv
+        # install pipeline. No pytest step there (no uv variant of it)
+        # and no pip matrix (the uv seam never spawns pip).
+        *(
+            Job(
+                name=f"setuptools-{st}-uv",
+                python="3.10",
+                commands=(("make", "test-uv"),),
+                family="uv",
+                setuptools=st,
+                installer="uv",
+            )
+            for st in (
+                "63.0.0",
+                "65.7.0",
+                "69.5.1",
+                "74.1.3",
+                "75.9.1",
+                "79.0.1",
+                "80.2.0",
+                "80.10.2",
+                "81.0.0",
+            )
+        ),
+        *(
+            Job(
+                name=f"python-{py}-uv",
+                python=py,
+                commands=(("make", "test-uv"),),
+                family="uv",
+                setuptools="75.6.0",
+                installer="uv",
+            )
+            for py in ("3.9", "3.11", "3.12", "3.13", "3.14")
+        ),
+        Job(name="mac-uv", python="3.10", commands=(("make", "test-uv"),), family="uv", installer="uv"),
         Job(name="coverage-legacy", python="3.12", commands=(("make", "coverage"),), family="coverage"),
         Job(name="coverage-pytest", python="3.12", commands=(("make", "coverage-pytest"),), family="coverage"),
         Job(name="coverage-unittests", python="3.12", commands=(("make", "coverage-unittests"),), family="coverage"),
