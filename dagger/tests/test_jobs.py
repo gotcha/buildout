@@ -11,9 +11,11 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "run-tests.yml"
+UV_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "test-uv.yml"
 JOBS_PATH = REPO_ROOT / "dagger" / "src" / "buildout_ci" / "jobs.py"
 
 MAKE_AND_PYTEST = (("make",), ("make", "pytest"))
+MAKE_TEST_UV = (("make", "test-uv"),)
 
 
 def _load_jobs():
@@ -33,6 +35,11 @@ jobs = _load_jobs()
 @pytest.fixture(scope="module")
 def workflow():
     return yaml.safe_load(WORKFLOW_PATH.read_text())
+
+
+@pytest.fixture(scope="module")
+def uv_workflow():
+    return yaml.safe_load(UV_WORKFLOW_PATH.read_text())
 
 
 def _devenv_run(step_run):
@@ -146,6 +153,56 @@ def _workflow_cells(data):
     return cells
 
 
+def _uv_workflow_cells(data):
+    """Derive the job cells .github/workflows/test-uv.yml defines.
+
+    The uv parallel set mirrors the setuptools, python, and mac jobs of
+    run-tests.yml with the legacy suite driven through the uv installer.
+    Every uv cell runs `make test-uv` only: there is no uv variant of
+    the pytest step, and the pip matrix is not mirrored (the uv seam
+    never spawns pip). The run step's command is parsed from the yaml
+    so the cell fails drift if the workflow stops invoking test-uv.
+    """
+    wf = data["jobs"]
+    cells = {}
+
+    def uv_commands(job):
+        steps = {step["name"]: step for step in job["steps"] if "name" in step}
+        run = steps["Run tests (uv installer)"]["run"]
+        return (tuple(run.split(" -- ")[-1].split()),)
+
+    matrix = wf["setuptools"]["strategy"]["matrix"]
+    for st in matrix["setuptools-version"]:
+        cells[f"setuptools-{st}-uv"] = {
+            "python": matrix["python-version"][0],
+            "commands": uv_commands(wf["setuptools"]),
+            "family": "uv",
+            "setuptools": st,
+            "installer": "uv",
+        }
+
+    matrix = wf["python"]["strategy"]["matrix"]
+    for py in matrix["python-version"]:
+        cells[f"python-{py}-uv"] = {
+            "python": py,
+            "commands": uv_commands(wf["python"]),
+            "family": "uv",
+            "setuptools": matrix["setuptools-version"][0],
+            "installer": "uv",
+        }
+
+    matrix = wf["mac"]["strategy"]["matrix"]
+    cells["mac-uv"] = {
+        "python": matrix["python-version"][0],
+        "commands": uv_commands(wf["mac"]),
+        "family": "uv",
+        "setuptools": matrix["setuptools-version"][0],
+        "installer": "uv",
+    }
+
+    return cells
+
+
 def test_jobs_module_imports_nothing_from_dagger():
     # dagger/tests must be able to load jobs.py without the SDK installed
     tree = ast.parse(JOBS_PATH.read_text())
@@ -159,9 +216,9 @@ def test_jobs_module_imports_nothing_from_dagger():
         assert "dagger" not in roots
 
 
-def test_workflow_cells_match_job_table(workflow):
-    cells = _workflow_cells(workflow)
-    assert len(cells) == 46
+def test_workflow_cells_match_job_table(workflow, uv_workflow):
+    cells = _workflow_cells(workflow) | _uv_workflow_cells(uv_workflow)
+    assert len(cells) == 61
     by_name = {job.name: job for job in jobs.JOBS}
     missing = set(cells) - set(by_name)
     assert not missing, f"workflow cells without a Job row: {sorted(missing)}"
@@ -170,7 +227,7 @@ def test_workflow_cells_match_job_table(workflow):
         assert job.python == expected["python"], name
         assert job.commands == expected["commands"], name
         assert job.family == expected["family"], name
-        for pin in ("setuptools", "pip", "package"):
+        for pin in ("setuptools", "pip", "package", "installer"):
             if pin in expected:
                 assert getattr(job, pin) == expected[pin], name
     extra = set(by_name) - set(cells)
@@ -201,11 +258,12 @@ def test_family_invariants():
         "scripts": 22,
         "static": 3,
         "coverage": 3,
+        "uv": 15,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 57
+    assert len(jobs.JOBS) == 72
 
 
 def test_select_jobs_pip():

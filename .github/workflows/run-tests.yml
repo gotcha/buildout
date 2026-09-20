@@ -413,7 +413,8 @@ jobs:
         ls -al sandbox/downloads/dist
 
   dagger:
-    # The whole matrix above, run a second time inside containers via
+    # The whole matrix above plus the test-uv.yml parallel set, run a
+    # second time inside containers via
     # the repo's own dagger module (dagger.json, dagger/): same job
     # table, same make targets. This is the job a developer reproduces
     # locally with `dagger call ci`. The matrix below runs one GH job
@@ -427,7 +428,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        family: [setuptools, python, pip, scripts, static, coverage, module]
+        family: [setuptools, python, pip, scripts, static, coverage, uv, module]
     steps:
     - uses: actions/checkout@v6.0.2
     - name: Free runner disk
