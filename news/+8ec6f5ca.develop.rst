@@ -1,0 +1,1 @@
+etc/bump_ci_versions.py bumps the CI version matrices (setuptools, pip, python, uv) to the latest eligible releases on demand, keeping workflows, the dagger job table, and the drift-test counts in sync. [gotcha]
