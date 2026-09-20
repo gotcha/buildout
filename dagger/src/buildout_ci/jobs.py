@@ -128,7 +128,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 setuptools=st,
                 pip=pip,
             )
-            for pip in ("21.3.1", "22.3.1", "23.3.2", "24.3.1", "25.3", "26.1.2")
+            for pip in ("21.3.1", "22.3.1", "23.3.2", "24.3.1", "25.3", "26.1.2", "26.2.1")
             for st in ("65.7.0", "75.8.2")
         ),
         # named after the macos workflow job: same make targets, but in a Linux container
