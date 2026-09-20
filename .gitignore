@@ -20,3 +20,4 @@ htmlcov/
 .devenv/
 .monkeytype-trace/
 .ruff_cache/
+.uv-pin/

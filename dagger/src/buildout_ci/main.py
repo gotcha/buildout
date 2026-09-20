@@ -43,6 +43,10 @@ Source = Annotated[
             "**/__pycache__",
             ".coverage",
             ".coverage.*",
+            # repo-local uv pins (Makefile test-uv UV_VERSION): a pin
+            # built for the host platform must never shadow the
+            # container's own install
+            ".uv-pin",
         ]
     ),
 ]
@@ -222,6 +226,10 @@ class BuildoutCi:
             ctr = ctr.with_env_variable("PIP_VERSION", job.pip)
         if job.package:
             ctr = ctr.with_env_variable("PACKAGE", job.package)
+        if job.uv:
+            # the Makefile's test-uv target installs this pin with the
+            # cell's pip-provided uv and puts it first on PATH
+            ctr = ctr.with_env_variable("UV_VERSION", job.uv)
         if job.pip_install:
             ctr = ctr.with_exec(["pip", "install", "--quiet", "--retries", "10", *job.pip_install])
         return ctr
@@ -243,17 +251,25 @@ class BuildoutCi:
                 # mount the sandbox egg caches only after the makefile's
                 # `uv venv sandbox` has run: with UV_VENV_CLEAR set, uv
                 # clears the target directory, which would empty a cache
-                # mounted there before venv creation
+                # mounted there before venv creation. uv-installer cells
+                # get their own volumes: sharing the pip cells' eggs
+                # could mask a uv install that produced nothing.
+                installer_suffix = "-uv" if job.installer == "uv" else ""
                 ctr = (
                     ctr.with_mounted_cache(
                         "/src/sandbox/eggs",
-                        dag.cache_volume(f"buildout-ci-scripts-eggs-py{job.python}-{job.package}"),
+                        dag.cache_volume(f"buildout-ci-scripts-eggs-py{job.python}-{job.package}{installer_suffix}"),
                     )
                     .with_mounted_cache(
                         "/src/sandbox/downloads",
-                        dag.cache_volume(f"buildout-ci-scripts-downloads-py{job.python}-{job.package}"),
+                        dag.cache_volume(f"buildout-ci-scripts-downloads-py{job.python}-{job.package}{installer_suffix}"),
                     )
                 )
+                if job.installer == "uv":
+                    # scope the installer default to the buildout runs:
+                    # the bootstrap exec above stays on pip, exactly like
+                    # the workflow's step-level env
+                    ctr = ctr.with_env_variable("buildout_testing_installer", "uv")
             ctr = ctr.with_exec(list(command))
             # Transient fetch failures flake in bursts: GH run
             # 34876803047 saw one cell burn both its attempts on two

@@ -52,7 +52,10 @@ setup(
         'packaging>=23.2',
         'pip',
         'wheel',
-        'uv>=0.12',
+        # 0.12.11 is the floor: earlier 0.12.x serve their own cache on
+        # --offline resolves, breaking install-from-cache isolation
+        # (easy_install.txt and downloadcache.txt pin that contract).
+        'uv>=0.12.11',
         'tomli; python_version < "3.11"',
     ],
     include_package_data = True,

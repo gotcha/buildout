@@ -157,11 +157,15 @@ def _uv_workflow_cells(data):
     """Derive the job cells .github/workflows/test-uv.yml defines.
 
     The uv parallel set mirrors the setuptools, python, and mac jobs of
-    run-tests.yml with the legacy suite driven through the uv installer.
-    Every uv cell runs `make test-uv` only: there is no uv variant of
-    the pytest step, and the pip matrix is not mirrored (the uv seam
-    never spawns pip). The run step's command is parsed from the yaml
-    so the cell fails drift if the workflow stops invoking test-uv.
+    run-tests.yml with the legacy suite driven through the uv installer,
+    adds a uv version matrix (UV_VERSION pins the uv under test), and
+    reruns the generate-scripts job through the uv installer. Every
+    suite cell runs `make test-uv` only: there is no uv variant of the
+    pytest step, and the pip matrix is not mirrored (the uv seam never
+    spawns pip). The windows job has no cell: the dagger module runs
+    Linux containers only. Run-step commands and env are parsed from
+    the yaml so the cells fail drift if the workflow stops invoking
+    test-uv or drops the installer pin.
     """
     wf = data["jobs"]
     cells = {}
@@ -191,6 +195,20 @@ def _uv_workflow_cells(data):
             "installer": "uv",
         }
 
+    # the uv version matrix: UV_VERSION pins the uv under test
+    matrix = wf["uv"]["strategy"]["matrix"]
+    steps = {step["name"]: step for step in wf["uv"]["steps"] if "name" in step}
+    for uv in matrix["uv-version"]:
+        assert steps["Run tests (uv installer)"]["env"]["UV_VERSION"] == "${{matrix.uv-version}}"
+        cells[f"uv-{uv}"] = {
+            "python": matrix["python-version"][0],
+            "commands": uv_commands(wf["uv"]),
+            "family": "uv",
+            "setuptools": matrix["setuptools-version"][0],
+            "installer": "uv",
+            "uv": uv,
+        }
+
     matrix = wf["mac"]["strategy"]["matrix"]
     cells["mac-uv"] = {
         "python": matrix["python-version"][0],
@@ -199,6 +217,25 @@ def _uv_workflow_cells(data):
         "setuptools": matrix["setuptools-version"][0],
         "installer": "uv",
     }
+
+    # the uv variant of generate-scripts: the installer default rides
+    # the run step's env, and the download-cache check drops away
+    # (installer = uv does not populate the buildout download cache)
+    scripts = wf["generate-scripts"]
+    matrix = scripts["strategy"]["matrix"]
+    steps = {step["name"]: step for step in scripts["steps"] if "name" in step}
+    assert steps["Run buildout"]["env"]["buildout_testing_installer"] == "uv"
+    bootstrap = steps["Setup buildout virtualenv"]["run"].split(" -- ")[-1].split()
+    makefile = bootstrap[bootstrap.index("-f") + 1]
+    for py in matrix["python-version"]:
+        for pkg in matrix["package"]:
+            cells[f"scripts-uv-{pkg}-py{py}"] = {
+                "python": py,
+                "commands": jobs._scripts_commands(makefile, check_downloads=False),
+                "family": "scripts",
+                "package": pkg,
+                "installer": "uv",
+            }
 
     return cells
 
@@ -218,7 +255,7 @@ def test_jobs_module_imports_nothing_from_dagger():
 
 def test_workflow_cells_match_job_table(workflow, uv_workflow):
     cells = _workflow_cells(workflow) | _uv_workflow_cells(uv_workflow)
-    assert len(cells) == 61
+    assert len(cells) == 79
     by_name = {job.name: job for job in jobs.JOBS}
     missing = set(cells) - set(by_name)
     assert not missing, f"workflow cells without a Job row: {sorted(missing)}"
@@ -227,7 +264,7 @@ def test_workflow_cells_match_job_table(workflow, uv_workflow):
         assert job.python == expected["python"], name
         assert job.commands == expected["commands"], name
         assert job.family == expected["family"], name
-        for pin in ("setuptools", "pip", "package", "installer"):
+        for pin in ("setuptools", "pip", "package", "installer", "uv"):
             if pin in expected:
                 assert getattr(job, pin) == expected[pin], name
     extra = set(by_name) - set(cells)
@@ -255,15 +292,15 @@ def test_family_invariants():
         "setuptools": 10,
         "python": 6,
         "pip": 12,
-        "scripts": 22,
+        "scripts": 34,
         "static": 3,
         "coverage": 3,
-        "uv": 15,
+        "uv": 21,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 72
+    assert len(jobs.JOBS) == 90
 
 
 def test_select_jobs_pip():
@@ -303,3 +340,11 @@ def test_scripts_commands_shape():
 def test_scripts_commands_makefile_threads_through():
     commands = jobs._scripts_commands("Makefile-sentinel")
     assert "Makefile-sentinel" in commands[0]
+
+
+def test_scripts_commands_uv_drops_downloads_check():
+    # installer = uv does not populate the buildout download cache, so
+    # the uv variant asserts on the eggs only
+    commands = jobs._scripts_commands(".github/workflows/Makefile-scripts", check_downloads=False)
+    assert len(commands) == 4
+    assert commands[3] == ("sh", "-c", 'test -n "$(ls -A sandbox/eggs)"')

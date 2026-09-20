@@ -2,21 +2,35 @@ name: Windows
 
 on:
   # Called from run-tests.yml so Windows stays in the push gate, and
-  # dispatchable on its own for Windows-only debugging loops once this
+  # from test-uv.yml with installer: uv for the uv pipeline variant.
+  # Dispatchable on its own for Windows-only debugging loops once this
   # file reaches the default branch (dispatch registers from there):
   #   gh workflow run windows.yml --ref <branch>
   # Until then the Windows-only loop is windows-iter.yml, which works
   # from any branch via its push trigger.
   workflow_call:
+    inputs:
+      installer:
+        description: "Install pipeline under test: 'pip' runs make plus make pytest, 'uv' runs make test-uv"
+        type: string
+        default: 'pip'
   workflow_dispatch:
+    inputs:
+      installer:
+        description: "Install pipeline under test: 'pip' runs make plus make pytest, 'uv' runs make test-uv"
+        type: string
+        default: 'pip'
 
 jobs:
   windows:
     # Exception to the devenv rule: Nix does not run on Windows
     # runners, so this job keeps actions/setup-python and the
     # pip-cached bootstrap. It still drives the repo-owned entry
-    # points (`make`, `make pytest`).
-    name: Windows
+    # points (`make`, `make pytest`). The uv variant needs no extra
+    # provisioning: uv is a declared zc.buildout dependency, so the
+    # venv pip install lays uv.exe next to the Python executable,
+    # where easy_install._uv_executable finds it after the PATH miss.
+    name: ${{ inputs.installer == 'uv' && 'Windows (uv installer)' || 'Windows' }}
     strategy:
       fail-fast: false
       matrix:
@@ -32,6 +46,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip' # caching pip dependencies
     - name: Run tests
+      if: inputs.installer != 'uv'
       env:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
@@ -42,7 +57,22 @@ jobs:
         TMP: C:\tmp
         TEMP: C:\tmp
       run: make
+    - name: Run tests (uv installer)
+      if: inputs.installer == 'uv'
+      env:
+        PYTHONWARNINGS: ignore
+        PYTHON_VERSION: ${{matrix.python-version}}
+        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
+        # Defining temporary directories is needed on Windows for
+        # test_all.TestEasyInstall.test_move_to_eggs_dir_and_compile
+        TMPDIR: C:\tmp
+        TMP: C:\tmp
+        TEMP: C:\tmp
+      run: make test-uv
     - name: Run pytest suite
+      # the uv variant runs make test-uv only: there is no uv variant of
+      # the pytest step
+      if: inputs.installer != 'uv'
       # bash, not the default pwsh: the Makefile pytest recipe is POSIX sh
       # (command substitution). Under pwsh, make has to discover Git's
       # sh.exe on PATH itself, and PWD is not exported.
