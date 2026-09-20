@@ -38,18 +38,20 @@ import sys
 import tempfile
 import urllib.parse
 import zipfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
 
 import pkg_resources
 import setuptools.archive_util
+from packaging.utils import canonicalize_name
 from pkg_resources import Distribution
 from setuptools.wheel import Wheel
 
 import zc.buildout
 import zc.buildout.rmtree
+from zc.buildout import uv_resolve
 from zc.buildout.utils import normalize_name
 
 logger = logging.getLogger('zc.buildout.easy_install')
@@ -579,8 +581,19 @@ def _move_record_leftovers(
             os.rename(dest_entry, egg_entry)
 
 
-def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> list[str]:
-    """build properly named egg directory"""
+def make_egg_after_pip_install(
+        dest: str,
+        distinfo_dir: str,
+        distro: pkg_resources.Distribution | None = None,
+        ) -> list[str]:
+    """build properly named egg directory
+
+    ``distro`` is the distribution the egg is named after.  When it is
+    omitted, the first distribution found in ``dest`` is picked — the
+    historical behavior, unambiguous as long as ``dest`` holds a single
+    install.  Callers that installed several distributions into ``dest``
+    with one subprocess pass the one matching ``distinfo_dir``.
+    """
     logger.debug('Making egg in %s from pip installation in %s', dest, distinfo_dir)
 
     _remove_namespace_init_files(dest)
@@ -590,7 +603,8 @@ def make_egg_after_pip_install(dest: str, distinfo_dir: str) -> list[str]:
     project_name = _read_project_name(dest, distinfo_dir)
 
     # Make properly named new egg dir
-    distro = next(iter(pkg_resources.find_distributions(dest)))
+    if distro is None:
+        distro = next(iter(pkg_resources.find_distributions(dest)))
     if project_name:
         distro.project_name = project_name
     base = f"{distro.egg_name()}-{pkg_resources.get_supported_platform()}"
@@ -931,6 +945,101 @@ def _move_to_eggs_dir_and_compile(dist: pkg_resources.DistInfoDistribution | pkg
         # Remember that temporary directories must be removed
         zc.buildout.rmtree.rmtree(tmp_dest)
     return newdist
+
+
+def _pinned_dist_info_dirname(pin: uv_resolve.PinnedDist) -> str:
+    """The ``.dist-info`` directory name an installer writes for ``pin``.
+
+    Wheel and dist-info name escaping per the binary distribution
+    format spec: runs of ``-_.`` in the distribution name collapse to
+    ``_`` and the name lowercases — spelled ``canonicalize_name``
+    followed by ``-`` → ``_``.  The pinned version comes from the lock
+    already normalized, so it joins verbatim.
+    """
+    name = canonicalize_name(pin.name).replace('-', '_')
+    return f"{name}-{pin.version}.dist-info"
+
+
+def _dist_for_pin(dest: str, pin: uv_resolve.PinnedDist
+                  ) -> pkg_resources.Distribution | None:
+    """The distribution installed in ``dest`` that ``pin`` names.
+
+    ``pkg_resources.find_distributions`` follows ``os.listdir`` order,
+    so picking its first hit is ambiguous once a batched install leaves
+    several ``.dist-info`` dirs in one directory; match the pin's
+    canonicalized name and parsed version instead.
+    """
+    wanted = canonicalize_name(pin.name)
+    version = pkg_resources.parse_version(pin.version)
+    for distro in pkg_resources.find_distributions(dest):
+        if (canonicalize_name(distro.project_name) == wanted
+                and distro.parsed_version == version):
+            return distro
+    return None
+
+
+def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
+                         dest: str) -> list[pkg_resources.Distribution]:
+    """Install a pinned set into ``dest`` with one uv subprocess.
+
+    Batched counterpart of ``_move_to_eggs_dir_and_compile`` for uv
+    full-resolution mode: ``uv pip install`` accepts N positional
+    specs, so the whole set lands in one shared temporary directory and
+    each distribution is then turned into an egg and moved into place.
+    Returns the new dists in pin order.
+    """
+    if not pinned:
+        # No pinned distributions, no subprocess.
+        return []
+    from zc.buildout import easy_install
+    from zc.buildout.easy_install import index_url
+
+    level = logger.getEffectiveLevel()
+    # Same parallel-buildout race contract as
+    # _move_to_eggs_dir_and_compile: the egg's final location may appear
+    # while we work, so install into a temporary sibling inside ``dest``
+    # first and move the eggs over afterwards.
+    _ensure_dest_dir(dest)
+    tmp_dest = tempfile.mkdtemp(dir=dest)
+    try:
+        args = _uv_install_args(
+            easy_install._uv_executable(), pinned[0].url, tmp_dest, False,
+            index_url(), level)
+        args.extend(p.url for p in pinned[1:])
+        easy_install._run_pip(args, os.environ.copy(), tmp_dest, level)
+        newdists = []
+        for pin in pinned:
+            distinfo_dirname = _pinned_dist_info_dirname(pin)
+            if not os.path.isdir(os.path.join(tmp_dest, distinfo_dirname)):
+                logger.error(
+                    "No .dist-info directory after successful uv pip"
+                    " install of %s (%s)",
+                    pin.name, pin.url)
+                raise zc.buildout.UserError(
+                    f"No {distinfo_dirname} directory after successful"
+                    f" uv pip install of {pin.name} {pin.version}.")
+            distro = _dist_for_pin(tmp_dest, pin)
+            if distro is None:
+                logger.error(
+                    "Could not find installed distribution for %s after"
+                    " successful uv pip install.",
+                    pin.name)
+                raise zc.buildout.UserError(
+                    f"Could not find installed distribution for {pin.name}"
+                    f" {pin.version} after successful uv pip install.")
+            [egg_dir] = make_egg_after_pip_install(
+                tmp_dest, distinfo_dirname, distro)
+            newdist = _move_dist_into_place(distro, egg_dir, dest)
+            # The new dist automatically has precedence DEVELOP_DIST,
+            # which interferes with the check for printing picked
+            # versions, so set it to EGG_DIST.  See
+            # _move_to_eggs_dir_and_compile for the long story.
+            newdist.precedence = pkg_resources.EGG_DIST
+            newdists.append(newdist)
+    finally:
+        # Remember that temporary directories must be removed
+        zc.buildout.rmtree.rmtree(tmp_dest)
+    return newdists
 
 
 def sort_working_set(ws: pkg_resources.WorkingSet, eggs_dir: str, develop_eggs_dir: str) -> pkg_resources.WorkingSet:
