@@ -194,29 +194,30 @@ def reset_easy_install_globals():
 
 @pytest.fixture(autouse=True)
 def reset_zc_buildout_logger_propagation():
-    """Restore the propagate flags of zc.buildout loggers after each test.
+    """Force propagate=True on zc.buildout loggers before each test.
 
     Buildout._setup_logging sets propagate=False on the 'zc.buildout'
     logger, and a few ported doctests do the same on
-    'zc.buildout.easy_install'.  Without a restore, one test's flag
-    leaks into its xdist worker and starves every later caplog capture
-    under the namespace: pytest < 9 attaches its capture handler only
-    to the root logger, so records emitted behind a False flag never
-    reach it (they surface on stderr via logging.lastResort instead).
-    The 3.9 CI leg runs pytest 8.4.2, the newest pytest that still
-    supports 3.9.
+    'zc.buildout.easy_install'; the flag then leaks across the xdist
+    worker and starves every later caplog capture under the namespace:
+    pytest < 9 attaches its capture handler only to the root logger, so
+    records emitted behind a False flag never reach it (they surface on
+    stderr via logging.lastResort instead).  The 3.9 CI leg runs pytest
+    8.4.2, the newest pytest that still supports 3.9.
+
+    Force the default at setup rather than snapshot-and-restore: the
+    session-scoped sample-eggs cache runs a Buildout before the first
+    function-scoped fixture of its test, so a snapshot can capture an
+    already-polluted flag and would restore the pollution forever.
     """
     import logging
 
-    saved = {
-        name: logger.propagate
-        for name, logger in logging.Logger.manager.loggerDict.items()
-        if isinstance(logger, logging.Logger)
-        and (name == 'zc.buildout' or name.startswith('zc.buildout.'))
-    }
+    for logger in logging.Logger.manager.loggerDict.values():
+        if isinstance(logger, logging.Logger) and (
+                logger.name == 'zc.buildout'
+                or logger.name.startswith('zc.buildout.')):
+            logger.propagate = True
     yield
-    for name, propagate in saved.items():
-        logging.getLogger(name).propagate = propagate
 
 
 @pytest.fixture(scope='session')
