@@ -37,6 +37,9 @@ trailers; gates close at an exact head SHA; the operator lands.
 - [ ] Record which `pkg_resources`/`setuptools` imports load in a uv-mode
       run (`python -X importtime` or an import hook on a representative
       lane). This is the removal checklist ground truth.
+- [ ] Assert no pip subprocess fires in any uv-mode lane (uv mode must
+      use only the uv binary; install_backend.py's pip branch stays
+      unreachable).
 
 ## Phase 1 — Seam stdlib swaps (uv path)
 
@@ -83,6 +86,11 @@ setuptools and Python.
       setuptools-latest leg; `make test` and `make test-uv` both green on
       it. This is the acceptance test that the vendoring, not the cap,
       is what keeps legacy alive.
+- [ ] Make pip legacy-only: drop `'pip'` from unconditional
+      install_requires (setup.py:53); pip mode provisions it itself,
+      test scaffolding keeps seeding it. User-visible for anyone
+      relying on zc.buildout to pull pip in — news fragment calls it
+      out. After this, uv mode has no pip dependency at all.
 - [ ] Keep the Python window 3.9-3.14; add a 3.15 leg when the nix
       toolchain carries it (upstream #765 in the same vein).
 
