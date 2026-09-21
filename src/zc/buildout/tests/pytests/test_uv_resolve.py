@@ -58,6 +58,32 @@ url = "https://files.example.com/other-2.0.tar.gz"
 hashes = { sha256 = "other-sdist" }
 """
 
+LOCK_DIRECTORY = """\
+lock-version = "1.0"
+created-by = "uv"
+
+[[packages]]
+name = "devpkg"
+directory = { path = "/dev/pkg" }
+
+[[packages]]
+name = "demo"
+version = "1.0"
+
+[[packages.wheels]]
+url = "https://files.example.com/demo-1.0-py3-none-any.whl"
+hashes = { sha256 = "aaaa" }
+"""
+
+LOCK_DIRECTORY_NO_PATH = """\
+lock-version = "1.0"
+created-by = "uv"
+
+[[packages]]
+name = "devpkg"
+directory = { editable = false }
+"""
+
 
 def _record_run(monkeypatch, lock_text=LOCK_DEMO, returncode=0, stderr=''):
     """Stub ``_run``: record argv and input files, write a canned lock."""
@@ -68,6 +94,9 @@ def _record_run(monkeypatch, lock_text=LOCK_DEMO, returncode=0, stderr=''):
         if '-c' in args:
             constraint_path = args[args.index('-c') + 1]
             texts['constraints'] = Path(constraint_path).read_text()
+        if '--overrides' in args:
+            overrides_path = args[args.index('--overrides') + 1]
+            texts['overrides'] = Path(overrides_path).read_text()
         out_path = args[args.index('-o') + 1]
         Path(out_path).write_text(lock_text)
         calls.append((list(args), texts))
@@ -153,6 +182,27 @@ def test_constraint_values_keep_operator_led_specifiers(monkeypatch):
             links=[], index_url=None, uv='/uv', python='/python')
     _args, texts = calls[0]
     assert texts['constraints'] == 'demo==1.0\nother>=2.0\nthird<4\n'
+
+
+def test_overrides_add_dash_dash_overrides_and_file(monkeypatch):
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url=None, uv='/uv', python='/python',
+            overrides=['devpkg @ file:///dev/pkg',
+                       'other @ file:///dev/other'])
+    args, texts = calls[0]
+    assert args[args.index('--overrides') + 1].endswith('overrides.txt')
+    assert texts['overrides'] == (
+        'devpkg @ file:///dev/pkg\nother @ file:///dev/other\n')
+
+
+def test_no_overrides_no_dash_dash_overrides(monkeypatch):
+    calls = _record_run(monkeypatch)
+    resolve(requirements=['demo'], constraints={}, links=[],
+            index_url=None, uv='/uv', python='/python')
+    args, texts = calls[0]
+    assert '--overrides' not in args
+    assert 'overrides' not in texts
 
 
 def test_prefer_final_false_allows_prereleases(monkeypatch):
@@ -381,6 +431,27 @@ def test_for_project_matches_canonicalized_name(monkeypatch):
 def test_for_project_absent_returns_none(monkeypatch):
     pinned = _resolve_with_lock(monkeypatch, LOCK_TWO_PACKAGES)
     assert pinned.for_project('absent') is None
+
+
+def test_directory_entry_parses_as_directory_pin(monkeypatch):
+    pinned = _resolve_with_lock(monkeypatch, LOCK_DIRECTORY)
+    dist = pinned.for_project('devpkg')
+    assert dist is not None
+    assert dist.directory == '/dev/pkg'
+    assert dist.version == ''
+    assert dist.url == ''
+    assert dist.sha256 is None
+    assert dist.sdist_url is None
+    demo = pinned.for_project('demo')
+    assert demo is not None
+    assert demo.directory is None
+    assert demo.url.endswith('.whl')
+
+
+def test_directory_entry_without_path_raises(monkeypatch):
+    with pytest.raises(ResolutionError) as excinfo:
+        _resolve_with_lock(monkeypatch, LOCK_DIRECTORY_NO_PATH)
+    assert 'directory entry' in str(excinfo.value)
 
 
 def test_nonzero_returncode_raises_resolution_error(monkeypatch):

@@ -34,6 +34,14 @@ class PinnedDist:
     sdist URL otherwise (so ``url == sdist_url`` for an sdist-only
     lock); ``sha256`` is that URL's hash. ``sdist_url`` and
     ``sdist_sha256`` are None when the lock carries no sdist.
+
+    ``directory`` carries the project path when the lock entry is a
+    directory pin, which is how a develop project handed to the compile
+    as an override comes back.  Such a pin has no artifact: ``url`` is
+    empty and ``version`` may be empty too, since uv omits it when the
+    compile never built the project's metadata.  Directory pins are
+    never installed; the caller grafts the matching develop
+    distribution instead.
     """
 
     name: str
@@ -42,6 +50,7 @@ class PinnedDist:
     sha256: str | None
     sdist_url: str | None
     sdist_sha256: str | None
+    directory: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +80,7 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
             links: Sequence[str], index_url: str | None,
             prefer_final: bool = True, offline: bool = False, uv: str,
             python: str, fallback_index_url: str | None = None,
+            overrides: Sequence[str] = (),
             ) -> PinnedSet:
     """Compile ``requirements`` to a ``PinnedSet`` with ``uv pip compile``.
 
@@ -92,6 +102,14 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
     now that the scrubbed child environment no longer leaks
     ``UV_INDEX_URL``; production callers leave it unset.
 
+    ``overrides`` carries override lines in pip's ``name @ url`` form,
+    written to an ``overrides.txt`` that uv applies through
+    ``--overrides``.  The install loop hands develop projects to the
+    compile this way: an override wins over configured sources wherever
+    the resolved closure references the project, and stays inert when
+    nothing does, so an unreferenced develop project can neither fail
+    nor skew an unrelated resolution (probes B2 a/b/c).
+
     Dependencies are not compiled (``--no-deps``): the caller resolves
     one requirement at a time and walks dependency metadata itself, so
     a transitive requirement that configured sources cannot reach must
@@ -109,6 +127,7 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
         for link in links:
             args.extend(['-f', link])
         args.extend(_constraints_args(workdir, requirements, constraints))
+        args.extend(_overrides_args(workdir, overrides))
         args.extend(_index_args(index_url, fallback_index_url))
         # Explicit both ways (probes p3, p6, p7): if-necessary is the
         # uv default today, but naming it pins the mapping against uv
@@ -173,6 +192,17 @@ def _constraints_args(
     constraints_txt = workdir / 'constraints.txt'
     constraints_txt.write_text(''.join(lines), encoding='utf-8')
     return ['-c', str(constraints_txt)]
+
+
+def _overrides_args(workdir: Path, overrides: Sequence[str]) -> list[str]:
+    """The ``--overrides overrides.txt`` arguments, empty without overrides."""
+    if not overrides:
+        return []
+    overrides_txt = workdir / 'overrides.txt'
+    overrides_txt.write_text(
+        ''.join(f'{override}\n' for override in overrides),
+        encoding='utf-8')
+    return ['--overrides', str(overrides_txt)]
 
 
 def _validated_constraint_lines(
@@ -263,10 +293,16 @@ def _parse_lock(data: dict[str, Any]) -> PinnedSet:
 def _parse_package(package: Any) -> PinnedDist:
     """One lock package entry as a ``PinnedDist``.
 
-    A lock whose shape differs from what uv 0.12 writes raises a
-    ResolutionError with context, never a raw KeyError or IndexError.
+    A directory override comes back as ``directory = { path = ... }``
+    with ``version`` optional; anything artifact-shaped keeps the
+    wheel/sdist reading.  A lock whose shape differs from what uv 0.12
+    writes raises a ResolutionError with context, never a raw KeyError
+    or IndexError.
     """
     try:
+        directory = package.get('directory')
+        if directory is not None:
+            return _parse_directory_package(package, directory)
         wheels = package.get('wheels') or []
         sdist = package.get('sdist') or {}
         if wheels:
@@ -283,6 +319,25 @@ def _parse_package(package: Any) -> PinnedDist:
         raise ResolutionError(
             'uv produced a pylock.toml with an unexpected shape:'
             f' {err!r} in the entry for {package.get("name")!r}') from err
+
+
+def _parse_directory_package(package: Any, directory: Any) -> PinnedDist:
+    """One lock directory entry as a ``PinnedDist`` marked by ``directory``.
+
+    uv writes ``directory = { path = ... }`` for a directory override
+    and may omit ``version`` when the compile never built the project's
+    metadata.
+    """
+    path = directory.get('path')
+    if not isinstance(path, str):
+        raise ResolutionError(
+            'uv produced a pylock.toml with an unexpected shape:'
+            ' no path in the directory entry for'
+            f' {package.get("name")!r}')
+    return PinnedDist(
+        name=package['name'], version=package.get('version', ''),
+        url='', sha256=None, sdist_url=None, sdist_sha256=None,
+        directory=path)
 
 
 def _sha256(artifact: Any) -> str | None:
