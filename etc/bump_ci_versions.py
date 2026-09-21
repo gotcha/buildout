@@ -149,9 +149,11 @@ class WorkflowFile:
 class JobsTable:
     """Tuple-level access to the dagger job table's version lists."""
 
-    def __init__(self, path: Path = JOBS_PY):
-        self.path = path
-        self.text = path.read_text()
+    def __init__(self, path: Path | None = None):
+        # read the module global at call time, not a def-time default:
+        # a frozen default would bypass any later JOBS_PY rebinding
+        self.path = path if path is not None else JOBS_PY
+        self.text = self.path.read_text()
         self.dirty = False
 
     def _replace_tuple(self, anchor: str, values: list[str],
