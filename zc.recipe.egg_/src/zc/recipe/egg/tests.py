@@ -55,6 +55,9 @@ def test_suite():
                zc.buildout.testing.pkg_resources_deprecated,
                zc.buildout.testing.warnings_warn,
                zc.buildout.testing.ignore_root_logger,
+               zc.buildout.testing.drop_uv_getting_got_lines,
+               zc.buildout.testing.drop_uv_install_debug_chatter,
+               zc.buildout.testing.drop_uv_resolution_narrative,
                (re.compile(r'[d-]  zc.buildout(-\S+)?[.]egg(-link)?'),
                 'zc.buildout.egg'),
                (re.compile(r'[d-]  setuptools-[^-]+-'), 'setuptools-X-'),
@@ -76,6 +79,9 @@ def test_suite():
                zc.buildout.testing.pkg_resources_deprecated,
                zc.buildout.testing.warnings_warn,
                zc.buildout.testing.ignore_root_logger,
+               zc.buildout.testing.drop_uv_getting_got_lines,
+               zc.buildout.testing.drop_uv_install_debug_chatter,
+               zc.buildout.testing.drop_uv_resolution_narrative,
                (re.compile('__buildout_signature__ = '
                            r'sample-\S+\s+'
                            r'zc.recipe.egg-\S+\s+'
@@ -98,6 +104,11 @@ def test_suite():
                zc.buildout.testing.normalize_endings,
                zc.buildout.testing.not_found,
                zc.buildout.testing.ignore_root_logger,
+               # No drop_uv_getting_got_lines here: this file's one
+               # fetch expectation is the lenient `Getting...`, which
+               # uv mode's own Getting/Got lines satisfy as they are.
+               zc.buildout.testing.drop_uv_install_debug_chatter,
+               zc.buildout.testing.drop_uv_resolution_narrative,
                ])
             ),
         ]

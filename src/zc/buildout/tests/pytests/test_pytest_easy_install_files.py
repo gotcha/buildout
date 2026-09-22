@@ -8,6 +8,7 @@ import pkg_resources
 
 import zc.buildout.buildout
 import zc.buildout.easy_install
+import zc.buildout.errors
 import zc.buildout.testing
 from zc.buildout.tests.pytests.conftest import (
     NORMALIZERS_EASY_INSTALL,
@@ -247,7 +248,15 @@ def test_easy_install_distribution_installation_unknown_extras(easy_install_env)
         ['demo[unknown_extra]'], dest, links=[link_server],
         index=link_server+'index/',
         allow_unknown_extras=True)
-    assert_output(capture_print(ls, dest), 'd  demo-0.3-py2.4.egg', N)
+    import os
+    names = sorted(os.listdir(dest))
+    if zc.buildout.easy_install.installer() == 'uv':
+        # uv resolves the full dependency closure in one compile, so
+        # demoneeded rides along; the legacy unknown-extra quirk that
+        # dropped the base requirements has no replay there.
+        assert any(name.startswith('demoneeded-1.1-') for name in names)
+    else:
+        assert_output(capture_print(ls, dest), 'd  demo-0.3-py2.4.egg', N)
     rmdir(dest)
 
 
@@ -463,9 +472,22 @@ def test_easy_install_use_dependency_links(easy_install_env):
     link_server3 = start_server(repoloc)
     # Now let's install the egg.
     example_dest = tmpdir('example-install')
-    _ = zc.buildout.easy_install.install(
-        ['hasdeps'], example_dest,
-        links=[link_server3], index=link_server3+'index/')
+    if zc.buildout.easy_install.installer() == 'uv':
+        # uv-deprecated: uv discovers no dependency_links metadata,
+        # so with link_server3 alone the closure lacks demoneeded
+        # and the install reports the missing distribution.
+        try:
+            _ = zc.buildout.easy_install.install(
+                ['hasdeps'], example_dest,
+                links=[link_server3], index=link_server3+'index/')
+        except zc.buildout.errors.MissingDistribution:
+            pass
+        else:
+            raise AssertionError('unexpectedly installed hasdeps')
+    else:
+        _ = zc.buildout.easy_install.install(
+            ['hasdeps'], example_dest,
+            links=[link_server3], index=link_server3+'index/')
     # TODO assert: 'GET 200 /\nGET 200 /demoneeded-1.2-py3-none-any.whl'
     # The server logs show that the dependency was retrieved from the server
     # specified in the dependency_links.

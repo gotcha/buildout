@@ -798,6 +798,153 @@ def drop_uv_allow_hosts_warning(text):
     return re.sub(r'(?m)^.*allow-hosts option is not enforced.*\n', '', text)
 
 
+def _while_block_restates(lines: list[str], activity_line: str) -> bool:
+    """Whether an indented While-body replays ``activity_line``.
+
+    ``lines`` starts just past the ``While:`` header; the body is the
+    run of lines indented by two spaces.
+    """
+    wanted = activity_line.rstrip('.')
+    for line in lines:
+        if not line.startswith('  '):
+            return False
+        # The activity replay ends in a period; an expectation-side
+        # probe may have dropped it together with a trailing ellipsis.
+        if line.rstrip('\n')[2:].rstrip('.') == wanted:
+            return True
+    return False
+
+
+def drop_uv_getting_got_lines(text):
+    """Drop the Getting-distribution/Got install chatter in uv mode.
+
+    The pip-mode resolution loop fetches one requirement at a time and
+    logs ``Getting distribution for ...``/``Got ...`` per fetch.  The
+    uv bypass resolves and installs the closure in batches: it logs
+    the same lines (once per requirement sent to the compile, once per
+    newly installed dist), but never interleaved pairwise and never
+    for transitive dependencies, which ride the closure unnamed.
+    Expectations written for the loop's interleave cannot hold, so in
+    uv mode the lines are dropped on both sides; the surrounding
+    output (Installing, While, Error, Generated) stays strictly
+    checked.  The While-block activity line (``  Getting distribution
+    for ...``, indented) is a different record and survives: the uv
+    path annotates the failing batch with it.
+
+    One bare line survives as well: a ``Getting distribution for
+    ...`` line that a ``While:`` block immediately replays as an
+    activity.  Both modes emit that line on the error path, and the
+    expectation's ``...`` slack ahead of the ``While:`` block needs at
+    least one line to chew on: two consecutive ellipses cannot match
+    zero lines (the second ellipsis would have to start where the
+    first ended, and the literal chunk after them no longer aligns).
+    Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    text = re.sub(
+        r'(?m)^[^\n]*\bINFO\n  (?:Getting distribution for |Got )[^\n]*\n',
+        '', text)
+    lines = text.splitlines(keepends=True)
+    kept = []
+    for pos, line in enumerate(lines):
+        if line.startswith('Getting distribution for '):
+            # The expectation side may carry an ellipsis at the end of
+            # the line; the While-block activity replay never does.
+            bare = line.rstrip('\n')
+            probe = bare.removesuffix('...')
+            if (pos + 1 < len(lines)
+                    and lines[pos + 1] == 'While:\n'
+                    and _while_block_restates(lines[pos + 2:], probe)):
+                kept.append(line)
+            continue
+        if line.startswith('Got '):
+            continue
+        kept.append(line)
+    return ''.join(kept)
+
+
+_UV_CHATTER_BODY = re.compile(
+    r'^ *(?:Using uv |Using CPython |Running pip install:|'
+    r'Pip install completed successfully\.|Contents of |'
+    r'Making egg in |Searching for namespace __init__[.]py|'
+    r'No namespace __init__[.]py|Resolved \d+ package|Prepared \d+ package|'
+    r'Installed \d+ package|- \S)')
+_UV_CHATTER_CONT = re.compile(r'^(?:"/|PYTHONPATH=|[ \t]|$)[^\n]*$')
+_UV_CHATTER_HEADER = re.compile(r'^[^\n]*\bDEBUG$')
+_LEGACY_FETCH_DEBUG = re.compile(
+    r'(?m)^[^\n]*\bDEBUG\n +(?:Fetching [^\n]* from:|Turning dist |'
+    r'Calling pip install for |Running pip install:|'
+    r'Egg for [^\n]* installed at )[^\n]*\n')
+
+
+def drop_uv_install_debug_chatter(text):
+    """Drop per-dist install debug chatter from -v transcripts in uv mode.
+
+    Two narrative families cannot hold across installers.  The pip
+    loop's fetch narrative (``Fetching ... from:``, ``Turning dist
+    ...``, ``Calling pip install ...``, ``Running pip install:``,
+    ``Egg for ... installed at ...``) describes per-dist pip calls the
+    batched uv install never makes.  The uv relay (``Using uv ...``,
+    the pip-install argv, uv's Resolved/Prepared/Installed summary,
+    the temporary-directory contents listing, the eggification notes)
+    describes subprocess internals whose wording is uv's own.  Both
+    are dropped on both sides in uv mode; the INFO skeleton and the
+    ``Picked:`` lines stay strictly checked, and uv's real install
+    mechanics are asserted by tests/pytests/test_uv_installer.py.
+    Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    lines = text.split('\n')
+    out = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        if (_UV_CHATTER_HEADER.match(line) and i + 1 < n
+                and _UV_CHATTER_BODY.match(lines[i + 1])):
+            i += 2
+        elif _UV_CHATTER_BODY.match(line):
+            i += 1
+        else:
+            out.append(line)
+            i += 1
+            continue
+        while i < n and not _UV_CHATTER_HEADER.match(lines[i]) \
+                and (_UV_CHATTER_BODY.match(lines[i])
+                     or _UV_CHATTER_CONT.match(lines[i])):
+            i += 1
+    return _LEGACY_FETCH_DEBUG.sub('', '\n'.join(out))
+
+
+_UV_NARRATIVE = re.compile(
+    r'(?m)^(?:[^\n]*\bDEBUG\n +)?(?:Getting required |  required by )'
+    r'[^\n]*\n')
+_UV_RESOLVE_ERROR = re.compile(
+    r'(?m)^(?:[^\n]*\bDEBUG\n +)?uv could not resolve [^\n]*\n'
+    r'(?:^[ \t×╰╭│├└─▶][^\n]*\n|^\n)*')
+
+
+def drop_uv_resolution_narrative(text):
+    """Drop the iterative resolution narrative in uv mode.
+
+    The resolution loop narrates its dependency walk at debug level:
+    ``Getting required ...`` and ``  required by ...`` pairs.  One
+    compile resolves the whole closure under uv, so the walk's per-hop
+    narrative has no faithful counterpart; the lines are dropped on
+    both sides.  Provenance stays asserted where it is load-bearing:
+    the ``# Required by:`` comments of ``update-versions-file``
+    output.  uv's own resolution-error block (``uv could not resolve
+    ...`` plus uv's explanation, whose wording churns between uv
+    releases) is dropped as well; the user-facing error that follows
+    it stays checked.  Inert under pip.
+    """
+    if zc.buildout.easy_install.installer() != 'uv':
+        return text
+    return _UV_RESOLVE_ERROR.sub('', _UV_NARRATIVE.sub('', text))
+
+
 def drop_uv_download_cache_deprecation(text):
     """Drop the download-cache deprecation warning lines in uv mode.
 

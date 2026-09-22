@@ -107,6 +107,7 @@ from zc.buildout.install_backend import (
     call_pip_install,
     check_namespace_init_file,
     find_namespace_init_files,
+    install_pinned_dists,
     make_egg_after_pip_install,
     sort_working_set,
     unpack_egg,
@@ -618,6 +619,69 @@ def _develop_dist(
     return None
 
 
+def _env_dist_for_pin(
+        env: Environment,
+        pin: uv_resolve.PinnedDist,
+        ) -> pkg_resources.Distribution | None:
+    """The environment's dist exactly matching ``pin``, if there is one."""
+    wanted = pkg_resources.parse_version(pin.version)
+    for dist in env[pin.name]:
+        if dist.parsed_version == wanted:
+            return dist
+    return None
+
+
+def _project_root(location: str) -> str:
+    """The buildable project root for a develop dist's location.
+
+    pkg_resources reports a src-layout develop dist's location as the
+    ``src`` directory (the egg-info parent), while uv builds a directory
+    requirement from the directory holding ``pyproject.toml`` or
+    ``setup.py``.  The only sanctioned climb is that one ``src`` level:
+    anything higher risks landing on an unrelated ancestor that happens
+    to carry a project file (a develop dist faked onto ``site-packages``
+    would otherwise resolve to whatever package owns the tree above).
+    Falls back to the location itself, so an unusual layout reaches uv
+    unchanged and fails there with uv's own message.
+    """
+    if (os.path.isfile(os.path.join(location, 'pyproject.toml'))
+            or os.path.isfile(os.path.join(location, 'setup.py'))):
+        return location
+    if os.path.basename(location) == 'src':
+        parent = os.path.dirname(location)
+        if (os.path.isfile(os.path.join(parent, 'pyproject.toml'))
+                or os.path.isfile(os.path.join(parent, 'setup.py'))):
+            return parent
+    return location
+
+
+def _pin_beats_env_dist(
+        pin: uv_resolve.PinnedDist,
+        env_dist: pkg_resources.Distribution,
+        prefer_final: bool,
+        final_version: Callable[[Version], bool],
+        ) -> bool:
+    """Whether a lock pin should replace ``env_dist``.
+
+    The compile cannot see the environment, so a requirement that rode
+    the compile under ``newest`` comes back with the best *available*
+    version even when the environment already holds something better or
+    equal.  This is ``_select_newer_dist`` lifted from dists to a pin:
+    under prefer-final a final release beats a pre-release regardless
+    of the version numbers, and nothing replaces the environment's
+    dist without being newer.
+    """
+    pin_version = pkg_resources.parse_version(pin.version)
+    env_version = env_dist.parsed_version
+    if prefer_final:
+        if final_version(pin_version):
+            if final_version(env_version):
+                return env_version < pin_version
+            return True
+        return not final_version(env_version) and env_version < pin_version
+    return env_version < pin_version
+
+
 def _final_dists(
         dists: list[pkg_resources.Distribution],
         prefer_final: bool,
@@ -711,16 +775,18 @@ def _uv_resolve_requirements(
         uv_stderr: list[str] | None = None,
         offline: bool = False,
         fallback_index_url: str | None = None,
+        overrides: Sequence[str] = (),
         ) -> uv_resolve.PinnedSet | None:
     """One ``uv pip compile`` for several requirements.
 
     Returns the pinned set from the lock; ``None`` means uv could not
-    resolve.  The compile still runs with ``--no-deps``, so each
-    requirement's pin is what the lock carries today; full-closure
-    compiles arrive with a later phase.  The remaining arguments are
-    forwarded to the seam exactly as ``_uv_available_dists`` forwards
-    them, and a resolve failure appends the tail of uv's stderr to
-    ``uv_stderr`` when a list is passed.
+    resolve.  The compile resolves the full dependency closure, so the
+    set carries the transitive pins alongside the requested ones, and
+    ``overrides`` lets the caller steer projects to directories (the
+    develop projects of the running buildout).  The remaining arguments
+    are forwarded to the seam exactly as ``_uv_available_dists``
+    forwards them, and a resolve failure appends the tail of uv's
+    stderr to ``uv_stderr`` when a list is passed.
     """
     for requirement in requirements:
         _raise_for_hg_links(requirement, links)
@@ -735,6 +801,7 @@ def _uv_resolve_requirements(
             prefer_final=prefer_final,
             offline=offline,
             fallback_index_url=fallback_index_url,
+            overrides=overrides,
             uv=_uv_executable(),
             python=sys.executable,
         )
@@ -864,11 +931,10 @@ def _without_extra_marker(requirement: pkg_resources.Requirement) -> str:
     pkg_resources adds ``extra == "..."`` markers to requirements pulled
     from a dist's metadata via extras. The extra is satisfied by
     construction here: we resolve the dependency because the dist
-    carrying it was selected with that extra. uv compiles one
-    requirement at a time (--no-deps), so the marker has no extras
-    context, would evaluate False, and uv would silently drop the
-    requirement from the lock. Only the extra-only and trailing
-    ``and extra == ...`` shapes are stripped.
+    carrying it was selected with that extra. As a top-level input line
+    the marker has no extras context, would evaluate False, and uv
+    would silently drop the requirement from the lock. Only the
+    extra-only and trailing ``and extra == ...`` shapes are stripped.
     """
     spec = str(requirement)
     if _EXTRA_MARKER_ONLY.search(spec):
@@ -1365,6 +1431,543 @@ class Installer:
             str(req))
         return best_we_have, None
 
+    def _satisfied_uv(self, req: pkg_resources.Requirement) -> pkg_resources.Distribution | None:
+        """The environment's dist for ``req`` when no compile is needed.
+
+        ``_satisfied`` without the availability lookup: develop
+        distributions and exact pins always settle the requirement, and
+        without newest any matching dist does.  Under newest a matching
+        dist stays unsettled here; it rides the single compile so a
+        newer available version wins.  The debug notes are the ones
+        ``_satisfied`` leaves at the same decision points.
+        """
+        dists = _matching_dists(self._env, req)
+        if not dists:
+            logger.debug('We have no distributions for %s that satisfies %r.',
+                         req.project_name, str(req))
+            return None
+        develop_dist = _develop_dist(dists)
+        if develop_dist is not None:
+            return develop_dist
+        specs = req.specs
+        if len(specs) == 1 and specs[0][0] == '==':
+            logger.debug('We have the distribution that satisfies %r.',
+                         str(req))
+            return dists[0]
+        if self._newest:
+            return None
+        return _final_dists(dists, self._prefer_final, self._final_version)[0]
+
+    def _develop_overrides(
+            self,
+            requirements: list[pkg_resources.Requirement],
+            ) -> list[str]:
+        """The environment's develop dists as uv override lines.
+
+        Each line pins the project to its project root in pip's
+        ``name @ url`` form, so a compile whose closure references the
+        project resolves it from its sources; an unreferenced override
+        is inert and can neither fail nor skew the resolution.  Dists
+        whose directory vanished are left out: their egg-link is stale
+        and the configured sources get their chance instead.
+
+        Develop precedence mirrors ``_satisfied``: a develop dist wins
+        only when it satisfies every spec the batch and the [versions]
+        constraints place on its project.  A dist that fails one — an
+        exact pin at another version, say — keeps its configured
+        sources reachable, so the pin resolves the way the resolution
+        loop resolved it.
+        """
+        by_project: dict[str, list[pkg_resources.Requirement]] = {}
+        for requirement in requirements:
+            by_project.setdefault(
+                str(canonicalize_name(requirement.project_name)),
+                []).append(requirement)
+        overrides = set()
+        for project_name in self._env:
+            for dist in self._env[project_name]:
+                if dist.precedence != pkg_resources.DEVELOP_DIST:
+                    continue
+                name = str(canonicalize_name(dist.project_name))
+                if any(dist not in req
+                       for req in by_project.get(name, [])):
+                    continue
+                constraint = self._versions.get(name)
+                if constraint:
+                    spec = (constraint if constraint[0] in '<>='
+                            else '==' + constraint)
+                    if dist not in pkg_resources.Requirement.parse(
+                            name + spec):
+                        continue
+                root = _project_root(_dist_location(dist))
+                # uv reads override metadata even for projects the
+                # compile never references, so an override must name a
+                # buildable project: a develop egg faked onto
+                # site-packages (no pyproject.toml or setup.py) would
+                # otherwise fail the whole compile with uv's metadata
+                # error.  Such a dist can still settle its requirement
+                # from the environment; it just cannot serve a compile.
+                if not (os.path.isfile(os.path.join(root, 'pyproject.toml'))
+                        or os.path.isfile(os.path.join(root, 'setup.py'))):
+                    continue
+                overrides.add(
+                    f'{dist.project_name} @ {Path(root).as_uri()}')
+        return sorted(overrides)
+
+    def _log_uv_using_best(self, requirement: pkg_resources.Requirement) -> None:
+        """The debug note ``_satisfied`` leaves when sources run dry."""
+        dists = _matching_dists(self._env, requirement)
+        if dists:
+            logger.debug(
+                'There are no distros available that meet %r.\n'
+                'Using our best, %s.', str(requirement), dists[0])
+
+    def _uv_resolve_for_install(
+            self,
+            requirements: list[pkg_resources.Requirement],
+            ws: pkg_resources.WorkingSet,
+            ) -> uv_resolve.PinnedSet:
+        """One compile for the unsatisfied requirements.
+
+        Raises MissingDistribution when uv cannot resolve.  Under
+        newest a requirement with an installed match rides the compile
+        only to find something newer, so when the compile fails the
+        retry keeps those requirements out, matching how the
+        per-requirement resolves this replaces degraded to the
+        installed dist when sources ran dry.
+        """
+        seam_links, seam_index = _seam_testing_sources()
+        index_url = self._index_url or default_index_url
+        links = [*self._links, *seam_links]
+        uv_stderr: list[str] = []
+        pinned = _uv_resolve_requirements(
+            requirements, self._versions, links, index_url,
+            self._prefer_final, uv_stderr, offline=self._uv_offline(),
+            fallback_index_url=seam_index,
+            overrides=self._develop_overrides(requirements))
+        self._uv_stderr_tail = _tail_text(uv_stderr)
+        attempted = requirements
+        if pinned is None and self._newest:
+            matched = [bool(_matching_dists(self._env, requirement))
+                       for requirement in requirements]
+            required = [requirement for requirement, has_installed
+                        in zip(requirements, matched) if not has_installed]
+            if len(required) < len(requirements):
+                degraded = [requirement for requirement, has_installed
+                            in zip(requirements, matched) if has_installed]
+                if required:
+                    pinned = _uv_resolve_requirements(
+                        required, self._versions, links, index_url,
+                        self._prefer_final, uv_stderr,
+                        offline=self._uv_offline(),
+                        fallback_index_url=seam_index,
+                        overrides=self._develop_overrides(required))
+                    self._uv_stderr_tail = _tail_text(uv_stderr)
+                    attempted = required
+                else:
+                    pinned = uv_resolve.PinnedSet(())
+                if pinned is not None:
+                    for requirement in degraded:
+                        self._log_uv_using_best(requirement)
+        if pinned is None:
+            raise MissingDistribution(attempted[0], ws,
+                                      self._uv_stderr_tail)
+        return pinned
+
+    def _graft_pinned(
+            self,
+            pinned: uv_resolve.PinnedSet,
+            requirements: list[pkg_resources.Requirement],
+            ws: pkg_resources.WorkingSet,
+            for_buildout_run: bool,
+            ) -> tuple[dict[str, pkg_resources.Distribution], list[pkg_resources.Distribution]]:
+        """Install the pinned closure and register it in ``ws``.
+
+        Artifact pins the environment already holds at the pinned
+        version graft from there; the rest install in one batch.
+        Referenced develop projects graft their develop dists.  Returns
+        the grafted distributions by canonical project name and the
+        ones the setuptools sweep still owes a look (freshly installed
+        or fetched for a requested requirement, the two shapes the
+        resolution loop used to sweep).  Picked versions are recorded
+        on the way, per the requested requirement when there is one.
+
+        The compile cannot see the environment, so a requirement that
+        rode the compile under ``newest`` can come back pinned to the
+        best *available* version although the environment holds one at
+        least as good: the environment's dist stays then, the way the
+        resolution loop kept ``best_we_have``, and its installed
+        dependency tree walks in from the environment, vetoing the
+        pins of the projects it covers.  (A kept dist whose installed
+        tree differs from the replaced pin's tree can leave the pin's
+        unused subtree installed; the loop never produced those eggs,
+        but a working set entry it never had is the worse deviation.)
+
+        Working-set order mirrors the loop's: freshly installed dists
+        front-insert in fetch order (requested requirements first, then
+        the remaining pins), which lists the set dependency-first, and
+        environment-kept requested dists graft in requirement order,
+        their walked dependency trees after them.
+        """
+        requested = {str(canonicalize_name(requirement.project_name)): requirement
+                     for requirement in requirements}
+        assert self._dest is not None  # _install_uv raises earlier otherwise
+
+        artifact_pins = [pin for pin in pinned.dists if pin.directory is None]
+
+        vetoed: set[str] = set()
+        gated: set[str] = set()
+        resolved: dict[str, pkg_resources.Distribution] = {}
+        swept: list[pkg_resources.Distribution] = []
+        pin_by_name = {str(canonicalize_name(pin.name)): pin
+                       for pin in artifact_pins}
+        kept: list[tuple[pkg_resources.Requirement,
+                         pkg_resources.Distribution]] = []
+        for requirement in requirements:
+            name = str(canonicalize_name(requirement.project_name))
+            pin = pin_by_name.get(name)
+            if pin is None:
+                continue
+            dists = _matching_dists(self._env, requirement)
+            if not dists:
+                continue
+            env_best = _final_dists(
+                dists, self._prefer_final, self._final_version)[0]
+            if _pin_beats_env_dist(
+                    pin, env_best, self._prefer_final, self._final_version):
+                continue
+            logger.debug(
+                'We have the best distribution that satisfies %r.',
+                str(requirement))
+            if self._check_picked:
+                # The loop gated a requested requirement before its
+                # dependencies walked: a picked top-level egg reports
+                # itself, not the first transitive dep the walk meets.
+                self._check_picked_requirement_versions(
+                    requirement, [env_best])
+                gated.add(name)
+            vetoed.add(name)
+            resolved[name] = env_best
+            swept.append(env_best)
+            # The requested dists all join the working set before any
+            # dependency walks in: the loop's fetch phase settled every
+            # request ahead of its resolution half, so an environment
+            # keep that interleaved its own deps between two requested
+            # dists inverted the working-set order legacy printed.
+            if env_best not in ws:
+                ws.add(env_best)
+            kept.append((requirement, env_best))
+        for requirement, env_best in kept:
+            walked = self._walk_installed_deps(
+                [(requirement, env_best)], ws, [], for_buildout_run,
+                defer=set(requested), pins=pin_by_name)
+            vetoed.update(str(canonicalize_name(dist.project_name))
+                          for _req, dist in walked)
+            swept.extend(dist for _req, dist in walked)
+
+        to_install = []
+        waiting = []
+        for pin in artifact_pins:
+            name = str(canonicalize_name(pin.name))
+            if name in vetoed:
+                continue
+            dist = _env_dist_for_pin(self._env, pin)
+            if dist is None:
+                to_install.append(pin)
+            else:
+                waiting.append((pin, dist))
+        requested_index = {name: index
+                           for index, name in enumerate(requested)}
+        to_install.sort(
+            key=lambda pin: requested_index.get(
+                str(canonicalize_name(pin.name)), len(requested_index)))
+        new_dists = install_pinned_dists(to_install, self._dest)
+        for dist in new_dists:
+            logger.info("Got %s.", dist)
+            ws.add(dist, replace=True)
+            resolved[str(canonicalize_name(dist.project_name))] = dist
+            swept.append(dist)
+        if new_dists:
+            self._env_rescan_dest()
+        for pin, dist in waiting:
+            name = str(canonicalize_name(pin.name))
+            if dist not in ws:
+                if dist.key in ws.by_key:
+                    # The working set holds the project at another
+                    # version: fetched-dist replace semantics.
+                    ws.add(dist, replace=True)
+                else:
+                    ws.add(dist)
+            resolved[name] = dist
+            if name in requested:
+                swept.append(dist)
+                logger.debug(
+                    'We have the best distribution that satisfies %r.',
+                    str(requested[name]))
+        for pin in pinned.dists:
+            if pin.directory is None:
+                continue
+            dist = _develop_dist(self._env[pin.name])
+            if dist is not None:
+                if dist not in ws:
+                    ws.add(dist)
+                resolved[str(canonicalize_name(pin.name))] = dist
+        unresolved: list[pkg_resources.Requirement] = []
+        for requirement in requirements:
+            # A requirement that only rode the compile to check for
+            # something newer comes back unpinned when a failed first
+            # resolve degraded to the installed dist; graft that one
+            # and walk its installed dependency tree in, the way the
+            # resolution loop's second half would have.
+            name = str(canonicalize_name(requirement.project_name))
+            if name in resolved:
+                continue
+            dists = _matching_dists(self._env, requirement)
+            if dists:
+                dist = _final_dists(
+                    dists, self._prefer_final, self._final_version)[0]
+                walked = self._walk_installed_deps(
+                    [(requirement, dist)], ws, unresolved,
+                    for_buildout_run, defer=set(requested))
+                for _req, walked_dist in walked:
+                    walked_name = str(
+                        canonicalize_name(walked_dist.project_name))
+                    if walked_name not in resolved:
+                        resolved[walked_name] = walked_dist
+                        swept.append(walked_dist)
+                if dist not in ws:
+                    ws.add(dist)
+                resolved[name] = dist
+                swept.append(dist)
+        if unresolved:
+            # The degraded graft cannot fetch: the resolve already ran
+            # dry.  What the walk could not settle is missing.
+            raise MissingDistribution(
+                unresolved[0], ws, self._uv_stderr_tail)
+        if new_dists:
+            # The required-by provenance the loop collected through
+            # ``_log_requirement`` for every dependency it fetched,
+            # with its ``Getting required`` note ahead of it.
+            for dist in new_dists:
+                name = str(canonicalize_name(dist.project_name))
+                if name not in requested:
+                    req = self._constrain(pkg_resources.Requirement.parse(name))
+                    logger.debug('Getting required %r', str(req))
+                    self._log_requirement(ws, req)
+        if self._check_picked:
+            new_names = {str(canonicalize_name(dist.project_name))
+                         for dist in new_dists}
+            for name, dist in resolved.items():
+                if name in requested:
+                    if name in gated:
+                        # An environment-kept requirement reported
+                        # itself ahead of its dependency walk, the
+                        # loop's order; reporting twice is not.
+                        continue
+                    self._check_picked_requirement_versions(
+                        requested[name], [dist])
+                elif name in new_names:
+                    self._check_picked_requirement_versions(
+                        self._constrain(
+                            pkg_resources.Requirement.parse(name)),
+                        [dist])
+        return resolved, swept
+
+    def _walk_installed_deps(
+            self,
+            satisfied: list[tuple[pkg_resources.Requirement, pkg_resources.Distribution]],
+            ws: pkg_resources.WorkingSet,
+            to_resolve: list[pkg_resources.Requirement],
+            for_buildout_run: bool,
+            defer: set[str] | None = None,
+            pins: dict[str, uv_resolve.PinnedDist] | None = None,
+            ) -> list[tuple[pkg_resources.Requirement, pkg_resources.Distribution]]:
+        """Walk the installed dependency tree of ``satisfied`` into ``ws``.
+
+        The resolution loop's other half for dists the environment
+        already holds: every requirement of every selected dist joins
+        the working set, walking installed metadata breadth-first in
+        the loop's own order (the reversed seed stack, then appended
+        requirements).  Requirements the environment cannot satisfy
+        collect into ``to_resolve`` for the single compile; the closure
+        the compile returns covers their own dependencies.  Returns the
+        (requirement, dist) pairs the walk settled from the working set
+        or the environment, so callers can tell which projects need no
+        resolution decision.
+
+        ``defer`` names projects the batch settles on its own terms —
+        the loop reached an explicit requirement before any dependency
+        edge walked to its project, so a walked edge must not pre-empt
+        an exact pin from the same batch with whatever the environment
+        happens to hold.  ``pins`` carries the compile's artifact pins
+        when the walk runs after a resolve: a walked dependency settles
+        from the environment only when its pin would not beat the
+        environment's dist, the same ``_select_newer_dist`` call the
+        loop made per dependency under newest.
+        """
+        dists_by_key = {req.key: dist for req, dist in satisfied}
+        queue = [req for req, _dist in reversed(satisfied)]
+        processed = set()
+        best = {}
+        walked = []
+        while queue:
+            current_requirement = queue.pop(0)
+            req = self._constrain(current_requirement)
+            if req in processed:
+                # Ignore cyclic or redundant dependencies.
+                continue
+            processed.add(req)
+            if (defer and req.key not in dists_by_key
+                    and str(canonicalize_name(req.project_name)) in defer):
+                continue
+            dist = dists_by_key.get(req.key)
+            if dist is None:
+                dist = best.get(req.key)
+            if dist is None:
+                try:
+                    dist = ws.find(req)
+                except pkg_resources.VersionConflict as err:
+                    logger.debug(
+                        "Version conflict while processing requirement %s "
+                        "(constrained to %s)",
+                        current_requirement, req)
+                    # Tolerated during a buildout run for the reasons
+                    # _best_matching_dist documents.
+                    if not for_buildout_run:
+                        raise VersionConflict(err, ws)
+            from_environment = False
+            if dist is None:
+                dists = _matching_dists(self._env, req)
+                if dists:
+                    # ``_satisfied`` prefers a develop dist and says
+                    # so; the walk settles environment misses the same
+                    # way, so the verbose transcript keeps its per-dep
+                    # 'We have a develop egg' lines.
+                    dist = _develop_dist(dists) or dists[0]
+                    from_environment = True
+            if dist is not None and from_environment and pins is not None:
+                pin = pins.get(str(canonicalize_name(req.project_name)))
+                if (pin is not None
+                        and _pin_beats_env_dist(
+                            pin, dist,
+                            self._prefer_final, self._final_version)):
+                    # The pin installs something newer; leave the
+                    # project to the graft.
+                    continue
+            if dist is None:
+                if self._dest:
+                    logger.debug('Getting required %r', str(req))
+                else:
+                    logger.debug('Adding required %r', str(req))
+                self._log_requirement(ws, req)
+                logger.debug(
+                    'We have no distributions for %s that satisfies %r.',
+                    req.project_name, str(req))
+                to_resolve.append(req)
+                continue
+            if from_environment:
+                # The loop reached ``_get_dist`` on a working-set miss
+                # and settled from the environment: the debug note, the
+                # required-by provenance, and the picked-version record
+                # (with its allow-picked-versions gate) all ride along.
+                if self._dest:
+                    logger.debug('Getting required %r', str(req))
+                else:
+                    logger.debug('Adding required %r', str(req))
+                self._log_requirement(ws, req)
+                if self._check_picked:
+                    self._check_picked_requirement_versions(req, [dist])
+            if dist not in req:
+                # Oops, the "best" so far conflicts with a dependency.
+                logger.info(self._version_conflict_information(req.key))
+                raise VersionConflict(
+                    pkg_resources.VersionConflict(dist, req), ws)
+            best[req.key] = dist
+            if dist not in ws:
+                ws.add(dist)
+            walked.append((req, dist))
+            extra_requirements = _resolve_extra_requirements(
+                req, dist, self._allow_unknown_extras)
+            for extra_requirement in extra_requirements:
+                self._requirements_and_constraints.append(
+                    f"Requirement of {current_requirement}: "
+                    f"{extra_requirement}")
+            # Quirk mirrored from the loop: with unknown extras allowed,
+            # extra_requirements holds extra *names* (str).
+            queue.extend(extra_requirements)  # ty: ignore[invalid-argument-type]
+        return walked
+
+    def _install_uv(
+            self,
+            requirements: list[pkg_resources.Requirement],
+            ws: pkg_resources.WorkingSet,
+            for_buildout_run: bool,
+            ) -> pkg_resources.WorkingSet:
+        """Resolve ``requirements`` in one compile and graft the closure.
+
+        The uv-mode install path: requirements already satisfied by the
+        environment stay as they are, their installed dependency trees
+        walk into the working set, and everything still open resolves
+        in a single ``uv pip compile`` that carries the develop
+        projects of the running buildout as overrides.  The pinned
+        artifacts install in one batch.  Directory pins come back for
+        referenced develop projects; their develop dists join the
+        working set directly.
+        """
+        satisfied: list[tuple[pkg_resources.Requirement, pkg_resources.Distribution]] = []
+        to_resolve: list[pkg_resources.Requirement] = []
+        batch_names = {str(canonicalize_name(requirement.project_name))
+                       for requirement in requirements}
+        for requirement in requirements:
+            dist = self._satisfied_uv(requirement)
+            if dist is None:
+                to_resolve.append(requirement)
+                continue
+            if dist not in ws:
+                ws.add(dist)
+            if self._check_picked:
+                self._check_picked_requirement_versions(requirement, [dist])
+            satisfied.append((requirement, dist))
+        walked = self._walk_installed_deps(
+            satisfied, ws, to_resolve, for_buildout_run, defer=batch_names)
+        settled = [dist for _req, dist in satisfied]
+        settled.extend(dist for _req, dist in walked)
+        if not to_resolve:
+            for dist in settled:
+                self._maybe_add_setuptools(ws, dist)
+            return ws
+        with zc.buildout._activity('Getting distribution for %r.',
+                                   str(to_resolve[0])):
+            if self._dest is None:
+                raise zc.buildout.UserError(
+                    f"We don't have a distribution for {to_resolve[0]}\n"
+                    "and can't install one in offline (no-install) mode.\n")
+            for requirement in to_resolve:
+                # The resolution loop announced a fetch only when the
+                # environment could not satisfy the requirement at
+                # all; a requirement that rides the compile only to
+                # check for something newer under ``newest`` stays
+                # quiet until a ``Got`` line reports a real install.
+                if not _matching_dists(self._env, requirement):
+                    logger.info(
+                        'Getting distribution for %r.', str(requirement))
+            pinned = self._uv_resolve_for_install(to_resolve, ws)
+            resolved, swept = self._graft_pinned(
+                pinned, to_resolve, ws, for_buildout_run)
+        for requirement in to_resolve:
+            # The closure covers the dependencies of compiled
+            # requirements; the unknown-extra validation still belongs
+            # to the requested requirement and the selected dist.
+            dist = resolved.get(str(canonicalize_name(requirement.project_name)))
+            if dist is not None and requirement.extras:
+                _resolve_extra_requirements(
+                    requirement, dist, self._allow_unknown_extras)
+        for dist in settled:
+            self._maybe_add_setuptools(ws, dist)
+        for dist in swept:
+            self._maybe_add_setuptools(ws, dist)
+        return ws
+
     def _call_pip_install(self, spec: str, dest: str, dist: pkg_resources.Distribution) -> list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution]:
 
         tmp = tempfile.mkdtemp(dir=dest)
@@ -1601,6 +2204,9 @@ class Installer:
         requirements = _parse_requirements(specs, self._constrain)
 
         ws = _working_set_or_default(working_set)
+
+        if self._installer == 'uv':
+            return self._install_uv(requirements, ws, for_buildout_run)
 
         _fetch_requested_dists(
             requirements, ws, self._get_dist, self._maybe_add_setuptools)

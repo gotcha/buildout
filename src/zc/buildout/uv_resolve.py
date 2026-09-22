@@ -110,10 +110,10 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
     nothing does, so an unreferenced develop project can neither fail
     nor skew an unrelated resolution (probes B2 a/b/c).
 
-    Dependencies are not compiled (``--no-deps``): the caller resolves
-    one requirement at a time and walks dependency metadata itself, so
-    a transitive requirement that configured sources cannot reach must
-    not fail the pin of the requirement being obtained.
+    The compile resolves the full dependency closure: one compile
+    carries every requirement the caller passes plus their transitive
+    dependencies, so a set of requirements resolved together stays
+    mutually consistent.
     """
     with tempfile.TemporaryDirectory(prefix='zc-buildout-uv-') as tmp:
         workdir = Path(tmp)
@@ -123,7 +123,7 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
             encoding='utf-8')
         lock_file = workdir / 'pylock.toml'
         args = [uv, 'pip', 'compile', str(requirements_in), '-o',
-                str(lock_file), '--python', python, '--no-deps']
+                str(lock_file), '--python', python]
         for link in links:
             args.extend(['-f', link])
         args.extend(_constraints_args(workdir, requirements, constraints))

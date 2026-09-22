@@ -433,6 +433,20 @@ class TestUvResolveRequirements:
         assert (captured['fallback_index_url']
                 == 'https://example.invalid/fallback')
 
+    def test_overrides_reach_resolve_verbatim(self, monkeypatch):
+        captured = {}
+
+        def fake_resolve(**kwargs):
+            captured.update(kwargs)
+            return uv_resolve.PinnedSet(())
+
+        monkeypatch.setattr(uv_resolve, 'resolve', fake_resolve)
+        result = easy_install._uv_resolve_requirements(
+            [pkg_resources.Requirement.parse('demo')], {}, [], None, True,
+            overrides=['devpkg @ file:///dev/pkg'])
+        assert result is not None
+        assert captured['overrides'] == ['devpkg @ file:///dev/pkg']
+
     def test_resolve_error_returns_none_and_notes_stderr(self, monkeypatch):
         def fail_resolve(**kwargs):
             raise uv_resolve.ResolutionError('no', 'first\n\nsecond\nthird')
@@ -671,6 +685,121 @@ class TestErrorTranslation:
         monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
         assert testing.drop_uv_resolution_stderr_tail(text) == (
             "Error: Couldn't find a distribution for 'demo'.\n")
+
+
+def test_drop_uv_getting_got_lines_is_mode_conditional(monkeypatch):
+    from zc.buildout import testing
+    text = ("Installing eggs.\n"
+            "Getting distribution for 'demo'.\n"
+            'Got demo 0.3.\n'
+            'While:\n'
+            '  Installing eggs.\n'
+            "  Getting distribution for 'demo'.\n"
+            "Error: Couldn't find a distribution for 'demo'.\n"
+            'zc.buildout.easy_install INFO\n'
+            "  Getting distribution for 'other'.\n"
+            'zc.buildout.easy_install INFO\n'
+            '  Got other 1.0.\n')
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert testing.drop_uv_getting_got_lines(text) == text
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    # Bare INFO lines drop; the While-block activity line stays.
+    assert testing.drop_uv_getting_got_lines(text) == (
+        'Installing eggs.\n'
+        'While:\n'
+        '  Installing eggs.\n'
+        "  Getting distribution for 'demo'.\n"
+        "Error: Couldn't find a distribution for 'demo'.\n")
+    # A bare line that a While-block immediately replays stays: both
+    # modes emit it on the error path, and the expectation's `...`
+    # slack ahead of the While-block needs a line to chew on.
+    echoed = ("Installing eggs.\n"
+              "Getting distribution for 'kss.core'.\n"
+              'While:\n'
+              '  Installing eggs.\n'
+              "  Getting distribution for 'kss.core'.\n"
+              "Error: Couldn't find a distribution for 'kss.core'.\n")
+    assert testing.drop_uv_getting_got_lines(echoed) == echoed
+    # A bare line ahead of a While-block that does not replay it
+    # drops like any other.
+    unechoed = ("Installing eggs.\n"
+                "Getting distribution for 'demo'.\n"
+                'While:\n'
+                '  Installing eggs.\n'
+                'Error: something else.\n')
+    assert testing.drop_uv_getting_got_lines(unechoed) == (
+        'Installing eggs.\n'
+        'While:\n'
+        '  Installing eggs.\n'
+        'Error: something else.\n')
+
+
+def test_drop_uv_install_debug_chatter_is_mode_conditional(monkeypatch):
+    from zc.buildout import testing
+    text = ("zc.buildout.easy_install DEBUG\n"
+            "  Installing 'demo'.\n"
+            'zc.buildout.easy_install DEBUG\n'
+            '  Running pip install:\n'
+            '"/nix/store/uv" "pip" "install" "--no-deps" "-t" "/tmp/x"\n'
+            'PYTHONPATH=/nix/store/sitecustomize.py\n'
+            '\n'
+            'Using CPython 3.12.6 interpreter at: /usr/bin/python3\n'
+            'Resolved 2 packages in 3ms\n'
+            '   Building demoneeded @ http://localhost/demoneeded.tar.gz\n'
+            '      Built demoneeded @ http://localhost/demoneeded.tar.gz\n'
+            'Installed 2 packages in 1ms\n'
+            ' + demo==0.3 (from http://localhost/demo-0.3-py3-none-any.whl)\n'
+            '\n'
+            'Pip install completed successfully.\n'
+            'Contents of /tmp/x:\n'
+            ' - .lock\n'
+            ' - demo-0.3.dist-info\n'
+            'Making egg in /tmp/x from pip installation in demo-0.3.dist-info\n'
+            'No namespace __init__.py files found.\n'
+            'zc.buildout.easy_install DEBUG\n'
+            '  Picked: demo = 0.3\n'
+            'zc.buildout.easy_install DEBUG\n'
+            '  Fetching demo 0.3 from: http://localhost/demo-0.3.whl\n'
+            'zc.buildout.easy_install DEBUG\n'
+            '  Turning dist demo 0.3 into egg, and moving to eggs dir.\n')
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert testing.drop_uv_install_debug_chatter(text) == text
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    assert testing.drop_uv_install_debug_chatter(text) == (
+        "zc.buildout.easy_install DEBUG\n"
+        "  Installing 'demo'.\n"
+        'zc.buildout.easy_install DEBUG\n'
+        '  Picked: demo = 0.3\n')
+
+
+def test_drop_uv_resolution_narrative_is_mode_conditional(monkeypatch):
+    from zc.buildout import testing
+    text = ("Installing 'demo'.\n"
+            "Getting required 'demoneeded'\n"
+            '  required by demo 0.3.\n'
+            'We have a develop egg: devpkg 0.1\n'
+            'zc.buildout.easy_install DEBUG\n'
+            "  Getting required 'other'\n"
+            'zc.buildout.easy_install DEBUG\n'
+            '    required by demo 0.3.\n'
+            "uv could not resolve 'pack5':\n"
+            '  \u00d7 No solution found when resolving dependencies:\n'
+            '  \u2570\u2500\u25b6 Because pack5 was not found in the package'
+            ' registry and you require\n'
+            '      pack5, your requirements are unsatisfiable.\n'
+            '\n'
+            'While:\n'
+            '  Installing eggs.\n')
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert testing.drop_uv_resolution_narrative(text) == text
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    # The develop-egg line stays: both modes emit it, and dropping
+    # lines wholesale can starve `...`-delimited anchors of slack.
+    assert testing.drop_uv_resolution_narrative(text) == (
+        "Installing 'demo'.\n"
+        'We have a develop egg: devpkg 0.1\n'
+        'While:\n'
+        '  Installing eggs.\n')
 
 
 def _capture_obtain_offline(monkeypatch, dest, **class_attrs):

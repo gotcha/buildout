@@ -43,6 +43,9 @@ NORMALIZERS_EASY_INSTALL = [
     zc.buildout.testing.ignore_native_namespace_warning_3,
     zc.buildout.testing.ignore_native_namespace_warning_4,
     zc.buildout.testing.ignore_native_namespace_warning_5,
+    zc.buildout.testing.drop_uv_getting_got_lines,
+    zc.buildout.testing.drop_uv_install_debug_chatter,
+    zc.buildout.testing.drop_uv_resolution_narrative,
     normalize_bang,
     (re.compile(r'^(\w+\.)*(Missing\w+: )'), r'\2'),
     (re.compile(r"buildout: Running \S*setup.py"), 'buildout: Running setup.py'),
@@ -89,6 +92,9 @@ NORMALIZERS_BUILDOUT = [
     zc.buildout.testing.ignore_native_namespace_warning_3,
     zc.buildout.testing.ignore_native_namespace_warning_4,
     zc.buildout.testing.ignore_native_namespace_warning_5,
+    zc.buildout.testing.drop_uv_getting_got_lines,
+    zc.buildout.testing.drop_uv_install_debug_chatter,
+    zc.buildout.testing.drop_uv_resolution_narrative,
     normalize_bang,
     (re.compile(r'__buildout_signature__ = recipes-\S+'),
      '__buildout_signature__ = recipes-SSSSSSSSSSS'),
@@ -439,14 +445,21 @@ def update_env():
 # ---------------------------------------------------------------------------
 
 def apply_normalizers(text, normalizers):
-    """Apply a list of (pattern, replacement) normalizers to text."""
+    """Apply a list of normalizers to text.
+
+    Each item is either a (pattern, replacement) pair or a callable
+    taking and returning the text (the ``drop_uv_*`` family in
+    zc.buildout.testing).  Callables ran as no-ops here until the uv
+    normalizers joined the lists.
+    """
     for item in normalizers:
-        if isinstance(item, tuple):
-            pattern, replacement = item
-            if callable(replacement):
-                text = pattern.sub(replacement, text)
-            else:
-                text = pattern.sub(replacement, text)
+        if callable(item):
+            text = item(text)
+            continue
+        if not isinstance(item, tuple):
+            continue
+        pattern, replacement = item
+        text = pattern.sub(replacement, text)
     return text
 
 

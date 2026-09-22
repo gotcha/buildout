@@ -126,14 +126,20 @@ echo "The test suites resolve their spawned installers' build requirements from 
 echo "(see buildoutSetUp in src/zc/buildout/testing.py), so suite runs need no index."
 echo "A uv wheel is seeded as well: zc.buildout declares uv as a dependency, so"
 echo "sample buildouts resolving that requirement must find it without an index."
+echo "packaging and pip are seeded for the same reason: they are zc.buildout"
+echo "runtime requirements, so a compile carrying the zc.buildout develop"
+echo "project as an override must find them in the seeded sources."
 SEED="$HERE/downloads/test-seed"
 mkdir -p "$SEED"
 rm -f "$SEED"/*.whl
 SEED_SETUPTOOLS=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("setuptools"))')
 SEED_WHEEL=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("wheel"))')
 SEED_UV=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("uv"))')
+SEED_PACKAGING=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("packaging"))')
+SEED_PIP=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("pip"))')
 "$VENV_PYTHON" -m pip download --quiet --no-deps --dest "$SEED" \
-    "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL" "uv==$SEED_UV"
+    "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL" "uv==$SEED_UV" \
+    "packaging==$SEED_PACKAGING" "pip==$SEED_PIP"
 ls -l "$SEED"
 
 # The spawned builds' expectations match modern setuptools: PEP 660's

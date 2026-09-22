@@ -113,14 +113,16 @@ def _resolve_with_lock(monkeypatch, lock_text):
                    index_url=None, uv='/uv', python='/python')
 
 
-def _make_wheel(directory, name='demo', version='1.0'):
+def _make_wheel(directory, name='demo', version='1.0', requires=()):
     """Write a minimal pure-python wheel for ``name`` into ``directory``."""
     dist_info = f'{name}-{version}.dist-info'
     wheel_path = directory / f'{name}-{version}-py3-none-any.whl'
+    requires_lines = ''.join(f'Requires-Dist: {dep}\n' for dep in requires)
     with zipfile.ZipFile(wheel_path, 'w') as zf:
         zf.writestr(
             f'{dist_info}/METADATA',
-            f'Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n')
+            f'Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n'
+            f'{requires_lines}')
         zf.writestr(
             f'{dist_info}/WHEEL',
             'Wheel-Version: 1.0\nGenerator: test\n'
@@ -139,7 +141,7 @@ def test_base_argv_shape(monkeypatch):
     assert args[4] == '-o'
     assert args[5].endswith('pylock.toml')
     assert Path(args[3]).parent == Path(args[5]).parent
-    assert args[6:] == ['--python', '/python', '--no-deps',
+    assert args[6:] == ['--python', '/python',
                         '--prerelease', 'if-necessary']
     assert texts == {'requirements': 'demo\n'}
     dist = pinned.for_project('demo')
@@ -153,7 +155,7 @@ def test_one_find_links_per_link(monkeypatch):
             index_url=None, uv='/uv', python='/python')
     args, _texts = calls[0]
     assert args[6:] == [
-        '--python', '/python', '--no-deps', '-f', '/a', '-f', '/b',
+        '--python', '/python', '-f', '/a', '-f', '/b',
         '--prerelease', 'if-necessary']
 
 
@@ -285,7 +287,6 @@ def test_directory_index_expands_project_subdirs(monkeypatch, tmp_path):
     args, _texts = calls[0]
     root = tmp_path.expanduser().resolve()
     assert args[args.index('--python') + 2:] == [
-        '--no-deps',
         '-f', root.as_uri(),
         '-f', (root / 'demo').as_uri(),
         '-f', (root / 'other').as_uri(),
@@ -310,7 +311,7 @@ def test_missing_index_path_is_dropped(monkeypatch):
     args, _texts = calls[0]
     assert '--default-index' not in args
     assert '-f' not in args
-    assert args[6:] == ['--python', '/python', '--no-deps',
+    assert args[6:] == ['--python', '/python',
                         '--prerelease', 'if-necessary']
 
 
@@ -591,6 +592,78 @@ def test_real_uv_unknown_package_raises_resolution_error(
             uv=UV, python=sys.executable)
 
 
+def _make_project_dir(tmp_path, name='devpkg'):
+    """A minimal setuptools project directory, the develop-override shape."""
+    project = tmp_path / name
+    project.mkdir()
+    (project / 'pyproject.toml').write_text(
+        '[build-system]\n'
+        'requires = ["setuptools>=61"]\n'
+        'build-backend = "setuptools.build_meta"\n'
+        '[project]\n'
+        f'name = "{name}"\n'
+        'version = "0.1"\n')
+    return project
+
+
+@requires_uv
+def test_real_uv_directory_override_serves_a_transitive_dep(
+        tmp_path, monkeypatch):
+    # A wheel requires a project only available as a directory: the
+    # override lets the full-closure compile succeed where the sources
+    # alone could not (the B0 failure shape).
+    assert UV is not None
+    links_dir = tmp_path / 'links'
+    links_dir.mkdir()
+    _make_wheel(links_dir, name='top', requires=['devpkg'])
+    project = _make_project_dir(tmp_path)
+    monkeypatch.setenv('UV_CACHE_DIR', str(tmp_path / 'uv-cache'))
+    pinned = resolve(
+        requirements=['top'], constraints={}, links=[str(links_dir)],
+        index_url=None, offline=True, uv=UV, python=sys.executable,
+        overrides=[f'devpkg @ {project.as_uri()}'])
+    top = pinned.for_project('top')
+    assert top is not None
+    assert top.url.startswith('file:')
+    devpkg = pinned.for_project('devpkg')
+    assert devpkg is not None
+    assert devpkg.directory == str(project)
+
+
+@requires_uv
+def test_real_uv_unreferenced_override_stays_out_of_the_lock(
+        tmp_path, monkeypatch):
+    # An override nothing references is inert: no failure, no pin.
+    assert UV is not None
+    links_dir = tmp_path / 'links'
+    links_dir.mkdir()
+    _make_wheel(links_dir)
+    project = _make_project_dir(tmp_path)
+    monkeypatch.setenv('UV_CACHE_DIR', str(tmp_path / 'uv-cache'))
+    pinned = resolve(
+        requirements=['demo'], constraints={}, links=[str(links_dir)],
+        index_url=None, offline=True, uv=UV, python=sys.executable,
+        overrides=[f'devpkg @ {project.as_uri()}'])
+    assert pinned.for_project('demo') is not None
+    assert pinned.for_project('devpkg') is None
+
+
+@requires_uv
+def test_real_uv_transitive_dep_without_override_fails(
+        tmp_path, monkeypatch):
+    # The same closure without the override fails, proving the override
+    # is what carries a develop-only project through the compile.
+    assert UV is not None
+    links_dir = tmp_path / 'links'
+    links_dir.mkdir()
+    _make_wheel(links_dir, name='top', requires=['devpkg'])
+    monkeypatch.setenv('UV_CACHE_DIR', str(tmp_path / 'uv-cache'))
+    with pytest.raises(ResolutionError):
+        resolve(
+            requirements=['top'], constraints={}, links=[str(links_dir)],
+            index_url=None, offline=True, uv=UV, python=sys.executable)
+
+
 def _fake_pinned(name='demo', version='1.0',
                  url='file:///wheels/demo-1.0-py3-none-any.whl',
                  sdist_url='file:///sdists/demo-1.0.tar.gz'):
@@ -731,8 +804,9 @@ def test_egg_error_mentions_file_url_locations(monkeypatch, tmp_path):
 
 
 # pkg_resources adds `extra == "..."` markers to requirements pulled
-# via extras; under --no-deps the marker has no context and uv would
-# silently drop the requirement.
+# via extras; as a top-level input line the marker has no extras
+# context, would evaluate False, and uv would silently drop the
+# requirement from the lock.
 
 def test_extra_only_marker_is_stripped(monkeypatch):
     calls = _stub_resolve(monkeypatch, pinned=_fake_pinned())
