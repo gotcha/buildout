@@ -890,7 +890,11 @@ _UV_CHATTER_BODY = re.compile(
     # ``TRACE ...``), which ambient tracing configuration adds to -v
     # transcripts (GH run 35850441947, reproduced with RUST_LOG=debug).
     r'DEBUG |WARN |TRACE )')
-_UV_CHATTER_CONT = re.compile(r'^(?:"/|PYTHONPATH=|[ \t]|$)[^\n]*$')
+# The relayed argv line starts with the quoted uv path: posix spellings
+# begin `"/`, Windows spellings with a drive letter (`"D:/`) or UNC
+# root (`"\\`).
+_UV_CHATTER_CONT = re.compile(
+    r'^(?:"/|"[A-Za-z]:[/\\]|"\\\\|PYTHONPATH=|[ \t]|$)[^\n]*$')
 _UV_CHATTER_HEADER = re.compile(r'^[^\n]*\bDEBUG$')
 _LEGACY_FETCH_DEBUG = re.compile(
     r'(?m)^[^\n]*\bDEBUG\n +(?:Fetching [^\n]* from:|Turning dist |'

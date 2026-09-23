@@ -794,6 +794,36 @@ def test_drop_uv_install_debug_chatter_is_mode_conditional(monkeypatch):
         '  Picked: demo = 0.3\n')
 
 
+def test_drop_uv_install_debug_chatter_drops_windows_argv(monkeypatch):
+    from zc.buildout import testing
+    # The relayed argv line of the Running-pip-install record starts
+    # with the quoted uv path.  On Windows that is a drive-letter path
+    # ("D:/..."), which the continuation rule's posix-only `"/` did not
+    # match, so the argv leaked into the transcript (GH run
+    # 35921276587, Windows leg).
+    text = ("zc.buildout.easy_install DEBUG\n"
+            "  Installing 'demo'.\n"
+            'zc.buildout.easy_install DEBUG\n'
+            '  Running pip install:\n'
+            '"D:/a/buildout/buildout/venvs/python/Scripts/uv.exe" "pip"'
+            ' "install" "--no-deps" "-t" "/sample-install/tmpxyz"'
+            ' "--python" "D:/a/buildout/buildout/venvs/python/Scripts'
+            '/python3.exe" "-v"'
+            ' "http://localhost:21748/demo-0.3-py3-none-any.whl"\n'
+            'PYTHONPATH=\n'
+            '\n'
+            'zc.buildout.easy_install DEBUG\n'
+            '  Picked: demo = 0.3\n')
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert testing.drop_uv_install_debug_chatter(text) == text
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    assert testing.drop_uv_install_debug_chatter(text) == (
+        "zc.buildout.easy_install DEBUG\n"
+        "  Installing 'demo'.\n"
+        'zc.buildout.easy_install DEBUG\n'
+        '  Picked: demo = 0.3\n')
+
+
 def test_drop_uv_install_debug_chatter_drops_leveled_uv_log(monkeypatch):
     from zc.buildout import testing
     # uv relays its own leveled internal log (``DEBUG ...``, ``WARN
