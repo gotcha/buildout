@@ -129,6 +129,7 @@ echo "sample buildouts resolving that requirement must find it without an index.
 echo "packaging and pip are seeded for the same reason: they are zc.buildout"
 echo "runtime requirements, so a compile carrying the zc.buildout develop"
 echo "project as an override must find them in the seeded sources."
+echo "tomli joins the seed on Python < 3.11, where zc.buildout requires it."
 SEED="$HERE/downloads/test-seed"
 mkdir -p "$SEED"
 rm -f "$SEED"/*.whl
@@ -137,9 +138,19 @@ SEED_WHEEL=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version(
 SEED_UV=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("uv"))')
 SEED_PACKAGING=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("packaging"))')
 SEED_PIP=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("pip"))')
+# tomli is a zc.buildout runtime requirement on Python < 3.11 only, so
+# the venv has it exactly on those interpreters.  The seed must carry
+# it there too: a compile carrying the zc.buildout develop override
+# resolves the marker dependency and fails hermetically without a
+# candidate (GH run 35833561014).
+SEED_TOMLI=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("tomli"))' 2>/dev/null || true)
+SEED_TOMLI_SPEC=
+if test "$SEED_TOMLI"; then
+  SEED_TOMLI_SPEC="tomli==$SEED_TOMLI"
+fi
 "$VENV_PYTHON" -m pip download --quiet --no-deps --dest "$SEED" \
     "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL" "uv==$SEED_UV" \
-    "packaging==$SEED_PACKAGING" "pip==$SEED_PIP"
+    "packaging==$SEED_PACKAGING" "pip==$SEED_PIP" $SEED_TOMLI_SPEC
 ls -l "$SEED"
 
 # The spawned builds' expectations match modern setuptools: PEP 660's

@@ -732,6 +732,28 @@ def test_drop_uv_getting_got_lines_is_mode_conditional(monkeypatch):
         'While:\n'
         '  Installing eggs.\n'
         'Error: something else.\n')
+    # uv's resolve chatter (Using uv ..., the could-not-resolve block)
+    # logs between the bare line and its While: replay; the sibling
+    # droppers own those lines, but they run later in the checker
+    # chain, so the keep-rule must see past them or the slack line
+    # ahead of a trailing ellipsis is lost (GH run 35833561014).
+    chatter = ("Installing eggs.\n"
+               "Getting distribution for 'demoneeded'.\n"
+               'Using uv 0.12.11 (aarch64-apple-darwin) (/nix/store/uv)\n'
+               "uv could not resolve 'demoneeded':\n"
+               '  × No solution found when resolving dependencies:\n'
+               '  ╰─▶ Because demoneeded was not found in the registry\n'
+               'While:\n'
+               '  Installing eggs.\n'
+               "  Getting distribution for 'demoneeded'.\n"
+               "Error: Couldn't find a distribution for 'demoneeded'.\n")
+    assert testing.drop_uv_getting_got_lines(chatter) == (
+        'Installing eggs.\n'
+        "Getting distribution for 'demoneeded'.\n"
+        'While:\n'
+        '  Installing eggs.\n'
+        "  Getting distribution for 'demoneeded'.\n"
+        "Error: Couldn't find a distribution for 'demoneeded'.\n")
 
 
 def test_drop_uv_install_debug_chatter_is_mode_conditional(monkeypatch):

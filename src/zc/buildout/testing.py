@@ -842,6 +842,15 @@ def drop_uv_getting_got_lines(text):
     """
     if zc.buildout.easy_install.installer() != 'uv':
         return text
+    # uv's resolve chatter (``Using uv ...``, the could-not-resolve
+    # stderr block) is logged between the bare fetch line and the
+    # ``While:`` block that replays it.  The sibling droppers own those
+    # lines but run later in the checker chain, so they are dropped
+    # here first: the keep-rule below keys on their adjacency and would
+    # otherwise lose the slack line a trailing ellipsis needs (GH run
+    # 35833561014).
+    text = drop_uv_install_debug_chatter(text)
+    text = drop_uv_resolution_narrative(text)
     text = re.sub(
         r'(?m)^[^\n]*\bINFO\n  (?:Getting distribution for |Got )[^\n]*\n',
         '', text)
