@@ -794,6 +794,44 @@ def test_drop_uv_install_debug_chatter_is_mode_conditional(monkeypatch):
         '  Picked: demo = 0.3\n')
 
 
+def test_drop_uv_install_debug_chatter_drops_leveled_uv_log(monkeypatch):
+    from zc.buildout import testing
+    # uv relays its own leveled internal log (``DEBUG ...``, ``WARN
+    # ...``) into the -v transcript when the ambient environment cranks
+    # its tracing (RUST_LOG=debug reproduces the easy_install.txt
+    # log-handler flood of GH run 35850441947).  The leveled lines are
+    # uv internals too: they join the chatter families the dropper
+    # removes, or the doctest transcript depends on the host's logging
+    # environment.
+    text = ("zc.buildout.easy_install DEBUG\n"
+            "  Installing 'demo'.\n"
+            'zc.buildout.easy_install DEBUG\n'
+            '  DEBUG Searching for user configuration in:'
+            ' `/home/runner/.config/uv/uv.toml`\n'
+            'DEBUG uv 0.12.11 (x86_64-unknown-linux-gnu)\n'
+            'DEBUG Checking for Python interpreter at path'
+            ' `/usr/bin/python3`\n'
+            'DEBUG Using `--target` directory at /sample-install/tmpxyz\n'
+            'DEBUG Adding direct dependency: demo*\n'
+            'WARN Range requests not supported for'
+            ' demo-0.3-py3-none-any.whl; streaming wheel\n'
+            '   Building demoneeded @ http://localhost/demoneeded.tar.gz\n'
+            '      Built demoneeded @ http://localhost/demoneeded.tar.gz\n'
+            'DEBUG Failed to reflink `/cache/setuptools.dist-info/LICENSE`'
+            ' to `/tmp/x`: Operation not supported (os error 95),'
+            ' falling back\n'
+            'zc.buildout.easy_install DEBUG\n'
+            '  Picked: demo = 0.3\n')
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert testing.drop_uv_install_debug_chatter(text) == text
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    assert testing.drop_uv_install_debug_chatter(text) == (
+        "zc.buildout.easy_install DEBUG\n"
+        "  Installing 'demo'.\n"
+        'zc.buildout.easy_install DEBUG\n'
+        '  Picked: demo = 0.3\n')
+
+
 def test_drop_uv_resolution_narrative_is_mode_conditional(monkeypatch):
     from zc.buildout import testing
     text = ("Installing 'demo'.\n"

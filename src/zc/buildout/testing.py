@@ -292,7 +292,8 @@ def hermetic_pip_env():
            for name in ('PIP_NO_INDEX', 'PIP_FIND_LINKS',
                         'UV_INDEX_URL', 'UV_FIND_LINKS', 'UV_CACHE_DIR',
                         'buildout_testing_seam_find_links',
-                        'buildout_testing_seam_index_url')}
+                        'buildout_testing_seam_index_url',
+                        'RUST_LOG')}
     os.environ['PIP_NO_INDEX'] = '1'
     os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
     os.environ['UV_FIND_LINKS'] = os.path.abspath(seed)
@@ -309,6 +310,12 @@ def hermetic_pip_env():
     # same native, nonexistent-by-construction spelling.
     os.environ['buildout_testing_seam_index_url'] = (
         Path(uv_cache) / 'nonexistent-hermetic-seam-index').as_uri()
+    # uv is a Rust binary: an ambient RUST_LOG makes every uv
+    # subprocess log at debug level, and the -v output relay then
+    # floods log-capturing doctests (GH run 35850441947, reproduced
+    # with RUST_LOG=debug).  Hermeticity covers the host's logging
+    # environment too.
+    os.environ.pop('RUST_LOG', None)
 
     def restore():
         for name, value in old.items():
@@ -878,7 +885,11 @@ _UV_CHATTER_BODY = re.compile(
     r'Pip install completed successfully\.|Contents of |'
     r'Making egg in |Searching for namespace __init__[.]py|'
     r'No namespace __init__[.]py|Resolved \d+ package|Prepared \d+ package|'
-    r'Installed \d+ package|- \S)')
+    r'Installed \d+ package|- \S|'
+    # uv's own leveled internal log (``DEBUG ...``, ``WARN ...``,
+    # ``TRACE ...``), which ambient tracing configuration adds to -v
+    # transcripts (GH run 35850441947, reproduced with RUST_LOG=debug).
+    r'DEBUG |WARN |TRACE )')
 _UV_CHATTER_CONT = re.compile(r'^(?:"/|PYTHONPATH=|[ \t]|$)[^\n]*$')
 _UV_CHATTER_HEADER = re.compile(r'^[^\n]*\bDEBUG$')
 _LEGACY_FETCH_DEBUG = re.compile(
@@ -897,11 +908,18 @@ def drop_uv_install_debug_chatter(text):
     batched uv install never makes.  The uv relay (``Using uv ...``,
     the pip-install argv, uv's Resolved/Prepared/Installed summary,
     the temporary-directory contents listing, the eggification notes)
-    describes subprocess internals whose wording is uv's own.  Both
-    are dropped on both sides in uv mode; the INFO skeleton and the
-    ``Picked:`` lines stay strictly checked, and uv's real install
-    mechanics are asserted by tests/pytests/test_uv_installer.py.
-    Inert under pip.
+    describes subprocess internals whose wording is uv's own.
+    A third family rides along when the host environment cranks uv's
+    own tracing: uv's leveled internal log lines (``DEBUG ...``,
+    ``WARN ...``) flood the transcript (GH run 35850441947, reproduced
+    with RUST_LOG=debug).  Those lines are uv internals as much as the
+    summary trio, so they drop with the rest rather than tie the
+    doctests to the host's logging environment.
+
+    All three families are dropped on both sides in uv mode; the INFO
+    skeleton and the ``Picked:`` lines stay strictly checked, and uv's
+    real install mechanics are asserted by
+    tests/pytests/test_uv_installer.py.  Inert under pip.
     """
     if zc.buildout.easy_install.installer() != 'uv':
         return text
