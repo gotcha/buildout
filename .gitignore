@@ -21,3 +21,4 @@ htmlcov/
 .monkeytype-trace/
 .ruff_cache/
 .uv-pin/
+.DS_Store
