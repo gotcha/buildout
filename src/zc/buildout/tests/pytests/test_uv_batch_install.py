@@ -128,6 +128,27 @@ def test_eggs_land_in_dest_in_pin_order(monkeypatch, tmp_path):
     assert sorted(locations) == eggs
 
 
+def test_wheel_built_with_unescaped_dist_info_installs(
+        monkeypatch, tmp_path):
+    """Old-style wheels carry the unescaped project name in dist-info.
+
+    Wheels built before setuptools normalized wheel filenames (or by
+    backends that never did) name the dist-info directory after the
+    raw project name: ``zc.recipe.egg-4.0.1.dist-info``, dots and all.
+    uv unpacks it verbatim, so the install must discover the dist-info
+    from the installed distribution rather than guess the escaped
+    spelling (GH run 35850441994 dagger uv cells).
+    """
+    pins = [_pin('zc.recipe.egg', '4.0.1')]
+    _record_uv_install(monkeypatch, materialize=[
+        ('zc.recipe.egg', '4.0.1', 'zc_recipe_egg'),
+    ])
+    dest = str(tmp_path / 'eggs')
+    newdists = install_pinned_dists(pins, dest)
+    assert [d.project_name for d in newdists] == ['zc.recipe.egg']
+    assert [d.version for d in newdists] == ['4.0.1']
+
+
 def test_missing_dist_info_raises_user_error_naming_pin(
         monkeypatch, tmp_path):
     pins = [_pin('demo', '1.0'), _pin('other-lib', '2.0')]
@@ -136,7 +157,7 @@ def test_missing_dist_info_raises_user_error_naming_pin(
     with pytest.raises(zc.buildout.UserError) as excinfo:
         install_pinned_dists(pins, dest)
     assert 'other-lib' in str(excinfo.value)
-    assert 'other_lib-2.0.dist-info' in str(excinfo.value)
+    assert '2.0' in str(excinfo.value)
     # demo was fully processed before the failure; the tmp dir inside
     # dest was still cleaned up.
     assert [e for e in os.listdir(dest) if not e.endswith('.egg')] == []

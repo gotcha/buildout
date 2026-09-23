@@ -947,19 +947,6 @@ def _move_to_eggs_dir_and_compile(dist: pkg_resources.DistInfoDistribution | pkg
     return newdist
 
 
-def _pinned_dist_info_dirname(pin: uv_resolve.PinnedDist) -> str:
-    """The ``.dist-info`` directory name an installer writes for ``pin``.
-
-    Wheel and dist-info name escaping per the binary distribution
-    format spec: runs of ``-_.`` in the distribution name collapse to
-    ``_`` and the name lowercases — spelled ``canonicalize_name``
-    followed by ``-`` → ``_``.  The pinned version comes from the lock
-    already normalized, so it joins verbatim.
-    """
-    name = canonicalize_name(pin.name).replace('-', '_')
-    return f"{name}-{pin.version}.dist-info"
-
-
 def _dist_for_pin(dest: str, pin: uv_resolve.PinnedDist
                   ) -> pkg_resources.Distribution | None:
     """The distribution installed in ``dest`` that ``pin`` names.
@@ -1009,15 +996,6 @@ def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
         easy_install._run_pip(args, os.environ.copy(), tmp_dest, level)
         newdists = []
         for pin in pinned:
-            distinfo_dirname = _pinned_dist_info_dirname(pin)
-            if not os.path.isdir(os.path.join(tmp_dest, distinfo_dirname)):
-                logger.error(
-                    "No .dist-info directory after successful uv pip"
-                    " install of %s (%s)",
-                    pin.name, pin.url)
-                raise zc.buildout.UserError(
-                    f"No {distinfo_dirname} directory after successful"
-                    f" uv pip install of {pin.name} {pin.version}.")
             distro = _dist_for_pin(tmp_dest, pin)
             if distro is None:
                 logger.error(
@@ -1027,6 +1005,12 @@ def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
                 raise zc.buildout.UserError(
                     f"Could not find installed distribution for {pin.name}"
                     f" {pin.version} after successful uv pip install.")
+            # The dist-info dirname comes from the installed dist, not
+            # from an escaping rule: old-style wheels carry the raw
+            # project name verbatim (``zc.recipe.egg-4.0.1.dist-info``,
+            # dots included), which uv unpacks as-is (GH run
+            # 35850441994).
+            distinfo_dirname = os.path.basename(distro.egg_info)
             [egg_dir] = make_egg_after_pip_install(
                 tmp_dest, distinfo_dirname, distro)
             newdist = _move_dist_into_place(distro, egg_dir, dest)
