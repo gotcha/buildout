@@ -99,7 +99,10 @@ Preconditions:
   with `PIP_NO_INDEX=1` and `PIP_FIND_LINKS=downloads/test-seed/`,
   where `prepare.sh` seeds the exact setuptools/wheel wheels it
   installed (build isolation on sdist and editable installs,
-  `python -m build`). A suite run with the ambient index pointed at a
+  `python -m build`). The uv resolve seam instead reads
+  `downloads/test-seam-seed/` — the same seed minus the setuptools
+  build-environment floor, which compiles must never upgrade to. A
+  suite run with the ambient index pointed at a
   dead port is a valid hermeticity probe. Missing seed dir (suites run
   without `make bin/buildout`) silently restores the ambient-index
   behavior — when hermeticity matters, check the seed exists first.

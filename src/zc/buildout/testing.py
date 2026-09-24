@@ -273,11 +273,15 @@ def hermetic_pip_env():
     Seam specifics: ``uv pip compile`` no longer honors the ambient
     ``UV_INDEX_URL``/``UV_FIND_LINKS`` — the seam scrubs them from the
     child environment so the configuration alone decides sources — so
-    the seed and the dead index are injected as explicit seam arguments
-    through ``buildout_testing_seam_find_links`` and
-    ``buildout_testing_seam_index_url``.  The ambient variables stay
-    set for the ``uv pip install`` step, whose build isolation still
-    reads them.
+    the seam seed and the dead index are injected as explicit seam
+    arguments through ``buildout_testing_seam_find_links`` and
+    ``buildout_testing_seam_index_url``.  The seam seed is
+    ``downloads/test-seam-seed``: prepare.sh's copy of the seed taken
+    before the setuptools floor wheel lands, because the floor serves
+    spawned build environments only and a compile that sees it upgrades
+    setuptools past the cell's pin (GH run 36030422312).  The ambient
+    variables stay set for the ``uv pip install`` step, whose build
+    isolation still reads them.
 
     Returns a callable restoring the previous environment, or None when
     the seed directory is absent (tests run without prepare.sh): the
@@ -297,7 +301,13 @@ def hermetic_pip_env():
     os.environ['PIP_NO_INDEX'] = '1'
     os.environ['PIP_FIND_LINKS'] = os.path.abspath(seed)
     os.environ['UV_FIND_LINKS'] = os.path.abspath(seed)
-    os.environ['buildout_testing_seam_find_links'] = os.path.abspath(seed)
+    # The seam resolves against the floor-free seed copy prepare.sh
+    # makes; the fallback keeps checkouts whose prepare.sh predates the
+    # split working (the floor then stays visible to compiles).
+    seam_seed = os.path.join(os.path.dirname(seed), 'test-seam-seed')
+    if not os.path.isdir(seam_seed):
+        seam_seed = seed
+    os.environ['buildout_testing_seam_find_links'] = os.path.abspath(seam_seed)
     uv_cache = tempfile.mkdtemp('uv-cache')
     os.environ['UV_CACHE_DIR'] = uv_cache
     # Path(...).as_uri() spells the dead index natively, which Windows

@@ -153,6 +153,17 @@ fi
     "packaging==$SEED_PACKAGING" "pip==$SEED_PIP" $SEED_TOMLI_SPEC
 ls -l "$SEED"
 
+# The uv resolve seam gets its own copy of the seed, snapshotted before
+# the setuptools floor lands below: the floor serves spawned build
+# environments only, and a compile that resolves setuptools against it
+# "upgrades" the toolchain past the cell's pin (GH run 36030422312).
+# hermetic_pip_env points buildout_testing_seam_find_links here.
+SEAM_SEED="$HERE/downloads/test-seam-seed"
+rm -rf "$SEAM_SEED"
+mkdir -p "$SEAM_SEED"
+cp "$SEED"/*.whl "$SEAM_SEED"
+ls -l "$SEAM_SEED"
+
 # The spawned builds' expectations match modern setuptools: PEP 660's
 # build_editable hook (added in setuptools 64) and normalized wheel
 # filenames (fixed in 75.8.x). A cell pinning an older setuptools keeps

@@ -185,8 +185,8 @@ def _seam_testing_sources() -> tuple[list[str], str | None]:
     """The find-links and fallback index the harness adds to uv resolves.
 
     The hermetic harness exports ``buildout_testing_seam_find_links``
-    (the downloads/test-seed wheel directory) and
-    ``buildout_testing_seam_index_url`` (a dead index) so corpus
+    (downloads/test-seam-seed, the seed minus the setuptools floor)
+    and ``buildout_testing_seam_index_url`` (a dead index) so corpus
     resolves stay hermetic now that the seam scrubs ambient UV_*
     variables from the child environment it spawns uv with.  The links
     join the configured ones verbatim; the index only fills in when the
