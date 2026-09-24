@@ -558,7 +558,7 @@ hashes = { sha256 = "aaaa" }
         instance = easy_install.Installer.__new__(easy_install.Installer)
         instance._installer = installer
         instance._versions = versions
-        instance._requirements_and_constraints = ()
+        instance._requirements_and_constraints = []
         return instance
 
     def test_constrain_reports_junk_pin_in_uv_mode(self):
