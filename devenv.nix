@@ -12,7 +12,7 @@
 # Python this environment provides. prepare.sh keys its venvs by Python
 # version (venvs/python3.x), so switching versions does not require
 # `make clean` — just re-run `make bin/buildout && bin/buildout`.
-{ pkgs, config, ... }:
+{ pkgs, lib, config, ... }:
 
 {
   languages.python = {
@@ -70,7 +70,15 @@
   # machine and the engine container; the dagger CLI in this shell
   # reaches the engine via _EXPERIMENTAL_DAGGER_RUNNER_HOST, which the
   # module exports.
-  services.dagger.enable = true;
+  # Local developer shells only. On CI runners (the CI env var is
+  # always set there) the module stays disabled: its
+  # podman-machine:init task otherwise runs before every shell entry
+  # (measured 85-120s per CI leg) and qemu/podman/dagger bloat the
+  # closure, none of which a CI leg uses. The dagger workflow job
+  # brings its own CLI and engine (dagger/dagger-for-github on the
+  # runner's docker). mkDefault keeps the gate overridable from
+  # devenv.local.nix.
+  services.dagger.enable = lib.mkDefault (builtins.getEnv "CI" == "");
 
   # Machine resources are coded, not hand-set: the podman default of
   # 2048 MiB OOM-killed the CI cache workload under full-run load. The
