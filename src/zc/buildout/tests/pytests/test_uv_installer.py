@@ -558,6 +558,7 @@ hashes = { sha256 = "aaaa" }
         instance = easy_install.Installer.__new__(easy_install.Installer)
         instance._installer = installer
         instance._versions = versions
+        instance._requirements_and_constraints = ()
         return instance
 
     def test_constrain_reports_junk_pin_in_uv_mode(self):
@@ -575,9 +576,16 @@ hashes = { sha256 = "aaaa" }
         assert instance._constrain(req) == req
 
     def test_constrain_pip_mode_keeps_invalid_specifier(self):
+        # Legacy pip-mode behavior depends on the setuptools in use:
+        # 69.5.1 raises IncompatibleConstraintError from the old
+        # containment check, other pins let the junk escape as
+        # InvalidSpecifier. Both predate the uv junk hardening; pip
+        # mode keeps whichever legacy error comes out.
         from packaging import specifiers
         instance = self._bare_installer('pip', {'demo': '{wtf}'})
-        with pytest.raises(specifiers.InvalidSpecifier):
+        with pytest.raises(
+                (specifiers.InvalidSpecifier,
+                 easy_install.IncompatibleConstraintError)):
             instance._constrain(pkg_resources.Requirement.parse('demo'))
 
 
