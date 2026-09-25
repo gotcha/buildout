@@ -12,7 +12,7 @@ import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -66,6 +66,45 @@ class PinnedSet:
             if canonicalize_name(dist.name) == wanted:
                 return dist
         return None
+
+
+class _LockHashes(TypedDict, total=False):
+    """The ``hashes`` table of a lock artifact entry."""
+
+    sha256: str
+
+
+class _LockArtifact(TypedDict, total=False):
+    """One wheel or sdist entry of a uv ``pylock.toml`` package."""
+
+    url: str
+    hashes: _LockHashes
+
+
+class _LockDirectory(TypedDict, total=False):
+    """The ``directory`` table of a directory-override lock entry."""
+
+    path: str
+
+
+class _LockPackage(TypedDict, total=False):
+    """One ``packages`` entry of a uv ``pylock.toml``.
+
+    Every key is optional at the type level; the parser validates the
+    combinations it accepts and raises ``ResolutionError`` otherwise.
+    """
+
+    name: str
+    version: str
+    wheels: list[_LockArtifact]
+    sdist: _LockArtifact
+    directory: _LockDirectory
+
+
+class _LockData(TypedDict, total=False):
+    """A parsed uv ``pylock.toml`` document."""
+
+    packages: list[_LockPackage]
 
 
 class ResolutionError(Exception):
@@ -146,7 +185,9 @@ def resolve(*, requirements: Sequence[str], constraints: Mapping[str, str],
                 f'uv pip compile exited with status {completed.returncode}',
                 completed.stderr)
         try:
-            lock = tomllib.loads(lock_file.read_text(encoding='utf-8'))
+            # Parsed TOML is dict[str, Any]; the cast names the
+            # documented pylock.toml shape and the parser validates it.
+            lock = cast(_LockData, tomllib.loads(lock_file.read_text(encoding='utf-8')))
         except tomllib.TOMLDecodeError as err:
             raise ResolutionError(
                 f'uv produced an unparsable pylock.toml: {err}',
@@ -284,13 +325,13 @@ def _constraint_line(name: str, constraint: str) -> str:
     return f'{name}=={constraint}\n'
 
 
-def _parse_lock(data: dict[str, Any]) -> PinnedSet:
+def _parse_lock(data: _LockData) -> PinnedSet:
     """Build the ``PinnedSet`` from parsed ``pylock.toml`` data."""
     return PinnedSet(tuple(
         _parse_package(package) for package in data.get('packages', [])))
 
 
-def _parse_package(package: Any) -> PinnedDist:
+def _parse_package(package: _LockPackage) -> PinnedDist:
     """One lock package entry as a ``PinnedDist``.
 
     A directory override comes back as ``directory = { path = ... }``
@@ -321,7 +362,7 @@ def _parse_package(package: Any) -> PinnedDist:
             f' {err!r} in the entry for {package.get("name")!r}') from err
 
 
-def _parse_directory_package(package: Any, directory: Any) -> PinnedDist:
+def _parse_directory_package(package: _LockPackage, directory: _LockDirectory) -> PinnedDist:
     """One lock directory entry as a ``PinnedDist`` marked by ``directory``.
 
     uv writes ``directory = { path = ... }`` for a directory override
@@ -340,7 +381,7 @@ def _parse_directory_package(package: Any, directory: Any) -> PinnedDist:
         directory=path)
 
 
-def _sha256(artifact: Any) -> str | None:
+def _sha256(artifact: _LockArtifact) -> str | None:
     """The sha256 hash of a lock artifact entry, when it has hashes."""
     return (artifact.get('hashes') or {}).get('sha256')
 

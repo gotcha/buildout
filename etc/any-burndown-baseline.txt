@@ -10,7 +10,3 @@ src/zc/buildout/parts.py:141
 src/zc/buildout/parts.py:185
 src/zc/buildout/parts.py:226
 src/zc/buildout/parts.py:298
-src/zc/buildout/uv_resolve.py:287
-src/zc/buildout/uv_resolve.py:293
-src/zc/buildout/uv_resolve.py:324
-src/zc/buildout/uv_resolve.py:343
