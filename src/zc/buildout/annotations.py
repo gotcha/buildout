@@ -22,15 +22,18 @@ from __future__ import annotations
 import copy
 import os
 import sys
-from typing import Any, Union
+from typing import cast
 
 from zc.buildout.utils import print_
 
 
-def _annotate_section(section: dict[str, Any], source: str) -> dict[str, SectionKey]:
+def _annotate_section(section: RawSection, source: str) -> AnnotatedSection:
+    # The raw dict is annotated in place: write through the cast view,
+    # which is the same object with its post-state type.
+    annotated = cast(AnnotatedSection, section)
     for key, value in section.items():
-        section[key] = SectionKey(value, source)
-    return section
+        annotated[key] = SectionKey(value, source)
+    return annotated
 
 
 class SectionKey:
@@ -167,18 +170,22 @@ class HistoryItem:
                 f"source={self.source}>")
 
 
-# Annotated configuration data: maps section names to sections whose values
-# are SectionKey objects once annotated (plain dicts while still raw).
-# A plain assignment is evaluated at import time even under
-# `from __future__ import annotations`, so keep the Union spelling: the `|`
-# form needs Python 3.10 (unsupported operand type(s) for |: GenericAlias).
-ConfigData = dict[str, Union[dict[str, SectionKey], dict[Any, Any]]]
+# Configuration data in its two states: section values are plain strings
+# while raw and SectionKey objects once annotated.  _annotate mutates the
+# dicts in place, so one dict object changes state; the aliases name the
+# states.  The raw state exists only between _parse_config_file and
+# _annotate inside configfiles.py; everywhere else the data is annotated,
+# which is what ConfigData names.
+RawSection = dict[str, str]
+AnnotatedSection = dict[str, SectionKey]
+ConfigData = dict[str, AnnotatedSection]
 
 
-def _annotate(data: dict[str, dict[str, str] | dict[Any, Any]], note: str) -> dict[str, dict[str, SectionKey] | dict[Any, Any]]:
+def _annotate(data: dict[str, RawSection], note: str) -> dict[str, AnnotatedSection]:
+    annotated = cast(dict[str, AnnotatedSection], data)
     for key, section in data.items():
-        data[key] = _annotate_section(section, note)
-    return data
+        annotated[key] = _annotate_section(section, note)
+    return annotated
 
 
 def _print_annotate(data: dict[str, dict[str, SectionKey]], verbose: bool, chosen_sections: list[str], basedir: str) -> None:

@@ -1091,7 +1091,7 @@ The following list shows the affected packages and their namespaces:
             options._initialize()
             return options
 
-    def __setitem__(self, name: str, data: dict[str, Any]) -> None:  # values str()-ified
+    def __setitem__(self, name: str, data: dict[str, object]) -> None:  # values str()-ified
         if name in self._raw:
             raise KeyError("Section already exists", name)
         self._raw[name] = {k: str(v) for (k, v) in data.items()}

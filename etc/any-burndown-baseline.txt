@@ -1,8 +1,0 @@
-src/zc/buildout/annotations.py:175
-src/zc/buildout/annotations.py:178
-src/zc/buildout/annotations.py:30
-src/zc/buildout/buildout.py:1094
-src/zc/buildout/configfiles.py:298
-src/zc/buildout/configfiles.py:84
-src/zc/buildout/configsetup.py:247
-src/zc/buildout/configsetup.py:263

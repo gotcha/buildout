@@ -28,13 +28,14 @@ import itertools
 import logging
 import os
 from collections.abc import Callable, Mapping, MutableMapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pkg_resources
 
 import zc.buildout
 import zc.buildout.easy_install
 from zc.buildout.annotations import (
+    AnnotatedSection,
     ConfigData,
     SectionKey,
     _buildout_default_options,
@@ -246,7 +247,7 @@ def _pin_buildout_version(versions: dict[str, SectionKey]) -> None:
 
 def _default_versions(
         data: ConfigData,
-        ) -> tuple[str, dict[str, SectionKey] | dict[Any, Any]]:
+        ) -> tuple[str, AnnotatedSection]:
     """Ensure ``data`` has a versions section with default pins.
 
     Return the versions section name and the versions mapping.
@@ -260,7 +261,7 @@ def _default_versions(
 
     # Default versions:
     versions_section_name = data['buildout']['versions'].value
-    versions: dict[str, SectionKey] | dict[Any, Any]
+    versions: AnnotatedSection
     if versions_section_name:
         versions = data[versions_section_name]
     else:

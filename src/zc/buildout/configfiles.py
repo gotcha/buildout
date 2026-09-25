@@ -25,13 +25,14 @@ import copy
 import os
 import re
 from io import StringIO, TextIOWrapper
-from typing import Any
 
 import zc.buildout
 import zc.buildout.configparser
 import zc.buildout.download
 from zc.buildout.annotations import (
+    AnnotatedSection,
     ConfigData,
+    RawSection,
     SectionKey,
     _annotate,
     _unannotate_section,
@@ -81,7 +82,7 @@ def _update_verbose(s1: dict[str, SectionKey], s2: dict[str, SectionKey]) -> Non
         else:
             s1[key] = copy.deepcopy(v2)
 
-def _update(in1: dict[str, dict[str, SectionKey] | dict[Any, Any]], d2: dict[str, dict[str, SectionKey] | dict[Any, Any]]) -> dict[str, dict[str, SectionKey] | dict[Any, Any]]:
+def _update(in1: ConfigData, d2: ConfigData) -> ConfigData:
     d1 = copy.deepcopy(in1)
     for section, options2 in d2.items():
         if section in d1:
@@ -291,17 +292,23 @@ def _open(
     root_config_file = not seen
     seen.append(filename)
 
-    result = _parse_config_file(fp, filename, downloaded_filename, is_temp)
+    raw_result = _parse_config_file(fp, filename, downloaded_filename, is_temp)
 
     # Values are plain strings for now; _annotate below mutates them into
     # SectionKey objects in place.
-    options: dict[str, Any] = result.get('buildout', {})
-    extends = options.pop('extends', None)
-    if 'extended-by' in options:
+    raw_options: RawSection = raw_result.get('buildout', {})
+    extends = raw_options.pop('extends', None)
+    if 'extended-by' in raw_options:
         raise zc.buildout.UserError(
             f'No-longer supported "extended-by" option found in {filename}.')
 
-    result = _annotate(result, filename)
+    result = _annotate(raw_result, filename)
+
+    # The buildout section raw_options was bound to above is the same
+    # object _annotate annotated in place; rebind it under its post-state
+    # type for the remaining reads (before _extends_results may merge
+    # result into a new dict).
+    options: AnnotatedSection = result.get('buildout', {})
 
     if root_config_file and 'buildout' in result:
         download_options = _update_section(
