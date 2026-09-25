@@ -814,7 +814,7 @@ class Buildout(DictMixin):
                 print_(file=f)
                 _save_options(part, installed_options[part], f)
 
-    def _error(self, message: str, *args: Any) -> NoReturn:
+    def _error(self, message: str, *args: object) -> NoReturn:
         raise zc.buildout.UserError(message % args)
 
     def _setup_socket_timeout(self) -> None:
@@ -1599,7 +1599,7 @@ def _doing() -> None:
                 message = message % args
             sys.stderr.write(f'  {message}\n')
 
-def _error(*message: Any) -> NoReturn:
+def _error(*message: Any) -> NoReturn:  # type: ignore[explicit-any]  # arbitrary parts; join raising TypeError on non-str is a preserved quirk (cli.py:244)
     sys.stderr.write('Error: ' + ' '.join(message) +'\n')
     sys.exit(1)
 

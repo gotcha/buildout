@@ -1,10 +1,7 @@
-src/zc/buildout/__init__.py:56
 src/zc/buildout/annotations.py:175
 src/zc/buildout/annotations.py:178
 src/zc/buildout/annotations.py:30
 src/zc/buildout/buildout.py:1094
-src/zc/buildout/buildout.py:1602
-src/zc/buildout/buildout.py:817
 src/zc/buildout/configfiles.py:298
 src/zc/buildout/configfiles.py:84
 src/zc/buildout/configsetup.py:247
@@ -13,7 +10,6 @@ src/zc/buildout/parts.py:141
 src/zc/buildout/parts.py:185
 src/zc/buildout/parts.py:226
 src/zc/buildout/parts.py:298
-src/zc/buildout/utils.py:36
 src/zc/buildout/uv_resolve.py:287
 src/zc/buildout/uv_resolve.py:293
 src/zc/buildout/uv_resolve.py:324

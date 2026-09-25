@@ -37,7 +37,6 @@ warnings.filterwarnings('ignore', message='Setuptools is replacing distutils.')
 import contextlib
 import sys
 from collections.abc import Iterator
-from typing import Any
 
 import zc.buildout.patches
 
@@ -53,7 +52,7 @@ class UserError(Exception):
 
 
 @contextlib.contextmanager
-def _activity(message: str, *args: Any) -> Iterator[None]:
+def _activity(message: str, *args: object) -> Iterator[None]:
     """Record what buildout was doing, for error reporting.
 
     Attaches the activity to a propagating exception: a context

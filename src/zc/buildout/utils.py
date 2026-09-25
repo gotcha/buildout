@@ -33,7 +33,7 @@ def normalize_name(name: str) -> str:
 def _print_options(sep: str=' ', end: str='\n', file: TextIO | None=None) -> tuple[str, str, TextIO | None]:
     return sep, end, file
 
-def print_(*args: Any, **kw: Any) -> None:
+def print_(*args: object, **kw: Any) -> None:  # type: ignore[explicit-any]  # **kw forwards into _print_options, which types it
     sep, end, file = _print_options(**kw)
     if file is None:
         file = sys.stdout
