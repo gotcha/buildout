@@ -32,7 +32,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Protocol, TextIO, Union, cast
 
 import pkg_resources
 from packaging import utils as packaging_utils
@@ -43,6 +43,31 @@ from zc.buildout.utils import bool_option, print_
 
 if TYPE_CHECKING:
     from zc.buildout.buildout import Options
+
+
+class _InstallOnly(Protocol):
+    def install(self) -> None | str | Sequence[str]: ...
+
+
+class _Updatable(Protocol):
+    def update(self) -> None | str | Sequence[str]: ...
+
+
+# The recipe contract: constructed with ``(buildout, name, options)``;
+# ``install()`` and/or ``update()`` take no arguments and return
+# ``None``, a path, or a sequence of paths.  Entry-point-loaded recipes
+# may carry either or both methods, so the seam types the union.
+# typing.Union because the 3.9 runtime cannot evaluate ``X | Y`` on
+# classes at module level.
+Recipe = Union[_InstallOnly, _Updatable]
+
+
+class _UpdateInstalled(Protocol):
+    """The ``Buildout._update_installed`` seam: str-valued keyword
+    options (``parts=...``, ``installed_develop_eggs=...``)."""
+
+    def __call__(self, **buildout_options: str) -> None: ...
+
 
 _spacey_nl = re.compile('[ \t\r\f\v]*\n[ \t\r\f\v\n]*'
                         '|'
@@ -149,7 +174,7 @@ def _uninstall_stale_parts(
         logger: logging.Logger,
         uninstall_part: Callable[
             [str, dict[str, Options | dict[str, str]]], None],
-        update_installed: Callable[..., None],
+        update_installed: _UpdateInstalled,
         ) -> list[str]:
     """Uninstall the parts that are no longer used or whose configuration
     changed; return the updated list of installed parts."""
@@ -183,16 +208,20 @@ def _uninstall_stale_parts(
 
 
 def _update_recipe_callable(
-        recipe: Any,
+        recipe: Recipe,
         part: str,
         logger: logging.Logger,
-        ) -> Any:
+        ) -> Callable[[], None | str | Sequence[str]]:
     """Return the recipe's update callable, falling back to its install
-    callable (with a warning) when it doesn't define one."""
+    callable (with a warning) when it doesn't define one.
+
+    Each ``cast`` names the arm of the ``Recipe`` union the runtime
+    probes for; the ``except`` covers a recipe that has neither the
+    probe's method nor, in a broken plugin, the fallback's."""
     try:
-        update = recipe.update
+        update = cast(_Updatable, recipe).update
     except AttributeError:
-        update = recipe.install
+        update = cast(_InstallOnly, recipe).install
         logger.warning(
             "The recipe for %s doesn't define an update "
             "method. Using its install method.",
@@ -225,7 +254,7 @@ def _merged_updated_files(
 
 def _update_part(
         part: str,
-        recipe: Any,
+        recipe: Recipe,
         call: Callable[
             [Callable], tuple[str, ...] | str | list[str] | None],
         installed_part_options: dict[str, Options | dict[str, str]],
@@ -233,7 +262,7 @@ def _update_part(
         installed_exists: bool,
         logger: logging.Logger,
         uninstall: Callable[[str], None],
-        update_installed: Callable[..., None],
+        update_installed: _UpdateInstalled,
         ) -> tuple[list[str], list[str]]:
     """Run a part's update recipe, rolling the part back on failure.
 
@@ -302,7 +331,7 @@ def _save_or_update_installed(
         installed_part_options: dict[str, Options | dict[str, str]],
         save_installed_options: Callable[
             [Mapping[str, Options | dict[str, str]]], None],
-        update_installed: Callable[..., None],
+        update_installed: _UpdateInstalled,
         ) -> bool:
     """Persist the installed options after a part install/update;
     return the new ``installed_exists`` flag."""

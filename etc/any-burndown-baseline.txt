@@ -6,7 +6,3 @@ src/zc/buildout/configfiles.py:298
 src/zc/buildout/configfiles.py:84
 src/zc/buildout/configsetup.py:247
 src/zc/buildout/configsetup.py:263
-src/zc/buildout/parts.py:141
-src/zc/buildout/parts.py:185
-src/zc/buildout/parts.py:226
-src/zc/buildout/parts.py:298
