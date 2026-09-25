@@ -8,6 +8,27 @@
 # by running it (dagger call), not statically.
 exclude = ["src/zc/buildout/_vendor", "etc/tracing", "dagger"]
 
+[tool.mypy]
+# Explicit-Any burndown gate (make typecheck-any; separate from the ty
+# static tier, which has no Any rule). mypy is not devenv-provided:
+# install mypy==2.3.1 into an environment on PATH. python_version
+# matches the support floor (setup.py python_requires >=3.9). mypy maps
+# this src layout to `buildout.*` module names (src/zc has no
+# __init__.py), so the overrides below use those names.
+python_version = "3.9"
+ignore_missing_imports = true
+disallow_any_explicit = true
+
+[[tool.mypy.overrides]]
+module = "buildout._package_index"
+# The uv migration deletes this module; out of the burndown scope.
+disallow_any_explicit = false
+
+[[tool.mypy.overrides]]
+module = "buildout.tests.*"
+# Test code stays out of the burndown scope.
+disallow_any_explicit = false
+
 [tool.pytest.ini_options]
 # src/zc is a namespace package (no __init__.py). Without this, pytest's
 # default import mode walks up only to zc/buildout and imports the ported

@@ -119,6 +119,18 @@ lint:
 	# baseline for this legacy tree; tighten it there as code gets cleaned.
 	ruff check .
 
+typecheck-any:
+	# Explicit-Any burndown gate: no new `Any` annotation enters
+	# src/zc/buildout. mypy (not devenv-provided; install mypy==2.3.1)
+	# runs with disallow_any_explicit from [tool.mypy] in pyproject.toml.
+	# The gate script compares reported sites against
+	# etc/any-burndown-baseline.txt and fails only on sites the baseline
+	# does not know, so the gate is green while the burndown burns down:
+	# burndown commits delete baselined lines, and deliberate sites carry
+	# per-line ignores with reasons. With an empty baseline the gate is
+	# plain disallow-any-explicit.
+	sh etc/check_any_burndown.sh
+
 complexity:
 	# Cyclomatic-complexity budget gate, a static tier of
 	# verify-buildout: no function or method may exceed its entry in

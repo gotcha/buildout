@@ -418,14 +418,14 @@ else:
     get_win_launcher = None
 
 
-def call_subprocess(args: Sequence[str | Path], **kw: Any) -> None:
+def call_subprocess(args: Sequence[str | Path], **kw: Any) -> None:  # type: ignore[explicit-any]  # forwarded into subprocess; its kwargs surface is not practically typeable
     if subprocess.call(args, **kw) != 0:
         raise Exception(  # noqa: TRY002 - legacy error contract: callers
             # catch broad Exception; the message text is the pinned surface
             f"Failed to run command:\n{repr(args)[1:-1]}")
 
 
-def get_subprocess_output(args: list[str], **kw: Any) -> str:
+def get_subprocess_output(args: list[str], **kw: Any) -> str:  # type: ignore[explicit-any]  # forwarded into subprocess.run; its kwargs surface is not practically typeable
     result = subprocess.run(
         args, **kw,
         stdout=subprocess.PIPE,

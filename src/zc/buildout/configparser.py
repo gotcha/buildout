@@ -209,7 +209,7 @@ def _handle_continuation(
     return True
 
 
-def _expression_context(context: list[Any], exp_globals: Callable) -> Any:
+def _expression_context(context: list[Any], exp_globals: Callable) -> Any:  # type: ignore[explicit-any]  # eval context for interpolation holds genuinely arbitrary values
     """Return the evaluation context for old-style section expressions,
     lazily populated from ``exp_globals``.
 
@@ -223,7 +223,7 @@ def _expression_context(context: list[Any], exp_globals: Callable) -> Any:
     return value
 
 
-def _start_section(
+def _start_section(  # type: ignore[explicit-any]  # context is the interpolation eval context; holds genuinely arbitrary values
         header: re.Match, sections: dict[str, dict[str, str]],
         context: list[Any], exp_globals: Callable,
         ) -> tuple[dict[str, str] | None, bool]:
@@ -328,7 +328,7 @@ def parse(fp: StringIO | TextIOWrapper, fpname: str, exp_globals: type[dict] | C
     sections = {}
     # the current section condition, possibly updated from a section expression
     section_condition = True
-    context: list[Any] = []  # lazy expression context, see _expression_context
+    context: list[Any] = []  # type: ignore[explicit-any]  # lazy expression context, see _expression_context; holds genuinely arbitrary values
     cursect = None                            # None, or a dictionary
     blockmode = False
     optname = None

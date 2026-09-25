@@ -1261,10 +1261,10 @@ class Options(DictMixin):
     # parameter is typed ``Any`` to stay compatible with ``Mapping.get``,
     # whose key type is not narrowed by this class.
     @overload
-    def get(self, key: Any) -> str | None: ...
+    def get(self, key: Any) -> str | None: ...  # type: ignore[explicit-any]  # Mapping.get compatibility, see comment above
     @overload
-    def get(self, key: Any, default: _T, seen: list[tuple[str, str]] | None=None) -> str | _T: ...
-    def get(self, key: Any, default: str | int | bool | None=None, seen: list[tuple[str, str]] | None=None) -> str | int | bool | None:
+    def get(self, key: Any, default: _T, seen: list[tuple[str, str]] | None=None) -> str | _T: ...  # type: ignore[explicit-any]  # Mapping.get compatibility, see comment above
+    def get(self, key: Any, default: str | int | bool | None=None, seen: list[tuple[str, str]] | None=None) -> str | int | bool | None:  # type: ignore[explicit-any]  # Mapping.get compatibility, see comment above
         try:
             return self._data[key]
         except KeyError:
@@ -1425,7 +1425,7 @@ _spacey_defaults = [
     ('%(__buildout_space_v__)s', '\v'),
     ]
 
-def _default_globals() -> dict[str, Any]:
+def _default_globals() -> dict[str, Any]:  # type: ignore[explicit-any]  # eval globals for interpolation hold arbitrary values
     """Return a mapping of default and precomputed expressions.
     These default expressions are convenience defaults available when eveluating
     section headers expressions.
