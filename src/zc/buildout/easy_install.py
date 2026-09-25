@@ -245,7 +245,7 @@ class EnvironmentMixin:
 
         def can_add(self, dist: pkg_resources.Distribution) -> bool: ...
 
-    def __getitem__(self, project_name: str) -> list[pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution | Any | pkg_resources.Distribution]:
+    def __getitem__(self, project_name: str) -> list[pkg_resources.Distribution]:
         """Return a newest-to-oldest list of distributions for `project_name`
 
         Uses case-insensitive `project_name` comparison, assuming all the
@@ -1042,7 +1042,7 @@ def _fetch_requested_dists(
 
 
 def _best_matching_dist(
-        best: dict[str, Any],
+        best: dict[str, pkg_resources.Distribution],
         env: pkg_resources.Environment,
         req: pkg_resources.Requirement,
         ws: pkg_resources.WorkingSet,

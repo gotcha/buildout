@@ -24,7 +24,7 @@ def patch_Distribution() -> None:
     except ImportError:
         return
 
-    def hashcmp(self: Any) -> tuple[Any, ...]:
+    def hashcmp(self: Distribution) -> tuple[Any, ...]:  # type: ignore[explicit-any]  # the hashcmp tuple shape is pkg_resources-internal
         if hasattr(self, '_hashcmp'):
             return self._hashcmp
         else:
@@ -102,7 +102,7 @@ def patch_PackageIndex() -> None:
 
     # method copied over from setuptools 46.1.3
     # Unchanged in setuptools 70.0.0.
-    def process_url(self: Any, url: str, retrieve: bool=False) -> None:
+    def process_url(self: Any, url: str, retrieve: bool=False) -> None:  # type: ignore[explicit-any]  # body is a verbatim copy from setuptools driving pip internals that do not survive static typing
         """Evaluate a URL as a possible download, and maybe retrieve it"""
         if url in self.scanned_urls and not retrieve:
             return
@@ -228,13 +228,14 @@ def patch_pkg_resources_requirement_contains() -> None:
     We want to compare normalized names.
     """
     try:
+        from packaging.version import Version
         from pkg_resources import Distribution, Requirement
 
         from zc.buildout.utils import normalize_name
     except ImportError:
         return
 
-    def __contains__(self: Requirement, item: Any) -> bool:
+    def __contains__(self: Requirement, item: Distribution | Version | str) -> bool:
         if isinstance(item, Distribution):
             # if item.key != self.key:
             if normalize_name(item.key) != normalize_name(self.key):

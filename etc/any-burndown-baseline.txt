@@ -9,15 +9,10 @@ src/zc/buildout/configfiles.py:298
 src/zc/buildout/configfiles.py:84
 src/zc/buildout/configsetup.py:247
 src/zc/buildout/configsetup.py:263
-src/zc/buildout/easy_install.py:1044
-src/zc/buildout/easy_install.py:248
 src/zc/buildout/parts.py:141
 src/zc/buildout/parts.py:185
 src/zc/buildout/parts.py:226
 src/zc/buildout/parts.py:298
-src/zc/buildout/patches.py:105
-src/zc/buildout/patches.py:237
-src/zc/buildout/patches.py:27
 src/zc/buildout/utils.py:36
 src/zc/buildout/uv_resolve.py:287
 src/zc/buildout/uv_resolve.py:293
