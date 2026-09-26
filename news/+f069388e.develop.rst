@@ -1,0 +1,1 @@
+Phase 0 probe of PLAN_UV_DEP_REMOVAL complete: in installer = uv mode the legacy package index is never instantiated, no pip subprocess fires, and the startup import ground truth is recorded (pkg_resources via 11 modules, setuptools via 5) with per-module attribution. Plan boxes ticked with evidence. [Fizz]
