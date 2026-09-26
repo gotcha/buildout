@@ -29,17 +29,43 @@ trailers; gates close at an exact head SHA; the operator lands.
 
 ## Phase 0 — Probe (pure verification, no product change)
 
-- [ ] Prove uv mode never instantiates the legacy index: instrument
-      `AllowHostsPackageIndex.__init__` (or an import-time counter) and
-      drive the ten-lane live harness in uv mode; expected: zero hits.
-      Static support: `_package_index` is only referenced by
-      `easy_install.py` and `patches.py`.
-- [ ] Record which `pkg_resources`/`setuptools` imports load in a uv-mode
-      run (`python -X importtime` or an import hook on a representative
-      lane). This is the removal checklist ground truth.
-- [ ] Assert no pip subprocess fires in any uv-mode lane (uv mode must
-      use only the uv binary; install_backend.py's pip branch stays
-      unreachable).
+Done on the `uv-dep-removal` branch worktree at devenv HEAD 50ec3397,
+2026-09-26. Probe: import hook + `AllowHostsPackageIndex.__init__`
+counter + subprocess argv recorder, injected by a sitecustomize on
+PYTHONPATH (scripts preserved in the agent workspace under
+RESEARCH/uvprobe-phase0/). Lanes driven in uv mode: empty-parts,
+annotate, recipe+egg from PyPI, develop egg, rerun; plus a pip-mode
+recipe lane as control. Artifacts:
+/tmp/verify-buildout-artifacts-phase0b-20260926-222924/.
+
+- [x] Prove uv mode never instantiates the legacy index: zero
+      `AllowHostsPackageIndex` hits in every uv lane. Probe arming
+      proven separately (a direct instantiation under the probe logs).
+      The pip-mode control also shows zero hits: recipe resolution on
+      these lanes goes through the pip/uv subprocess, so the legacy
+      index class is dormant even in pip mode. Static support
+      confirmed: `_package_index` is referenced only by
+      `easy_install.py` (definition at :373, instantiation via
+      `_get_index` at :391) and `patches.py` (:75).
+- [x] Record which `pkg_resources`/`setuptools` imports load in a
+      uv-mode run: the import hook attributes each import to the
+      importing zc.buildout module. Ground truth (identical in every
+      lane; these are startup-time, module-top-level imports):
+      `pkg_resources` is imported by `__init__`, `_package_index`,
+      `buildout`, `cli`, `configsetup`, `easy_install`, `errors`,
+      `install_backend`, `parts`, `patches`, `scripts` (11 modules).
+      `setuptools` is pulled by `__init__` (:21, warning hygiene),
+      `_package_index`, `easy_install` (:49 archive_util, :50 setopt,
+      :55 wheel), `develop` (:31 setopt), and `install_backend`
+      (:47 archive_util, :50 wheel). Consequence for Phase 1: the
+      `__init__.py` import can only drop once `easy_install.py` and
+      `develop.py` stop importing setuptools at module top in uv mode
+      (buildout.py imports both unconditionally at startup).
+- [x] Assert no pip subprocess fires in any uv-mode lane: zero
+      `python -m pip` spawns in all uv lanes; uv lanes spawn only the
+      uv binary (`uv --version`, `uv pip compile`, `uv pip install`).
+      Control lane spawned exactly one `python -m pip install`,
+      proving the detector fires.
 
 ## Phase 1 — Seam stdlib swaps (uv path)
 
