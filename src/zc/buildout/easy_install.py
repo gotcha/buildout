@@ -74,7 +74,6 @@ from zc.buildout.errors import (
 )
 from zc.buildout.install_backend import (
     UNPACKERS,
-    BuildoutWheel,
     _dist_info_dirname,
     _editable_scan_result,
     _ensure_dest_dir,
@@ -84,7 +83,6 @@ from zc.buildout.install_backend import (
     _is_url,
     _lines_declare_namespace,
     _maybe_add_no_python_version_warning,
-    _maybe_copy_and_rename_wheel,
     _move_dist_into_place,
     _move_record_leftovers,
     _move_to_eggs_dir_and_compile,
@@ -111,7 +109,6 @@ from zc.buildout.install_backend import (
     make_egg_after_pip_install,
     sort_working_set,
     unpack_egg,
-    unpack_wheel,
 )
 from zc.buildout.scripts import (
     _collect_req_scripts,

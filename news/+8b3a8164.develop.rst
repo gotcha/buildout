@@ -1,0 +1,1 @@
+Removed dead code from the install seam: unpack_wheel, BuildoutWheel, and _maybe_copy_and_rename_wheel had no callers (their last call site was commented out), so the setuptools.wheel import leaves install_backend.py without a replacement port. First step of the uv-mode dependency removal plan. [Fizz]
