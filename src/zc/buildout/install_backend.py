@@ -37,7 +37,6 @@ import subprocess
 import sys
 import tempfile
 import urllib.parse
-import zipfile
 from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from importlib import metadata
@@ -47,7 +46,6 @@ import pkg_resources
 import setuptools.archive_util
 from packaging.utils import canonicalize_name
 from pkg_resources import Distribution
-from setuptools.wheel import Wheel
 
 import zc.buildout
 import zc.buildout.rmtree
@@ -671,19 +669,6 @@ def unpack_egg(location: str, dest: str) -> None:
     setuptools.archive_util.unpack_archive(location, dest)
 
 
-def unpack_wheel(location: str, dest: str) -> None:
-    wheel = Wheel(location)
-    # The egg_name method returns a string that includes:
-    # platform = None if self.platform == 'any' else get_platform()
-    # get_platform is imported from distutils.util, vendorized
-    # by setuptools, but this is really just: sysconfig.get_platform()
-    # This is the platform where Python got compiled.  This may differ
-    # from the current platform, and this trips up the logic in
-    # pkg_resources.compatible_platforms.  We have a patch for that.
-    # See the docstring of the Environment class above.
-    wheel.install_as_egg(os.path.join(dest, wheel.egg_name()))
-
-
 UNPACKERS = {
     '.egg': unpack_egg,
     # '.whl': setuptools.archive_util.unpack_zipfile,
@@ -708,113 +693,6 @@ def _get_matching_dist_in_location(dist: pkg_resources.DistInfoDistribution | pk
     dist_infos = [ (normalize_name(d.project_name), d.parsed_version) for d in dists ]
     if dist_infos == [(normalize_name(dist.project_name), dist.parsed_version)]:
         return dists.pop()
-
-
-class BuildoutWheel(Wheel):
-    """Extension for Wheel class to get the actual project name."""
-
-    # setuptools.wheel.Wheel.__init__ sets this dynamically via setattr
-    # from the wheel filename, which is invisible to static analysis.
-    project_name: str
-
-    def get_project_name(self) -> str | None:
-        """Get project name by looking in the .dist-info of the wheel.
-
-        This is adapted from the Wheel.install_as_egg method and the methods
-        it calls.
-
-        Ideally, this would be the same as self.project_name.
-        """
-        with zipfile.ZipFile(self.filename) as zf:
-            dist_info = self.get_dist_info(zf)
-
-            with zf.open(posixpath.join(dist_info, 'METADATA')) as fp:
-                value = fp.read().decode('utf-8')
-                metadata = email.parser.Parser().parsestr(value)
-
-            return metadata.get("Name")
-
-
-def _maybe_copy_and_rename_wheel(dist: pkg_resources.DistInfoDistribution | pkg_resources.Distribution, dest: str) -> pkg_resources.Distribution | pkg_resources.DistInfoDistribution | None:
-    from zc.buildout.easy_install import _dist_location
-    """Maybe copy and rename wheel.
-
-    Return the new dist or None.
-
-    So why do we do this?  We need to check a special case:
-
-    - zest_releaser-9.4.0-py3-none-any.whl with an underscore results in:
-      zest_releaser-9.4.0-py3.13.egg
-      In the resulting `bin/fullrease` script the zest.releaser distribution
-      is not found.
-    - So in this function we copy and rename the wheel to:
-      zest.releaser-9.4.0-py3-none-any.whl with a dot, which results in:
-      zest.releaser-9.4.0-py3.13.egg
-      The resulting `bin/fullrease` script works fine.
-
-    See https://github.com/buildout/buildout/issues/686
-    So check if we should rename the wheel before handling it.
-
-    At first, source dists seemed to not have this problem.  Or not anymore,
-    after some fixes in Buildout last year:
-
-    - zest_releaser-9.4.0.tar.gz with an underscore results in (in my case):
-      zest_releaser-9.4.0-py3.13-macosx-14.7-x86_64.egg
-      And this works fine, despite having an underscore.
-    - But: products_cmfplone-6.1.1.tar.gz with an underscore leads to
-      products_cmfplone-6.1.1-py3.13-macosx-14.7-x86_64.egg
-      and with this, a Plone instance totally fails to start.
-      Ah, but this is only because the generated zope.conf contains a
-      temporarystorage option which is added because plone.recipe.zope2instance
-      could not determine the Products.CMFPlone version.  If I work around that,
-      the instance actually starts.
-
-    The zest.releaser egg generated from the source dist has a dist-info directory:
-    zest_releaser-9.4.0-py3.13-macosx-14.7-x86_64.dist-info
-    The egg generated from any of the two wheels only has an EGG-INFO directory.
-    I guess the dist-info directory somehow helps.
-    It is there because our make_egg_after_pip_install function, which only
-    gets called after installing a source dist, has its own home grown way
-    of creating an egg.
-    """
-    # The dists handled in this module are installed or downloadable dists,
-    # which always live on disk and thus have a location (see _dist_location).
-    location = _dist_location(dist)
-    wheel = BuildoutWheel(location)
-    actual_project_name = wheel.get_project_name()
-    if actual_project_name and wheel.project_name == actual_project_name:
-        return
-    # A valid wheel always has a Name in its METADATA, so at this point we
-    # know the actual project name (otherwise there is nothing to rename to).
-    assert actual_project_name is not None
-    filename = os.path.basename(location)
-    new_filename = filename.replace(wheel.project_name, actual_project_name)
-    if filename == new_filename:
-        return
-    logger.debug("Renaming wheel %s to %s", location, new_filename)
-    tmp_wheeldir = tempfile.mkdtemp()
-    try:
-        new_location = os.path.join(tmp_wheeldir, new_filename)
-        shutil.copy(location, new_location)
-        # Now we create a clone of the original distribution,
-        # but with the new location and the wanted project name.
-        new_dist = Distribution(
-            new_location,
-            project_name=actual_project_name,
-            version=dist.version,
-            py_version=dist.py_version,
-            platform=dist.platform,
-            precedence=dist.precedence,
-        )
-        # We were called by _move_to_eggs_dir_and_compile.
-        # Now we call it again with the new dist.
-        # I tried simply returning new_dist, but then it immediately
-        # got removed because we remove its temporary directory.
-        return _move_to_eggs_dir_and_compile(new_dist, dest)
-
-    finally:
-        # Remember that temporary directories must be removed
-        zc.buildout.rmtree.rmtree(tmp_wheeldir)
 
 
 def _ensure_dest_dir(dest: str) -> None:
@@ -862,14 +740,6 @@ def _unpack_dist_to_tmp(dist: pkg_resources.DistInfoDistribution | pkg_resources
         if ext in UNPACKERS:
             # TODO Maybe simply always call pip install for all dists, without
             # checking for unpackers.
-            # TODO Maybe never rename a wheel or other dist anymore.
-            # if ext == '.whl':
-            #     logger.debug("Checking if wheel needs to be renamed.")
-            #     new_dist = _maybe_copy_and_rename_wheel(dist, dest)
-            #     if new_dist is not None:
-            #         logger.debug("Found dist after renaming wheel: %s", new_dist)
-            #         return new_dist
-            #     logger.debug("Renaming wheel was not needed or did not help.")
             unpacker = UNPACKERS[ext]
             logger.debug("Calling unpacker for %s on %s", ext, dist.location)
             unpacker(_dist_location(dist), tmp_loc)
