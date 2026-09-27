@@ -1,0 +1,10 @@
+``easy_install`` and ``develop`` no longer import ``setuptools`` at
+module level.  The source-build unpack now uses the stdlib
+``unpack_archive`` from ``zc.buildout.install_backend``, the two
+``setuptools.command.setopt.edit_config`` calls moved behind
+function-local imports on the legacy pip-mode paths, and the unused
+``setuptools.wheel.Wheel`` import is gone.  Importing
+``zc.buildout.buildout`` in uv mode no longer loads
+``setuptools.archive_util``, ``setuptools.command.setopt`` or
+``setuptools.wheel`` through these modules.
+[Fizz]
