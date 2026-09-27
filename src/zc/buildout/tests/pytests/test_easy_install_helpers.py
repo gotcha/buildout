@@ -3,6 +3,8 @@ import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools 
 import logging
 import os
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 
 import pkg_resources
@@ -58,6 +60,7 @@ from zc.buildout.easy_install import (
     _warn_missing_scripts,
     _working_set_or_default,
     _write_build_ext_config,
+    unpack_egg,
 )
 
 BASE_ARGS = [sys.executable, '-m', 'pip', 'install', '--no-deps', '-t', '/dest']
@@ -1445,6 +1448,61 @@ def test_unpack_dist_to_tmp_falls_back_to_pip(tmp_path, monkeypatch, caplog):
     assert tmp_loc == str(tmp_path / 'demo-1.0.egg')
     assert installed == [('/x/demo-1.0.zip', str(tmp_path))]
     assert 'Calling pip install for .zip' in caplog.text
+
+
+def test_unpack_egg_unpacks_zip_archive(tmp_path):
+    location = tmp_path / 'demo-1.0.egg'
+    with zipfile.ZipFile(location, 'w') as archive:
+        archive.writestr('demo/__init__.py', 'x = 1\n')
+        archive.writestr('demo/data.txt', 'payload')
+        info = zipfile.ZipInfo('demo/run.sh')
+        info.external_attr = 0o755 << 16
+        archive.writestr(info, '#!/bin/sh\n')
+        archive.writestr('/absolute.txt', 'nope')
+        archive.writestr('../traversal.txt', 'nope')
+    dest = tmp_path / 'out'
+
+    unpack_egg(str(location), str(dest))
+
+    assert (dest / 'demo' / '__init__.py').read_text() == 'x = 1\n'
+    assert (dest / 'demo' / 'data.txt').read_text() == 'payload'
+    mode = (dest / 'demo' / 'run.sh').stat().st_mode
+    assert mode & 0o111  # unix exec bits restored
+    assert not (dest / 'absolute.txt').exists()
+    assert not (tmp_path / 'traversal.txt').exists()
+
+
+def test_unpack_egg_copies_directory(tmp_path):
+    location = tmp_path / 'demo-1.0.egg'
+    (location / 'demo').mkdir(parents=True)
+    (location / 'demo' / 'mod.py').write_text('y = 2\n')
+    dest = tmp_path / 'out'
+
+    unpack_egg(str(location), str(dest))
+
+    assert (dest / 'demo' / 'mod.py').read_text() == 'y = 2\n'
+
+
+def test_unpack_egg_unpacks_tar_archive(tmp_path):
+    source = tmp_path / 'src' / 'demo'
+    source.mkdir(parents=True)
+    (source / 'mod.py').write_text('z = 3\n')
+    location = tmp_path / 'demo-1.0.egg'
+    with tarfile.open(location, 'w:gz') as archive:
+        archive.add(str(source), arcname='demo')
+    dest = tmp_path / 'out'
+
+    unpack_egg(str(location), str(dest))
+
+    assert (dest / 'demo' / 'mod.py').read_text() == 'z = 3\n'
+
+
+def test_unpack_egg_rejects_unrecognized_archive(tmp_path):
+    location = tmp_path / 'demo-1.0.egg'
+    location.write_bytes(b'not an archive')
+
+    with pytest.raises(zc.buildout.UserError):
+        unpack_egg(str(location), str(tmp_path / 'out'))
 
 
 def test_move_dist_into_place_renames_and_returns_new_dist(
