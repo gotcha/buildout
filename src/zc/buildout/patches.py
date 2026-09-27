@@ -14,6 +14,11 @@
 
 from __future__ import annotations
 
+import importlib.abc
+import importlib.machinery
+import sys
+from collections.abc import Sequence
+from types import ModuleType
 from typing import Any
 
 
@@ -216,9 +221,6 @@ def patch_PackageIndex() -> None:
     PackageIndex.process_url = process_url
 
 
-patch_PackageIndex()
-
-
 
 def patch_pkg_resources_requirement_contains() -> None:
     """Patch pkg_resources.Requirement contains method.
@@ -257,9 +259,6 @@ def patch_pkg_resources_requirement_contains() -> None:
             return False
 
     Requirement.__contains__ = __contains__
-
-
-patch_pkg_resources_requirement_contains()
 
 
 def patch_pkg_resources_working_set_find() -> None:
@@ -349,4 +348,86 @@ def patch_pkg_resources_working_set_find() -> None:
     WorkingSet.find = find
 
 
-patch_pkg_resources_working_set_find()
+_applying = False
+
+
+def apply_patches() -> None:
+    """Apply every pkg_resources patch; safe to call repeatedly.
+
+    Each patch function is idempotent and silently does nothing when
+    pkg_resources (or, for the index patch, pip's internals) cannot be
+    imported.  Never call this from a uv-mode code path: importing
+    pkg_resources to patch it would defeat the goal of never loading
+    pkg_resources in uv mode.
+    """
+    global _applying
+    if _applying:
+        # Re-entrant import triggered while applying: the outer call
+        # completes the work.
+        return
+    _applying = True
+    try:
+        patch_PackageIndex()
+        patch_pkg_resources_requirement_contains()
+        patch_pkg_resources_working_set_find()
+    finally:
+        _applying = False
+
+
+class _PatchTriggerLoader(importlib.abc.Loader):
+    """Loader wrapper that applies the patches right after exec."""
+
+    def __init__(self, loader: importlib.abc.Loader) -> None:
+        self._loader = loader
+
+    def __getattr__(self, name: str):
+        return getattr(self._loader, name)
+
+    def exec_module(self, module: ModuleType) -> None:
+        self._loader.exec_module(module)
+        apply_patches()
+
+
+class _PatchTriggerFinder(importlib.abc.MetaPathFinder):
+    """Apply the pkg_resources patches when pkg_resources is imported.
+
+    The patches used to run when this module was imported, which pulled
+    pkg_resources into every process that imported zc.buildout, uv mode
+    included.  Triggering on the first import of pkg_resources instead
+    keeps the legacy (pip) behavior bit-identical -- the patches are in
+    place before any pkg_resources object is used -- while uv mode,
+    which never imports pkg_resources, never pays for it.
+
+    ``zc.buildout._package_index`` is a second trigger: it imports
+    pkg_resources at its own top, and if it is imported directly, the
+    pkg_resources trigger fires while _package_index is only partially
+    initialized, so its own patch (``patch_PackageIndex``) is retried
+    once the module finishes loading.
+    """
+
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None = None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        if fullname not in ('pkg_resources', 'zc.buildout._package_index'):
+            return None
+        spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
+        if spec is None or spec.loader is None:
+            return None
+        spec.loader = _PatchTriggerLoader(spec.loader)
+        return spec
+
+
+def install_import_hook() -> None:
+    """Install the trigger once; importing this module installs it.
+
+    The finder must sit ahead of PathFinder, or PathFinder resolves
+    pkg_resources first and the wrapper never gets consulted.
+    """
+    if not any(isinstance(finder, _PatchTriggerFinder) for finder in sys.meta_path):
+        sys.meta_path.insert(0, _PatchTriggerFinder())
+
+
+install_import_hook()
