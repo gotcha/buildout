@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import logging
 import os
 import pdb  # noqa: T100 - pdb behavior is under test (monkeypatched below)
@@ -453,44 +454,26 @@ def test_default_versions_empty_section_name_uses_plain_dict():
     assert versions['zc.recipe.egg'].value == '>=2.0.6'
 
 
-class _StubDist:
-    def __init__(self, version):
-        self.version = version
-
-
-class _StubWorkingSet:
-    def __init__(self, dists):
-        self._dists = dists
-
-    def find(self, req):
-        return self._dists.get(req.project_name)
-
-
 def test_pin_buildout_version_pins_running_dist():
     versions: dict = {}
     _pin_buildout_version(versions)
-    dist = pkg_resources.working_set.find(
-        pkg_resources.Requirement.parse('zc-buildout'))
-    if dist is None:
-        dist = pkg_resources.working_set.find(
-            pkg_resources.Requirement.parse('zc.buildout'))
-    assert dist is not None
-    assert versions['zc.buildout'].value == '>=' + dist.version
+    running = importlib.metadata.version('zc.buildout')
+    assert versions['zc.buildout'].value == '>=' + running
     assert versions['zc.buildout'].source == 'DEFAULT_VALUE'
 
 
-def test_pin_buildout_version_falls_back_to_dotted_name(monkeypatch):
+def test_pin_buildout_version_uses_running_version(monkeypatch):
     monkeypatch.setattr(
-        pkg_resources, 'working_set',
-        _StubWorkingSet({'zc.buildout': _StubDist('9.9')}))
+        importlib.metadata, 'version', lambda name: '9.9')
     versions: dict = {}
     _pin_buildout_version(versions)
     assert versions['zc.buildout'].value == '>=9.9'
 
 
 def test_pin_buildout_version_without_dist_raises(monkeypatch):
-    monkeypatch.setattr(
-        pkg_resources, 'working_set', _StubWorkingSet({}))
+    def _missing(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+    monkeypatch.setattr(importlib.metadata, 'version', _missing)
     with pytest.raises(ValueError, match='Could not find distribution'):
         _pin_buildout_version({})
 

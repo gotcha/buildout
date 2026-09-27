@@ -28,9 +28,8 @@ import itertools
 import logging
 import os
 from collections.abc import Callable, Mapping, MutableMapping
+from importlib import metadata
 from typing import TYPE_CHECKING
-
-import pkg_resources
 
 import zc.buildout
 import zc.buildout.easy_install
@@ -226,22 +225,15 @@ def _apply_cl_extends(
 def _pin_buildout_version(versions: dict[str, SectionKey]) -> None:
     """Pin ``zc.buildout`` to at least the running version."""
     # Prevent downgrading of zc.buildout itself due to prefer-final.
-    ws = pkg_resources.working_set
-    dist = ws.find(
-        pkg_resources.Requirement.parse('zc-buildout')
-    )
-    if dist is None:
-        # older setuptools
-        dist = ws.find(
-            pkg_resources.Requirement.parse('zc.buildout')
+    # importlib.metadata normalizes the dotted/dashed project name.
+    try:
+        minimum = metadata.version('zc.buildout')
+    except metadata.PackageNotFoundError:
+        # This would be really strange, but I prefer an explicit
+        # failure here over an unclear error later.
+        raise ValueError(
+            "Could not find distribution for zc.buildout in working set."
         )
-        if dist is None:
-            # This would be really strange, but I prefer an explicit
-            # failure here over an unclear error later.
-            raise ValueError(
-                "Could not find distribution for zc.buildout in working set."
-            )
-    minimum = dist.version
     versions['zc.buildout'] = SectionKey(f'>={minimum}', 'DEFAULT_VALUE')
 
 

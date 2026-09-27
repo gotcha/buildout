@@ -21,10 +21,16 @@ a user error.
 from __future__ import annotations
 
 from collections.abc import Iterable
-
-import pkg_resources
+from typing import TYPE_CHECKING
 
 import zc.buildout
+
+if TYPE_CHECKING:
+    # Type annotations only: with ``from __future__ import annotations``
+    # these are never evaluated at runtime, so uv mode never needs
+    # pkg_resources for this module. Callers still pass pkg_resources
+    # objects built by the legacy (pip) code paths.
+    import pkg_resources
 
 
 class IncompatibleConstraintError(zc.buildout.UserError):

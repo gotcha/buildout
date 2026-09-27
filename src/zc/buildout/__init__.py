@@ -30,8 +30,11 @@ except ImportError:
 import pip
 
 import warnings
-from pkg_resources import PkgResourcesDeprecationWarning
-warnings.filterwarnings('ignore', category=PkgResourcesDeprecationWarning)
+# The PkgResourcesDeprecationWarning category filter used to live here,
+# but importing pkg_resources to name the category defeats the uv-mode
+# goal of never loading pkg_resources. The doctest suite's
+# pkg_resources_deprecated output normalizer (testing.py) already covers
+# the legacy-mode occurrences.
 warnings.filterwarnings('ignore', message='Setuptools is replacing distutils.')
 
 import contextlib
