@@ -1,0 +1,6 @@
+The pkg_resources patches in zc.buildout.patches (Requirement contains,
+WorkingSet find, PackageIndex process_url) are no longer applied at
+zope.buildout import time.  A small import hook now applies them the
+moment pkg_resources is actually imported, so pip mode keeps the exact
+same patched behavior while uv mode, which never imports pkg_resources,
+never loads it just to patch it. [Fizz]
