@@ -1,0 +1,7 @@
+The legacy egg unpacker no longer uses ``setuptools.archive_util``:
+``zc.buildout.install_backend`` now unpacks egg archives (zip, tar, or a
+pre-built directory) with the stdlib only.  The replacement keeps the
+setuptools semantics of skipping absolute or traversing archive entries
+and of restoring unix permission bits on extracted files.  This removes
+the ``setuptools`` import from the uv-mode install backend.
+[Fizz]

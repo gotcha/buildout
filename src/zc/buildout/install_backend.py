@@ -35,15 +35,16 @@ import posixpath
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.parse
+import zipfile
 from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
 
 import pkg_resources
-import setuptools.archive_util
 from packaging.utils import canonicalize_name
 from pkg_resources import Distribution
 
@@ -661,17 +662,72 @@ def make_egg_after_pip_install(
     return [egg_dir]
 
 
+def _unpack_zipfile(location: str, dest: str) -> None:
+    """Unpack a zip archive into ``dest``.
+
+    Mirrors ``setuptools.archive_util.unpack_zipfile``: entries with
+    absolute or traversing paths are skipped, and unix permission bits
+    are restored on extracted files.
+    """
+    with zipfile.ZipFile(location) as archive:
+        for info in archive.infolist():
+            name = info.filename
+            if name.startswith('/') or '..' in name.split('/'):
+                continue
+            target = os.path.join(dest, *name.split('/'))
+            if name.endswith('/'):
+                os.makedirs(target, exist_ok=True)
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with archive.open(info) as source, open(target, 'wb') as outfile:
+                shutil.copyfileobj(source, outfile)
+            unix_attributes = info.external_attr >> 16
+            if unix_attributes:
+                os.chmod(target, unix_attributes)
+
+
+def _unpack_tarfile(location: str, dest: str) -> None:
+    """Unpack a tar archive into ``dest``.
+
+    The ``data`` filter gives what setuptools.archive_util implements by
+    hand: no absolute paths, no traversal, no device nodes, no chowning.
+    """
+    with tarfile.open(location) as archive:
+        try:
+            archive.extractall(dest, filter='data')
+        except TypeError:
+            # Interpreters older than 3.9.17 lack the filter argument.
+            archive.extractall(dest)
+
+
+def unpack_archive(location: str, dest: str) -> None:
+    """Unpack ``location`` into ``dest`` using only the stdlib.
+
+    Drop-in replacement for ``setuptools.archive_util.unpack_archive``:
+    directories are copied, zip and tar archives are extracted, and
+    anything else is an error.
+    """
+    if os.path.isdir(location):
+        shutil.copytree(location, dest, dirs_exist_ok=True)
+    elif zipfile.is_zipfile(location):
+        _unpack_zipfile(location, dest)
+    elif tarfile.is_tarfile(location):
+        _unpack_tarfile(location, dest)
+    else:
+        raise zc.buildout.UserError(f'Not a recognized archive type: {location}')
+
+
 def unpack_egg(location: str, dest: str) -> None:
     # Buildout 2 no longer installs zipped eggs,
     # so we always want to unpack it.
     # XXX The next line seems double now.
     # dest = os.path.join(dest, os.path.basename(location))
-    setuptools.archive_util.unpack_archive(location, dest)
+    unpack_archive(location, dest)
 
 
 UNPACKERS = {
     '.egg': unpack_egg,
-    # '.whl': setuptools.archive_util.unpack_zipfile,
+    # '.whl': _unpack_zipfile,
 }
 
 
