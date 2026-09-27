@@ -1,0 +1,7 @@
+Phase 1 of the uv dependency removal plan is recorded complete with
+evidence: the archive unpacker is stdlib-only, the dead
+``setuptools.wheel`` seam was deleted instead of ported, and
+``easy_install``/``develop`` import ``setuptools`` lazily.  The
+``__init__`` setuptools import is documented as deferred to Phase 3,
+blocked on the ``_package_index`` vendoring.
+[Fizz]

@@ -69,17 +69,46 @@ recipe lane as control. Artifacts:
 
 ## Phase 1 — Seam stdlib swaps (uv path)
 
-- [ ] Replace `setuptools.archive_util.unpack_archive`
+Done in three units; probe lanes rerun per unit against the Phase 0
+ground truth (final artifacts:
+/tmp/verify-buildout-artifacts-p1u3-20260927-065026).
+
+- [x] Replace `setuptools.archive_util.unpack_archive`
       (install_backend.py) with shutil/zipfile/tarfile handling that
       preserves current semantics (incl. the unpack_zipfile comment at
       :644).
-- [ ] Replace `setuptools.wheel.Wheel` usage (install_backend.py:671)
+      Done in fa2ce89d: stdlib `unpack_archive` (dir/zip/tar drivers,
+      absolute/traversal entries skipped, unix modes restored,
+      UserError on unrecognized) verified against the setuptools
+      75.8.2 source; the `.whl` comment now points at
+      `_unpack_zipfile`; four new pytests cover the seam.
+- [x] Replace `setuptools.wheel.Wheel` usage (install_backend.py:671)
       with `packaging`-based name/metadata parsing (packaging is already
       a dependency).
+      Done in fd497f42 by deletion instead: `unpack_wheel`,
+      `BuildoutWheel` and `_maybe_copy_and_rename_wheel` had zero
+      callers (the only call site was commented out, no test
+      references), so 170 lines of dead code went away and no
+      packaging-based port was needed. easy_install.py's remaining
+      dead `Wheel` import went in c6c7f509.
 - [ ] Drop the bare `import setuptools` warning-hygiene import in
       `__init__.py` once nothing else pulls setuptools in uv mode.
-- [ ] Gate: unit ladder green; live lanes regression/develop/uv-resolve
+      Deferred to Phase 3 on evidence: after units 1-3 the probe still
+      attributes `setuptools` to `_package_index` (imported top-level
+      by easy_install.py because `AllowHostsPackageIndex` inherits
+      from `PackageIndex` at class-definition time) and to
+      `__init__.py` itself. `_package_index` is repointed to the
+      vendored pkg_resources in Phase 3, which is what unblocks this.
+      easy_install.py and develop.py top-level setuptools imports
+      (the Phase 0 precondition) are gone as of c6c7f509.
+- [x] Gate: unit ladder green; live lanes regression/develop/uv-resolve
       identical vs pre-phase base.
+      Per unit: lint, ty, typecheck-any, complexity and pytest green.
+      `make test` 656/656 and `make test-uv` 652/652 on each unit
+      commit, last on c6c7f509. Probe lanes show the uv-mode import
+      set shrinking by exactly the predicted lines with zero
+      additions, uv-only spawns, and the legacy index never
+      instantiated.
 
 ## Phase 2 — Core pkg_resources layer (both modes benefit)
 
