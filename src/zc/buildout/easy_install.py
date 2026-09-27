@@ -46,13 +46,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pkg_resources
-import setuptools.archive_util
-import setuptools.command.setopt
 from packaging import specifiers
 from packaging.utils import canonicalize_name, is_normalized_name
 from packaging.version import Version
 from pkg_resources import Distribution
-from setuptools.wheel import Wheel
 
 import zc.buildout
 import zc.buildout.rmtree
@@ -108,6 +105,7 @@ from zc.buildout.install_backend import (
     install_pinned_dists,
     make_egg_after_pip_install,
     sort_working_set,
+    unpack_archive,
     unpack_egg,
 )
 from zc.buildout.scripts import (
@@ -1199,8 +1197,7 @@ def _initial_path(path: list[str] | None) -> list[str]:
 
 def _unpack_dist_for_build(dist: pkg_resources.Distribution, build_tmp: str) -> str:
     """Unpack ``dist`` into ``build_tmp`` and return its setup base dir."""
-    setuptools.archive_util.unpack_archive(dist.location,
-                                           build_tmp)
+    unpack_archive(_dist_location(dist), build_tmp)
     base = build_tmp
     if not os.path.exists(os.path.join(build_tmp, 'setup.py')):
         setups = glob.glob(
@@ -1225,6 +1222,9 @@ def _unpack_dist_for_build(dist: pkg_resources.Distribution, build_tmp: str) -> 
 
 def _write_build_ext_config(base: str, build_ext: dict[str, str]) -> None:
     """Create ``setup.cfg`` in ``base`` if missing and set ``build_ext``."""
+    # Local import: only the legacy source-build path needs setuptools,
+    # and it must not load when the module is imported in uv mode.
+    import setuptools.command.setopt
     setup_cfg = os.path.join(base, 'setup.cfg')
     if not os.path.exists(setup_cfg):
         with open(setup_cfg, 'w'):
