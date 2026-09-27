@@ -1619,7 +1619,7 @@ def test_unpack_dist_for_build_returns_build_tmp_for_top_level_setup(
     build_tmp = tmp_path / 'unpacked'
     build_tmp.mkdir()
     monkeypatch.setattr(
-        'setuptools.archive_util.unpack_archive', fake_unpack)
+        'zc.buildout.easy_install.unpack_archive', fake_unpack)
 
     base = _unpack_dist_for_build(dist, str(build_tmp))
 
@@ -1636,7 +1636,7 @@ def test_unpack_dist_for_build_finds_setup_in_single_subdir(
     build_tmp = tmp_path / 'unpacked'
     build_tmp.mkdir()
     monkeypatch.setattr(
-        'setuptools.archive_util.unpack_archive', fake_unpack)
+        'zc.buildout.easy_install.unpack_archive', fake_unpack)
 
     base = _unpack_dist_for_build(_build_dist(tmp_path), str(build_tmp))
 
@@ -1646,7 +1646,7 @@ def test_unpack_dist_for_build_finds_setup_in_single_subdir(
 def test_unpack_dist_for_build_warns_and_keeps_base_without_setup(
         tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(
-        'setuptools.archive_util.unpack_archive',
+        'zc.buildout.easy_install.unpack_archive',
         lambda filename, extract_dir: None)
     build_tmp = tmp_path / 'unpacked'
     build_tmp.mkdir()
@@ -1671,7 +1671,7 @@ def test_unpack_dist_for_build_raises_on_multiple_setups(
     build_tmp = tmp_path / 'unpacked'
     build_tmp.mkdir()
     monkeypatch.setattr(
-        'setuptools.archive_util.unpack_archive', fake_unpack)
+        'zc.buildout.easy_install.unpack_archive', fake_unpack)
 
     with pytest.raises(distutils.errors.DistutilsError) as exc:
         _unpack_dist_for_build(_build_dist(tmp_path), str(build_tmp))

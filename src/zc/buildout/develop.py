@@ -28,8 +28,6 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-import setuptools.command.setopt
-
 import zc.buildout.rmtree
 
 logger = logging.getLogger('zc.buildout.easy_install')
@@ -242,6 +240,9 @@ def develop(setup: str, dest: str,
                 with open(setup_cfg, 'w'):
                     pass  # create the empty file that edit_config expects
                 undo.append(lambda: os.remove(setup_cfg))
+            # Local import: only the legacy develop path needs setuptools,
+            # and it must not load when the module is imported in uv mode.
+            import setuptools.command.setopt
             setuptools.command.setopt.edit_config(
                 setup_cfg, {'build_ext': build_ext})
 
