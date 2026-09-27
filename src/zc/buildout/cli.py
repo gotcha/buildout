@@ -28,9 +28,8 @@ from __future__ import annotations
 
 import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import sys
+from importlib import metadata
 from typing import NoReturn
-
-import pkg_resources
 
 import zc.buildout
 from zc.buildout.utils import print_
@@ -147,11 +146,9 @@ def _help() -> NoReturn:
     sys.exit(0)
 
 def _version() -> NoReturn:
-    dist = pkg_resources.working_set.find(
-        pkg_resources.Requirement.parse('zc.buildout'))
-    # We are running, so zc.buildout is in the working set.
-    assert dist is not None
-    print_(f"buildout version {dist.version}")
+    # We are running, so zc.buildout's dist metadata is on sys.path;
+    # importlib.metadata normalizes the dotted/dashed project name.
+    print_(f"buildout version {metadata.version('zc.buildout')}")
     sys.exit(0)
 
 
