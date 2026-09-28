@@ -1,0 +1,10 @@
+Phase 2 unit 5 of the uv dependency removal plan:
+zc.buildout.install_backend no longer imports pkg_resources at
+module level.  Egg directory naming (egg_name() and the supported
+platform string) is reimplemented with stdlib/packaging equivalents
+that are byte-identical to what pkg_resources produced -- pinned by a
+test table against the real thing -- because egg names land in
+.installed.cfg signatures and generated script sys.path lines.
+The uv-path functions that still exchange pkg_resources-shaped dists
+with easy_install import pkg_resources lazily until the easy_install
+unit lands.  Legacy installer = pip mode is unchanged.  [Fizz]

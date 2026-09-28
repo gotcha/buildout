@@ -56,6 +56,9 @@ if TYPE_CHECKING:
 # pkg_resources precedence constants.  Defined here so the uv path
 # never has to import pkg_resources to name them.
 DEVELOP_DIST = -1  # pkg_resources.DEVELOP_DIST
+CHECKOUT_DIST = 0  # pkg_resources.CHECKOUT_DIST
+SOURCE_DIST = 1  # pkg_resources.SOURCE_DIST
+BINARY_DIST = 2  # pkg_resources.BINARY_DIST
 EGG_DIST = 3  # pkg_resources.EGG_DIST
 
 
