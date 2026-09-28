@@ -34,7 +34,6 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Protocol, TextIO, Union, cast
 
-import pkg_resources
 from packaging import utils as packaging_utils
 
 import zc.buildout.easy_install
@@ -42,6 +41,11 @@ from zc.buildout.easy_install import realpath
 from zc.buildout.utils import bool_option, print_
 
 if TYPE_CHECKING:
+    # pkg_resources is annotation-only here; the runtime use in
+    # _find_upgraded_dists imports it lazily so this module stays
+    # pkg_resources-free on the uv-mode startup path.
+    import pkg_resources
+
     from zc.buildout.buildout import Options
 
 
@@ -371,6 +375,9 @@ def _find_upgraded_dists(
     """Return the dists in ``ws`` for ``projects`` whose loaded module
     lives outside the dist location (i.e. the dist upgrades the active
     version)."""
+    # Local import: ws is pkg_resources-shaped in both modes until
+    # easy_install's uv path is ported; keep module import clean.
+    import pkg_resources
     upgraded = []
     for project in projects:
         canonicalized_name = packaging_utils.canonicalize_name(project)
