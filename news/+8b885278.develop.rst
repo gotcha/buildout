@@ -1,0 +1,12 @@
+Phase 2 unit 4 of the uv dependency removal plan: the legacy package
+index (zc.buildout._package_index, a vendored setuptools
+PackageIndex) is no longer imported in uv mode.  easy_install now
+builds AllowHostsPackageIndex lazily on first use and resolves
+Installer._index through a lazy property, so importing
+easy_install -- including its module-level buildout-dist install --
+never touches the index module; easy_install.AllowHostsPackageIndex
+stays importable through a module __getattr__.  The pkg_resources
+patch trigger no longer applies the PackageIndex patch eagerly;
+patch_PackageIndex now runs from the _package_index import
+trigger, before the module's first use.  Legacy installer = pip
+mode is unchanged.  [Fizz]
