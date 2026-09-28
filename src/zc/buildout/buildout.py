@@ -34,16 +34,15 @@ from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequenc
 from collections.abc import MutableMapping as DictMixin
 from functools import partial
 from hashlib import md5 as md5_original
-from typing import Any, ClassVar, NoReturn, TypeVar, overload
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TypeVar, overload
 
-import pkg_resources
 from packaging import utils as packaging_utils
 
 import zc.buildout
 import zc.buildout.configparser
 import zc.buildout.download
 import zc.buildout.easy_install
-from zc.buildout import _activity
+from zc.buildout import _activity, _workingset
 from zc.buildout.annotations import (
     ConfigData,
     HistoryItem,
@@ -128,6 +127,12 @@ from zc.buildout.parts import (
 )
 from zc.buildout.rmtree import rmtree
 from zc.buildout.utils import _bool_names, _print_options, bool_option, print_
+
+if TYPE_CHECKING:
+    # Annotations only.  The legacy (pip) code paths import
+    # pkg_resources lazily inside the functions that still need it, so
+    # importing this module stays pkg_resources-free in uv mode.
+    import pkg_resources
 
 try:
     hashed = md5_original(b'test')
@@ -387,7 +392,7 @@ class Buildout(DictMixin):
                 # These are the dists running the current buildout, so they
                 # always live on disk.
                 location = zc.buildout.easy_install._dist_location(dist)
-                if dist.precedence == pkg_resources.DEVELOP_DIST:
+                if _workingset.is_develop(dist):
                     dest = os.path.join(self['buildout']['develop-eggs-directory'],
                                         dist.key + '.egg-link')
                     with open(dest, 'w') as fh:
@@ -404,6 +409,11 @@ class Buildout(DictMixin):
                             shutil.copy2(location, dest)
 
             # Create buildout script
+            # Local import: the working set built here feeds
+            # easy_install.sort_working_set and easy_install.scripts,
+            # which stay pkg_resources-shaped in both modes until the
+            # install_backend and easy_install units land.
+            import pkg_resources
             ws = pkg_resources.WorkingSet(entries)
             ws.require('zc.buildout')
             options = self['buildout']
@@ -586,7 +596,12 @@ class Buildout(DictMixin):
                     recipe, 'zc.buildout.uninstall', entry, self)
                 self._logger.info('Running uninstall recipe.')
                 uninstaller(part, installed_part_options[part])
-            except (ImportError, pkg_resources.DistributionNotFound):
+            except (ImportError, *_workingset.not_found_errors()):
+                # ImportError covers entry-point load failures in both
+                # modes; not_found_errors() is the mode's distribution-
+                # not-found (PackageNotFoundError in uv mode, plus
+                # pkg_resources' DistributionNotFound while pip-mode
+                # internals still raise it).
                 pass
 
             # remove created files and directories
@@ -741,8 +756,17 @@ class Buildout(DictMixin):
             if options is None:
                 options = self[part] = {}
             recipe, _entry = _recipe(options)
-            req = pkg_resources.Requirement.parse(recipe)
-            sig = _dists_sig(pkg_resources.working_set.resolve([req]))
+            if zc.buildout.easy_install.installer() == 'uv':
+                req = _workingset.PackagingRequirement(recipe)
+                resolved = _workingset.resolve([req])
+            else:
+                # Legacy mode keeps the pkg_resources resolve
+                # bit-identical; the import stays lazy so uv mode never
+                # pays it.
+                import pkg_resources
+                req = pkg_resources.Requirement.parse(recipe)
+                resolved = pkg_resources.working_set.resolve([req])
+            sig = _dists_sig(resolved)
             options['__buildout_signature__'] = ' '.join(sig)
 
     def _read_installed_part_options(self) -> tuple[dict[str, Options | dict[str, str]], bool]:
@@ -791,8 +815,13 @@ class Buildout(DictMixin):
     def _install(self, part: str) -> str:
         options = self[part]
         recipe, entry = _recipe(options)
-        recipe_class = pkg_resources.load_entry_point(
-            recipe, 'zc.buildout', entry)
+        if zc.buildout.easy_install.installer() == 'uv':
+            recipe_class = _workingset.load_entry_point(
+                recipe, 'zc.buildout', entry)
+        else:
+            import pkg_resources
+            recipe_class = pkg_resources.load_entry_point(
+                recipe, 'zc.buildout', entry)
         installed = recipe_class(self, part, options).install()
         if installed is None:
             installed = []
@@ -919,26 +948,50 @@ class Buildout(DictMixin):
                 else:
                     dest = self['buildout']['eggs-directory']
 
-                zc.buildout.easy_install.install(
-                    specs, dest, path=path,
-                    working_set=pkg_resources.working_set,
-                    links = self['buildout'].get('find-links', '').split(),
-                    index = self['buildout'].get('index'),
-                    newest=self.newest, allow_hosts=self._allow_hosts)
+                if zc.buildout.easy_install.installer() == 'uv':
+                    zc.buildout.easy_install.install(
+                        specs, dest, path=path,
+                        # The facade satisfies the runtime protocol;
+                        # easy_install's annotation widens in its own
+                        # unit of the uv dependency removal plan.
+                        working_set=_workingset.ambient(),  # ty: ignore[invalid-argument-type]
+                        links = self['buildout'].get('find-links', '').split(),
+                        index = self['buildout'].get('index'),
+                        newest=self.newest, allow_hosts=self._allow_hosts)
+                else:
+                    import pkg_resources
+                    zc.buildout.easy_install.install(
+                        specs, dest, path=path,
+                        working_set=pkg_resources.working_set,
+                        links = self['buildout'].get('find-links', '').split(),
+                        index = self['buildout'].get('index'),
+                        newest=self.newest, allow_hosts=self._allow_hosts)
 
                 # Clear cache because extensions might now let us read pages we
                 # couldn't read before.
                 zc.buildout.easy_install.clear_index_cache()
 
-                for ep in pkg_resources.iter_entry_points('zc.buildout.extension'):
+                if zc.buildout.easy_install.installer() == 'uv':
+                    extension_points = _workingset.iter_entry_points(
+                        'zc.buildout.extension')
+                else:
+                    extension_points = pkg_resources.iter_entry_points(
+                        'zc.buildout.extension')
+                for ep in extension_points:
                     ep.load()(self)
 
     def _unload_extensions(self) -> None:
         with _activity('Unloading extensions.'):
             specs = self['buildout'].get('extensions', '').split()
             if specs:
-                for ep in pkg_resources.iter_entry_points(
-                    'zc.buildout.unloadextension'):
+                if zc.buildout.easy_install.installer() == 'uv':
+                    unload_points = _workingset.iter_entry_points(
+                        'zc.buildout.unloadextension')
+                else:
+                    import pkg_resources
+                    unload_points = pkg_resources.iter_entry_points(
+                        'zc.buildout.unloadextension')
+                for ep in unload_points:
                     ep.load()(self)
 
     def _print_picked_versions(self) -> None:
@@ -1127,12 +1180,19 @@ The following list shows the affected packages and their namespaces:
 
 
 def _install_and_load(spec: str, group: str, entry: str, buildout: Buildout) -> Callable:
+    uv_mode = zc.buildout.easy_install.installer() == 'uv'
     try:
         with _activity('Loading recipe %r.', spec):
-            req = pkg_resources.Requirement.parse(spec)
+            if uv_mode:
+                req = _workingset.PackagingRequirement(spec)
+                buildout_options = buildout['buildout']
+                installed = _workingset.find_available(req)
+            else:
+                import pkg_resources
+                pkg_req = pkg_resources.Requirement.parse(spec)
 
-            buildout_options = buildout['buildout']
-            installed = pkg_resources.working_set.find(req)
+                buildout_options = buildout['buildout']
+                installed = pkg_resources.working_set.find(pkg_req)
         if installed is None:
             with _activity('Installing recipe %s.', spec):
                 if buildout.offline:
@@ -1155,15 +1215,21 @@ def _install_and_load(spec: str, group: str, entry: str, buildout: Buildout) -> 
                     links=buildout._links,
                     index=buildout_options.get('index'),
                     path=path,
-                    working_set=pkg_resources.working_set,
+                    # The facade satisfies the runtime protocol; the
+                    # easy_install annotation widens in its own unit.
+                    working_set=(
+                        _workingset.ambient() if uv_mode
+                        else pkg_resources.working_set),  # ty: ignore[invalid-argument-type]
                     newest=buildout.newest,
                     allow_hosts=buildout._allow_hosts,
                     versions=versions,
                     )
 
         with _activity('Loading %s recipe entry %s:%s.', group, spec, entry):
+            if uv_mode:
+                return _workingset.load_entry_point(req.name, group, entry)
             return pkg_resources.load_entry_point(
-                req.project_name, group, entry)
+                pkg_req.project_name, group, entry)
 
     except Exception:
         v = sys.exc_info()[1]
@@ -1555,16 +1621,22 @@ def _dir_hash(dir: str) -> str:
     _dir_hashes[dir] = dir_hash = hash.hexdigest()
     return dir_hash
 
-def _dists_sig(dists: list[pkg_resources.Distribution]) -> list[str]:
+def _dists_sig(dists: list) -> list[str]:
+    # Byte-identical to the pkg_resources-based implementation: the
+    # signatures persist in .installed.cfg, and a silent change would
+    # reinstall every part on the first run after upgrade.  The sort
+    # key reproduces pkg_resources' Distribution.hashcmp ordering and
+    # the dedupe key reproduces its equality (see _workingset.sort_key).
     seen = set()
     result = []
-    for dist in sorted(dists):
-        if dist in seen:
+    for dist in sorted(dists, key=_workingset.sort_key):
+        key = _workingset.sort_key(dist)
+        if key in seen:
             continue
-        seen.add(dist)
-        location = zc.buildout.easy_install._dist_location(dist)
-        if dist.precedence == pkg_resources.DEVELOP_DIST:
-            result.append(dist.project_name + '-' + _dir_hash(location))
+        seen.add(key)
+        location = _workingset.dist_location(dist)
+        if _workingset.is_develop(dist):
+            result.append(_workingset.dist_name(dist) + '-' + _dir_hash(location))
         else:
             result.append(os.path.basename(location))
     return result
