@@ -1,0 +1,9 @@
+Phase 2 unit 3b of the uv dependency removal plan: buildout.py no
+longer imports pkg_resources.  Working-set duties in uv mode (ambient
+set handed to the installer, entry-point lookup, recipe resolution for
+part signatures) go through the new zc.buildout._workingset
+facade, which replicates the pkg_resources side effects that matter —
+grafted dists land on sys.path, and part signatures stay
+byte-identical to the ones already persisted in .installed.cfg
+files.  Legacy installer = pip mode keeps using pkg_resources
+unchanged, via lazy imports.  [Fizz]
