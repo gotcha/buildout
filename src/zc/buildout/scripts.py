@@ -26,9 +26,16 @@ import errno
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING
 
-import pkg_resources
 from packaging.utils import canonicalize_name, is_normalized_name
+
+if TYPE_CHECKING:
+    # Annotations only. Runtime uses import pkg_resources lazily inside
+    # the functions that need it, so importing this module stays
+    # pkg_resources-free on the uv-mode startup path (easy_install
+    # imports this module for its script facade).
+    import pkg_resources
 
 logger = logging.getLogger('zc.buildout.easy_install')
 
@@ -85,6 +92,10 @@ def _find_req_dist(
     Returns ``None`` when the requirement's environment marker excludes
     the current environment; raises ``ValueError`` when no dist matches.
     """
+    # Local import: the working_set passed in is pkg_resources-shaped in
+    # both modes until easy_install's uv path is ported, so this runtime
+    # use stays lazy to keep module import pkg_resources-free.
+    import pkg_resources
     orig_req = pkg_resources.Requirement.parse(req)
     if orig_req.marker and not orig_req.marker.evaluate():
         return None
@@ -117,6 +128,9 @@ def _dist_entry_points(
         dist: pkg_resources.Distribution,
         ) -> list[tuple[str, str, str]]:
     # regular console_scripts entry points
+    # Local import: dist is pkg_resources-shaped in both modes until
+    # easy_install's uv path is ported; keep module import clean.
+    import pkg_resources
     entry_points = []
     for name in pkg_resources.get_entry_map(dist, 'console_scripts'):
         entry_point = dist.get_entry_info('console_scripts', name)
@@ -513,6 +527,9 @@ def _pyscript(path: str, dest: str, rsetup: str, initialization: str='') -> list
 
     if is_win32:
         # generate exe file and give the script a magic name:
+        # Local import: Windows-only legacy path; the cli.exe question is
+        # Phase 4 of the uv dependency removal plan (operator decision).
+        import pkg_resources
         exe = script + '.exe'
         with open(exe, 'wb') as f:
             f.write(
