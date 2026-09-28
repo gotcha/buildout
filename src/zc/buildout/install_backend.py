@@ -31,10 +31,14 @@ import email.parser
 import glob
 import logging
 import os
+import platform as platform_
+import plistlib
 import posixpath
+import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tarfile
 import tempfile
 import urllib.parse
@@ -43,17 +47,117 @@ from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pkg_resources
 from packaging.utils import canonicalize_name
-from pkg_resources import Distribution
+from packaging.version import InvalidVersion
+from packaging.version import parse as parse_version
 
 import zc.buildout
 import zc.buildout.rmtree
-from zc.buildout import uv_resolve
+from zc.buildout import _workingset, uv_resolve
 from zc.buildout.utils import normalize_name
 
+if TYPE_CHECKING:
+    # Annotations only.  The functions that still build or consult
+    # pkg_resources distributions import it lazily, so importing this
+    # module stays pkg_resources-free on the uv-mode startup path.
+    import pkg_resources
+
 logger = logging.getLogger('zc.buildout.easy_install')
+
+
+def _safe_name(name: str) -> str:
+    """pkg_resources.safe_name: runs of non [A-Za-z0-9.] become '_'."""
+    return re.sub('[^A-Za-z0-9.]+', '_', name)
+
+
+def _safe_version(version: str) -> str:
+    """pkg_resources.safe_version: PEP 440-normalized, lenient fallback."""
+    try:
+        return str(parse_version(version))
+    except InvalidVersion:
+        return re.sub('[^A-Za-z0-9.]+', '-', version.replace(' ', '.'))
+
+
+def _to_filename(name: str) -> str:
+    """pkg_resources.to_filename: dashes become underscores."""
+    return name.replace('-', '_')
+
+
+def _egg_base_name(project_name: str, version: str) -> str:
+    """pkg_resources.Distribution.egg_name() for dist-info dists.
+
+    The dists pip/uv installs leave in a target directory carry no
+    py_version or platform, so pkg_resources spells the egg base with
+    the running interpreter's major.minor and no platform suffix (the
+    caller appends the supported platform).  pkg_resources applies
+    safe_name/safe_version at Distribution construction time, so they
+    are applied here too.  The spelling must stay byte-identical: egg
+    directory names land in .installed.cfg signatures and in generated
+    script sys.path lines.
+    """
+    py_major = f'{sys.version_info[0]}.{sys.version_info[1]}'
+    return (f"{_to_filename(_safe_name(project_name))}"
+            f"-{_to_filename(_safe_version(version))}"
+            f"-py{py_major}")
+
+
+@lru_cache
+def _macos_vers() -> list[str]:
+    # pkg_resources._macos_vers: the RUNNING macOS version, with the
+    # MacPorts plist fallback.
+    version = platform_.mac_ver()[0]
+    if version == '':
+        plist = '/System/Library/CoreServices/SystemVersion.plist'
+        if os.path.exists(plist):
+            with open(plist, 'rb') as fh:
+                plist_content = plistlib.load(fh)
+            if 'ProductVersion' in plist_content:
+                version = plist_content['ProductVersion']
+    return version.split('.')
+
+
+def _supported_platform() -> str:
+    """pkg_resources.get_supported_platform(), minus pkg_resources.
+
+    sysconfig's build-time platform, except on macOS where the version
+    in the string is replaced by the running OS version
+    (pkg_resources' compatibility behavior).  Egg directory names
+    embed the result, so it must spell exactly what pkg_resources
+    spelled.
+    """
+    plat = sysconfig.get_platform()
+    if sys.platform == 'darwin' and not plat.startswith('macosx-'):
+        try:
+            version = _macos_vers()
+            machine = {'PowerPC': 'ppc', 'Power_Macintosh': 'ppc'}.get(
+                os.uname()[4].replace(' ', '_'), os.uname()[4].replace(' ', '_'))
+            return f'macosx-{version[0]}.{version[1]}-{machine}'
+        except ValueError:
+            # not macOS
+            pass
+    m = re.match(r'macosx-(\d+)\.(\d+)-(.*)', plat)
+    if m is not None and sys.platform == 'darwin':
+        try:
+            major_minor = '.'.join(_macos_vers()[:2])
+            build = m.group(3)
+            plat = f'macosx-{major_minor}-{build}'
+        except ValueError:
+            # not macOS
+            pass
+    return plat
+
+
+def _first_installed_name_version(dest: str) -> tuple[str, str]:
+    """Name and version of the first distribution found in ``dest``.
+
+    Naming-only lookup for the single-install temporary directories
+    pip/uv installs produce; importlib.metadata follows the same
+    directory order pkg_resources.find_distributions did.
+    """
+    dist = next(iter(metadata.distributions(path=[dest])))
+    return dist.metadata['Name'], dist.version
 
 
 def _is_url(value: str) -> bool:
@@ -625,13 +729,19 @@ def make_egg_after_pip_install(
 
     project_name = _read_project_name(dest, distinfo_dir)
 
-    # Make properly named new egg dir
+    # Make properly named new egg dir.  The name must spell exactly
+    # what pkg_resources spelled: egg directories land in
+    # .installed.cfg signatures and generated script sys.path lines.
     batched = distro is not None
     if distro is None:
-        distro = next(iter(pkg_resources.find_distributions(dest)))
-    if project_name:
-        distro.project_name = project_name
-    base = f"{distro.egg_name()}-{pkg_resources.get_supported_platform()}"
+        found_name, version = _first_installed_name_version(dest)
+        name = project_name or found_name
+    else:
+        if project_name:
+            # Historical mutation: callers reuse this dist afterwards.
+            distro.project_name = project_name
+        name, version = distro.project_name, distro.version
+    base = f"{_egg_base_name(name, version)}-{_supported_platform()}"
     egg_name = base + '.egg'
     new_distinfo_dir = base + '.dist-info'
     egg_dir = os.path.join(dest, egg_name)
@@ -645,7 +755,7 @@ def make_egg_after_pip_install(
 
     record_file = os.path.join(egg_dir, new_distinfo_dir, 'RECORD')
     all_files = _read_record_or_raise(
-        record_file, batched, distro.project_name, distinfo_dir)
+        record_file, batched, name, distinfo_dir)
 
     if not batched:
         # ``dest`` holds this single install, so moving the whole
@@ -776,7 +886,7 @@ def _unpack_dist_to_tmp(dist: pkg_resources.DistInfoDistribution | pkg_resources
     the registered unpacker for its extension, or installed by pip.
     """
     if (os.path.isdir(_dist_location(dist)) and
-            dist.precedence >= pkg_resources.BINARY_DIST):
+            dist.precedence >= _workingset.BINARY_DIST):
         # We got a pre-built directory. It must have been obtained locally.
         # Just copy it.
         logger.debug("dist is pre-built directory.")
@@ -897,7 +1007,7 @@ def _move_to_eggs_dir_and_compile(dist: pkg_resources.DistInfoDistribution | pkg
         # but it seems needed always, otherwise dists installed from eggs won't
         # be reported in picked versions either.  It could be that we report
         # too much then, but we will see.
-        newdist.precedence = pkg_resources.EGG_DIST
+        newdist.precedence = _workingset.EGG_DIST
     finally:
         # Remember that temporary directories must be removed
         zc.buildout.rmtree.rmtree(tmp_dest)
@@ -914,7 +1024,11 @@ def _dist_for_pin(dest: str, pin: uv_resolve.PinnedDist
     canonicalized name and parsed version instead.
     """
     wanted = canonicalize_name(pin.name)
-    version = pkg_resources.parse_version(pin.version)
+    # The dists found here flow back into easy_install, which is
+    # still pkg_resources-shaped until its own unit of the uv
+    # dependency removal plan; hence the lazy import.
+    import pkg_resources
+    version = parse_version(pin.version)
     for distro in pkg_resources.find_distributions(dest):
         if (canonicalize_name(distro.project_name) == wanted
                 and distro.parsed_version == version):
@@ -975,7 +1089,7 @@ def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
             # which interferes with the check for printing picked
             # versions, so set it to EGG_DIST.  See
             # _move_to_eggs_dir_and_compile for the long story.
-            newdist.precedence = pkg_resources.EGG_DIST
+            newdist.precedence = _workingset.EGG_DIST
             newdists.append(newdist)
     finally:
         # Remember that temporary directories must be removed
@@ -1006,6 +1120,9 @@ def sort_working_set(ws: pkg_resources.WorkingSet, eggs_dir: str, develop_eggs_d
             other_paths.append(path)
     sorted_paths.extend(egg_paths)
     sorted_paths.extend(other_paths)
+    # Called with pkg_resources working sets in both modes until the
+    # easy_install unit; keep the import lazy.
+    import pkg_resources
     return pkg_resources.WorkingSet(sorted_paths)
 
 
