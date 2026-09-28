@@ -951,7 +951,7 @@ class TestOfflineForwarding:
         instance = easy_install.Installer.__new__(easy_install.Installer)
         instance._installer = 'pip'
         # never read: _available_dists below is stubbed
-        instance._index = None  # ty: ignore[invalid-assignment]
+        instance._index = None
         monkeypatch.setattr(easy_install.Installer, '_offline', True)
         seen = []
 
