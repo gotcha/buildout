@@ -48,6 +48,44 @@ def test_pkg_resources_import_applies_the_patches():
     assert result.returncode == 0, result.stderr
 
 
+def test_pkg_resources_import_does_not_import_the_package_index():
+    # uv-mode property: the index module is legacy pip-mode-only, so
+    # importing pkg_resources alone must not drag it in.
+    result = _run_in_subprocess(
+        'import sys\n'
+        'import zc.buildout\n'
+        'import pkg_resources\n'
+        "assert 'zc.buildout._package_index' not in sys.modules, "
+        "'_package_index loaded with pkg_resources'\n"
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_package_index_import_applies_its_patch():
+    # Legacy property: importing the index module applies
+    # patch_PackageIndex before the class can be used.
+    result = _run_in_subprocess(
+        'import zc.buildout\n'
+        'from zc.buildout import _package_index\n'
+        'qualname = _package_index.PackageIndex.process_url.__qualname__\n'
+        'assert qualname.startswith("patch_PackageIndex."), \\\n'
+        '    "PackageIndex.process_url patch not applied: " + qualname\n'
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_easy_install_import_does_not_import_the_package_index():
+    # uv-mode property: easy_install builds the index class lazily, so
+    # importing it must not load the legacy index module.
+    result = _run_in_subprocess(
+        'import sys\n'
+        'import zc.buildout.easy_install\n'
+        "assert 'zc.buildout._package_index' not in sys.modules, "
+        "'_package_index loaded with easy_install'\n"
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_apply_patches_is_idempotent():
     from zc.buildout import patches
     patches.apply_patches()

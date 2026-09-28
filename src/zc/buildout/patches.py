@@ -77,6 +77,14 @@ def patch_PackageIndex() -> None:
     try:
         import logging
         logging.getLogger('pip._internal.index.collector').setLevel(logging.ERROR)
+        # The patch is applied lazily since Phase 2 unit 4 (the index is
+        # pip-mode-only), which moves pip's import-time logging into the
+        # middle of runs that have logging configured: pip registers its
+        # VCS backends at import and logs each at DEBUG level.  Silence
+        # that here, the same way the collector is silenced above, so
+        # verbose transcripts keep their pre-laziness content.
+        logging.getLogger(
+            'pip._internal.vcs.versioncontrol').setLevel(logging.ERROR)
         from ._package_index import URL_SCHEME, PackageIndex, distros_for_url
 
         try:
@@ -352,13 +360,19 @@ _applying = False
 
 
 def apply_patches() -> None:
-    """Apply every pkg_resources patch; safe to call repeatedly.
+    """Apply the pkg_resources patches; safe to call repeatedly.
 
-    Each patch function is idempotent and silently does nothing when
-    pkg_resources (or, for the index patch, pip's internals) cannot be
-    imported.  Never call this from a uv-mode code path: importing
-    pkg_resources to patch it would defeat the goal of never loading
-    pkg_resources in uv mode.
+    Each patch function is idempotent.  Never call this from a
+    uv-mode code path: importing pkg_resources to patch it would
+    defeat the goal of never loading pkg_resources in uv mode.
+
+    ``patch_PackageIndex`` is deliberately not applied here: it needs
+    ``zc.buildout._package_index``, which is legacy pip-mode-only, and
+    importing it eagerly would drag the index module (and setuptools)
+    into every uv-mode run that loads pkg_resources.  The
+    ``zc.buildout._package_index`` import trigger applies it as soon
+    as that module finishes loading instead, which is always before
+    its first use.
     """
     global _applying
     if _applying:
@@ -367,25 +381,45 @@ def apply_patches() -> None:
         return
     _applying = True
     try:
-        patch_PackageIndex()
         patch_pkg_resources_requirement_contains()
         patch_pkg_resources_working_set_find()
     finally:
         _applying = False
 
 
-class _PatchTriggerLoader(importlib.abc.Loader):
-    """Loader wrapper that applies the patches right after exec."""
+def apply_index_patch() -> None:
+    """Apply the PackageIndex patch once _package_index is loaded.
 
-    def __init__(self, loader: importlib.abc.Loader) -> None:
+    Runs from the ``zc.buildout._package_index`` import trigger, after
+    the module's exec completed, so the names it imports are fully
+    initialized.  Also applies the pkg_resources patches first: a
+    direct import of _package_index fires the pkg_resources trigger
+    mid-exec, which covers those, and the call is idempotent anyway.
+    """
+    apply_patches()
+    global _applying
+    if _applying:
+        return
+    _applying = True
+    try:
+        patch_PackageIndex()
+    finally:
+        _applying = False
+
+
+class _PatchTriggerLoader(importlib.abc.Loader):
+    """Loader wrapper that applies its patch hook right after exec."""
+
+    def __init__(self, loader: importlib.abc.Loader, apply) -> None:
         self._loader = loader
+        self._apply = apply
 
     def __getattr__(self, name: str):
         return getattr(self._loader, name)
 
     def exec_module(self, module: ModuleType) -> None:
         self._loader.exec_module(module)
-        apply_patches()
+        self._apply()
 
 
 class _PatchTriggerFinder(importlib.abc.MetaPathFinder):
@@ -401,8 +435,8 @@ class _PatchTriggerFinder(importlib.abc.MetaPathFinder):
     ``zc.buildout._package_index`` is a second trigger: it imports
     pkg_resources at its own top, and if it is imported directly, the
     pkg_resources trigger fires while _package_index is only partially
-    initialized, so its own patch (``patch_PackageIndex``) is retried
-    once the module finishes loading.
+    initialized, so its own patch (``patch_PackageIndex``) is applied
+    only once the module finishes loading.
     """
 
     def find_spec(
@@ -411,12 +445,16 @@ class _PatchTriggerFinder(importlib.abc.MetaPathFinder):
         path: Sequence[str] | None = None,
         target: ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
-        if fullname not in ('pkg_resources', 'zc.buildout._package_index'):
+        if fullname == 'pkg_resources':
+            apply = apply_patches
+        elif fullname == 'zc.buildout._package_index':
+            apply = apply_index_patch
+        else:
             return None
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
         if spec is None or spec.loader is None:
             return None
-        spec.loader = _PatchTriggerLoader(spec.loader)
+        spec.loader = _PatchTriggerLoader(spec.loader, apply)
         return spec
 
 

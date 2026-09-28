@@ -43,7 +43,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import cached_property, lru_cache
 from importlib import metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import pkg_resources
 from packaging import specifiers
@@ -139,7 +139,15 @@ from zc.buildout.scripts import (
 )
 from zc.buildout.utils import normalize_name
 
-from . import _package_index, uv_resolve
+from . import uv_resolve
+
+if TYPE_CHECKING:
+    # Type annotations only: _package_index is the legacy pip-mode
+    # package index, imported lazily at runtime (see
+    # _allow_hosts_package_index) so that importing this module does
+    # not drag it -- and its pkg_resources/setuptools imports -- into
+    # uv-mode runs.
+    from . import _package_index
 
 # Aliased in the import above and bound here: the ``working_set``
 # parameters of _working_set_or_default and Installer.install would
@@ -365,16 +373,47 @@ class Environment(EnvironmentMixin, pkg_resources.Environment):
         return True
 
 
-class AllowHostsPackageIndex(EnvironmentMixin, _package_index.PackageIndex):
-    """Will allow urls that are local to the system.
+_AllowHostsPackageIndex: type | None = None
 
-    This class had its own url_ok method, but we merged this into
-    _package_index.py.
+
+def _allow_hosts_package_index() -> type:
+    """Build AllowHostsPackageIndex on first use, not at import time.
+
+    The class inherits _package_index.PackageIndex, and a class
+    definition needs its base at definition time -- so a module-level
+    definition would force the legacy pip-mode index module (and its
+    pkg_resources/setuptools imports) into every uv-mode run.  Only
+    pip-mode code paths instantiate the index, so building it lazily
+    keeps uv mode clean while the public name stays available (see the
+    module-level __getattr__ below).
     """
+    global _AllowHostsPackageIndex
+    if _AllowHostsPackageIndex is None:
+        from . import _package_index
+
+        class AllowHostsPackageIndex(
+                EnvironmentMixin, _package_index.PackageIndex):
+            """Will allow urls that are local to the system.
+
+            This class had its own url_ok method, but we merged this
+            into _package_index.py.
+            """
+
+        _AllowHostsPackageIndex = AllowHostsPackageIndex
+    return _AllowHostsPackageIndex
+
+
+def __getattr__(name: str):
+    # PEP 562: keep easy_install.AllowHostsPackageIndex importable for
+    # backward compatibility without defining it at module import time.
+    if name == 'AllowHostsPackageIndex':
+        return _allow_hosts_package_index()
+    raise AttributeError(
+        f"module {__name__!r} has no attribute {name!r}")
 
 
 _indexes = {}
-def _get_index(index_url: str | None, find_links: list[str], allow_hosts: tuple[str, ...]=('*',)) -> AllowHostsPackageIndex:
+def _get_index(index_url: str | None, find_links: list[str], allow_hosts: tuple[str, ...]=('*',)) -> _package_index.PackageIndex:
     key = index_url, tuple(find_links)
     index = _indexes.get(key)
     if index is not None:
@@ -383,7 +422,7 @@ def _get_index(index_url: str | None, find_links: list[str], allow_hosts: tuple[
     if index_url is None:
         index_url = default_index_url
     index_url = index_url.removeprefix('file://')
-    index = AllowHostsPackageIndex(index_url, hosts=allow_hosts)
+    index = _allow_hosts_package_index()(index_url, hosts=allow_hosts)
 
     if find_links:
         index.add_find_links(find_links)
@@ -737,7 +776,7 @@ def _select_newer_dist(
 
 
 def _available_dists(
-        index: AllowHostsPackageIndex,
+        index: _package_index.PackageIndex,
         requirement: pkg_resources.Requirement,
         source: int | None,
         ) -> list[pkg_resources.Distribution] | None:
@@ -1233,6 +1272,11 @@ def _write_build_ext_config(base: str, build_ext: dict[str, str]) -> None:
         setup_cfg, {'build_ext': build_ext})
 
 
+# Sentinel for the Installer._index override (tests assign the
+# property directly, and the assigned value may legitimately be None).
+_INDEX_UNSET = object()
+
+
 class Installer:
 
     _versions = {}  # noqa: RUF012 - class-level default, deliberately
@@ -1279,8 +1323,7 @@ class Installer:
         self._links = links = _prepare_links(
             links, self._download_cache, self._fix_file_links)
 
-        if index:
-            self._index_url = index
+        self._index_url = index
 
         path = _initial_path(path)
         self._path = path
@@ -1288,13 +1331,39 @@ class Installer:
             newest = False
         self._newest = newest
         self._env = self._make_env()
-        self._index = _get_index(index, links, self._allow_hosts)
+        # self._index is intentionally not built here; see the lazy
+        # property below.
         self._requirements_and_constraints = []
         self._check_picked = check_picked
         self._uv_stderr_tail: str | None = None
 
         if versions is not None:
             self._versions = normalize_versions(versions)
+
+    @property
+    def _index(self) -> _package_index.PackageIndex:
+        """The legacy pip-mode package index, built on first use.
+
+        Lazy so that importing this module (which constructs an
+        Installer for the buildout dists at module level) and running
+        uv-mode installs never load _package_index; only pip-mode
+        resolution and the legacy source-build download path read it.
+        ``_get_index`` caches per (index url, links), and the
+        dependency-links handling mutates ``self._links``, so a
+        re-index happens here automatically when the links change.
+        Tests may still assign ``instance._index`` directly; the
+        setter stores that as an override.
+        """
+        override = self.__dict__.get('_index_override', _INDEX_UNSET)
+        if override is not _INDEX_UNSET:
+            # Tests assign stand-ins (including None) on instances
+            # built with __new__; the declared type is the real one.
+            return cast('_package_index.PackageIndex', override)
+        return _get_index(self._index_url, self._links, self._allow_hosts)
+
+    @_index.setter
+    def _index(self, index: _package_index.PackageIndex | None) -> None:
+        self.__dict__['_index_override'] = index
 
     def _make_env(self) -> Environment:
         dist_paths = self._get_dest_dist_paths()
@@ -2113,7 +2182,8 @@ class Installer:
             return dists
 
     def _add_dependency_links_from_dists(self, dists: list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]) -> None:
-        reindex = False
+        # ``self._index`` is a lazy property over ``self._links``, so
+        # appending here re-indexes automatically on the next read.
         links = self._links
         for dist in dists:
             if dist.has_metadata('dependency_links.txt'):
@@ -2123,9 +2193,6 @@ class Installer:
                         logger.debug('Adding find link %r from %s',
                                      link, dist)
                         links.append(link)
-                        reindex = True
-        if reindex:
-            self._index = _get_index(self._index_url, links, self._allow_hosts)
 
     def _check_picked_requirement_versions(self, requirement: pkg_resources.Requirement, dists: list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]) -> None:
         """ Check whether we picked a version and, if we did, report it """
