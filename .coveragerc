@@ -14,6 +14,9 @@ omit =
     # code, so both reports exclude it: measuring code scheduled for
     # removal teaches nothing.
     */_package_index.py
+    # The vendored pkg_resources copy is setuptools' code, not ours;
+    # measuring it teaches nothing either.
+    */zc/buildout/_vendor/*
 
 [paths]
 # The update tests package the current source as fake-release eggs

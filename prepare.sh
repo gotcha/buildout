@@ -99,16 +99,17 @@ if test $WHEEL_VERSION; then
   # Use a specific version:
 	PIP_ARGS="$PIP_ARGS==$WHEEL_VERSION"
 fi
-# packaging is already a dependency of zc.buildout, but we explicitly add it.
+# packaging and platformdirs are dependencies of zc.buildout, but we
+# explicitly add them because zc.buildout itself is not pip-installed here.
 # We add 'build' so we can build a source dist of zc.buildout,
 # which has a side effect we need: generate 'src/zc.buildout.egg-info'
-# This is needed so in Python we can do:
-# >>> pkg_resources.working_set.add_entry('src')
+# This is needed so dev.py can find the zc.buildout distribution after
+# putting 'src' on sys.path.
 # Floor build at 1: if a package index momentarily hides pyproject_hooks,
 # an unfloored build requirement silently backtracks to build 0.9.0, which
 # lacks build.env.DefaultIsolatedEnv and fails the test suite much later.
 # uv is a dependency of zc.buildout; add it like packaging.
-PIP_ARGS="$PIP_ARGS packaging build>=1 uv"
+PIP_ARGS="$PIP_ARGS packaging platformdirs build>=1 uv"
 echo
 echo "Using arguments for pip install: $PIP_ARGS"
 # "$VENV_PYTHON" -m pip install -e .[test] -e zc.recipe.egg_[test] $PIP_ARGS
@@ -126,9 +127,10 @@ echo "The test suites resolve their spawned installers' build requirements from 
 echo "(see buildoutSetUp in src/zc/buildout/testing.py), so suite runs need no index."
 echo "A uv wheel is seeded as well: zc.buildout declares uv as a dependency, so"
 echo "sample buildouts resolving that requirement must find it without an index."
-echo "packaging and pip are seeded for the same reason: they are zc.buildout"
-echo "runtime requirements, so a compile carrying the zc.buildout develop"
-echo "project as an override must find them in the seeded sources."
+echo "packaging, platformdirs and pip are seeded for the same reason:"
+echo "they are zc.buildout runtime requirements, so a compile carrying"
+echo "the zc.buildout develop project as an override must find them in"
+echo "the seeded sources."
 echo "tomli joins the seed on Python < 3.11, where zc.buildout requires it."
 SEED="$HERE/downloads/test-seed"
 mkdir -p "$SEED"
@@ -137,6 +139,7 @@ SEED_SETUPTOOLS=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.ver
 SEED_WHEEL=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("wheel"))')
 SEED_UV=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("uv"))')
 SEED_PACKAGING=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("packaging"))')
+SEED_PLATFORMDIRS=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("platformdirs"))')
 SEED_PIP=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("pip"))')
 # tomli is a zc.buildout runtime requirement on Python < 3.11 only, so
 # the venv has it exactly on those interpreters.  The seed must carry
@@ -150,7 +153,8 @@ if test "$SEED_TOMLI"; then
 fi
 "$VENV_PYTHON" -m pip download --quiet --no-deps --dest "$SEED" \
     "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL" "uv==$SEED_UV" \
-    "packaging==$SEED_PACKAGING" "pip==$SEED_PIP" $SEED_TOMLI_SPEC
+    "packaging==$SEED_PACKAGING" "platformdirs==$SEED_PLATFORMDIRS" \
+    "pip==$SEED_PIP" $SEED_TOMLI_SPEC
 ls -l "$SEED"
 
 # The uv resolve seam gets its own copy of the seed, snapshotted before
