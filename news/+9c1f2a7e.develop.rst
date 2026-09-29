@@ -1,0 +1,4 @@
+uv dependency removal plan: track the pre-existing ``test_runsetup``
+isolation flakiness as a program item (suite trust gates every phase),
+and record that execution follows the poteto-mode discipline at every
+phase. [Fizz]
