@@ -255,6 +255,13 @@ Reproducing one CI leg locally:
   hand it to a subagent whose turn exists for that purpose — and post
   the result the moment it exists (see "Turn budget").
 
+The **dagger** skill is the operational companion to this section:
+engine anatomy (state lives in the `dagger-cache` volume, not the
+container), the `dagger core -s version` readiness probe, the full
+remediation ladder for a wedged engine (machine → container → cache
+volume), and the run discipline in one place. Load it when a run
+cannot connect, dies mid-run, or the engine needs surgery.
+
 ## Pre-test CI locally before pushing
 
 Pushing to learn what CI thinks costs a runner round-trip per
