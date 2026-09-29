@@ -115,3 +115,95 @@ class TestFunctions(unittest.TestCase):
             self.assertListEqual(
                 find_namespace_init_files(package_dir), [str(plone_init), str(plone_app_init)]
             )
+
+
+class TestVendoredPkgResources(unittest.TestCase):
+    """Tests for the pkg_resources copy vendored in zc.buildout._vendor.
+
+    See src/zc/buildout/_vendor/README.rst and
+    https://github.com/buildout/buildout/issues/685
+    """
+
+    def test_pkg_resources_importable(self):
+        # Importing zc.buildout guarantees that `import pkg_resources`
+        # works afterwards, whatever setuptools version is installed:
+        # either something imported a real pkg_resources first
+        # (setuptools < 82) or the vendored copy was aliased.
+        import sys
+
+        import zc.buildout  # noqa: F401
+        # The guarantee, stated directly: the package import is what put
+        # pkg_resources in place.  Kept as a separate statement so isort
+        # cannot sort the pkg_resources import ahead of it — on
+        # setuptools >= 82 that ordering would make the test need an
+        # installed pkg_resources, which is the opposite of the point.
+        self.assertIn('pkg_resources', sys.modules)
+
+        import pkg_resources
+        self.assertIs(sys.modules['pkg_resources'], pkg_resources)
+        self.assertTrue(hasattr(pkg_resources, 'WorkingSet'))
+
+    def test_alias_in_fresh_process(self):
+        # In a fresh process, importing zc.buildout installs the vendored
+        # copy as `pkg_resources` (nothing else imported it before).
+        # Exception: on setuptools < 68, `import setuptools` at package
+        # init loads the installed pkg_resources first (its version.py
+        # imports it), and module identity requires keeping that copy.
+        # Boundary measured empirically: 63.0.0/65.7.0/67.0.0 pre-load,
+        # 68.0.0 and newer do not.
+        import os
+        import subprocess
+        import sys
+
+        import zc.buildout.easy_install
+        env = dict(os.environ)
+        env['PYTHONPATH'] = os.pathsep.join(
+            zc.buildout.easy_install.buildout_and_setuptools_path)
+        code = (
+            "import zc.buildout, sys, setuptools; "
+            "name = sys.modules['pkg_resources'].__name__; "
+            "st_major = int(setuptools.__version__.split('.')[0]); "
+            "expected = ('pkg_resources' if st_major < 68 "
+            "else 'zc.buildout._vendor.pkg_resources'); "
+            "assert name == expected, name"
+        )
+        subprocess.check_call([sys.executable, '-c', code], env=env)
+
+    def test_resource_string_finds_setuptools_cli_exe(self):
+        # easy_install.py reads setuptools' cli.exe launcher via
+        # pkg_resources.resource_string when generating interpreter
+        # scripts on Windows.  This must keep working with the vendored
+        # pkg_resources, whatever the location of setuptools.
+        import zc.buildout  # noqa
+        import pkg_resources
+        data = pkg_resources.resource_string('setuptools', 'cli.exe')
+        self.assertEqual(data[:2], b'MZ')
+
+    def test_vendored_copy_is_functional(self):
+        from zc.buildout._vendor import pkg_resources as vendored
+        req = vendored.Requirement.parse('foo.bar>=1.0')
+        self.assertEqual(req.project_name, 'foo.bar')
+        self.assertEqual(req.key, 'foo.bar')
+        ws = vendored.WorkingSet()
+        self.assertIsNone(ws.find(vendored.Requirement.parse('does-not-exist')))
+
+    def test_jaraco_text_helpers(self):
+        from zc.buildout._vendor.jaraco_text import (
+            drop_comment,
+            join_continuation,
+            yield_lines,
+        )
+
+        self.assertEqual(drop_comment('foo # bar'), 'foo')
+        self.assertEqual(
+            drop_comment('http://example.com/foo#bar'),
+            'http://example.com/foo#bar')
+        self.assertEqual(
+            list(join_continuation(['foo \\', 'bar', 'baz'])),
+            ['foobar', 'baz'])
+        self.assertEqual(
+            list(yield_lines('\nfoo\n#bar\nbaz #comment')),
+            ['foo', 'baz #comment'])
+        self.assertEqual(
+            list(yield_lines(['foo\nbar', 'baz', 'bing\n\n\n'])),
+            ['foo', 'bar', 'baz', 'bing'])

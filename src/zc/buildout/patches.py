@@ -295,6 +295,14 @@ def patch_pkg_resources_working_set_find() -> None:
 
     Alternatively, we could drop support.  That is fine with me.
     """
+    import pkg_resources
+    if pkg_resources.__name__.startswith('zc.buildout._vendor'):
+        # The pkg_resources copy vendored by zc.buildout comes from
+        # setuptools 81.0.0, so the 75.8.2 `find` fix is built in.  The
+        # setuptools version check below only makes sense when
+        # pkg_resources was pre-imported from an installed setuptools.
+        return
+
     try:
         from importlib.metadata import version
 
@@ -362,9 +370,12 @@ _applying = False
 def apply_patches() -> None:
     """Apply the pkg_resources patches; safe to call repeatedly.
 
-    Each patch function is idempotent.  Never call this from a
-    uv-mode code path: importing pkg_resources to patch it would
-    defeat the goal of never loading pkg_resources in uv mode.
+    Each patch function is idempotent.  Since zc.buildout vendors its
+    own pkg_resources copy (aliased to plain ``pkg_resources`` at
+    package import, see src/zc/buildout/_vendor/README.rst), the copy
+    to patch is normally already loaded when this module is first
+    imported; the import trigger below covers any remaining
+    load-later ordering.
 
     ``patch_PackageIndex`` is deliberately not applied here: it needs
     ``zc.buildout._package_index``, which is legacy pip-mode-only, and
@@ -469,3 +480,19 @@ def install_import_hook() -> None:
 
 
 install_import_hook()
+
+
+# When pkg_resources is already loaded by the time this module is first
+# imported, the import trigger installed above can never fire for it —
+# and since zc.buildout vendors its own pkg_resources copy (aliased to
+# plain ``pkg_resources`` at package import, see
+# src/zc/buildout/_vendor/README.rst), that is the normal case now:
+# the alias is installed before this module is reached (and on
+# setuptools < 68 the installed copy is loaded even earlier, as a side
+# effect of ``import setuptools`` at package init).  The patches are
+# required in both modes — Requirement.__contains__ name normalization
+# backs the membership checks uv mode gates on — so apply them now.
+# The module is already loaded, so this costs no import, and each
+# patch is idempotent.
+if 'pkg_resources' in sys.modules:
+    apply_patches()

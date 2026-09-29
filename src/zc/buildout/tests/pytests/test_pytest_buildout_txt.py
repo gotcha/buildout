@@ -77,6 +77,7 @@ d  recipes
     assert_output(capture_print(ls, sample_buildout, 'eggs', 'v5'), """
 -  packaging.egg-link
 -  pip.egg-link
+-  platformdirs.egg-link
 -  setuptools.egg-link
 -  uv.egg-link
 -  wheel.egg-link

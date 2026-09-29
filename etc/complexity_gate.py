@@ -27,7 +27,7 @@ NEW_MAX_CC = 10  # radon grade B ceiling for code without a baseline entry
 
 def scan():
     out = subprocess.run(
-        ["radon", "cc", SOURCE, "--exclude", "*/tests/*", "-j"],
+        ["radon", "cc", SOURCE, "--exclude", "*/tests/*,*/_vendor/*", "-j"],
         cwd=str(REPO), capture_output=True, text=True, check=True,
     ).stdout
     blocks = {}

@@ -79,6 +79,7 @@ Now, if we look at the buildout eggs directory:
     d  demoneeded-1.1-pyN.N.egg
     -  packaging.egg-link
     -  pip.egg-link
+    -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
     -  wheel.egg-link
@@ -277,6 +278,7 @@ Then we'll get a new demo egg:
     d  demoneeded-1.1-pyN.N.egg
     -  packaging.egg-link
     -  pip.egg-link
+    -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
     -  wheel.egg-link
