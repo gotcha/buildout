@@ -595,9 +595,24 @@ def _raise_if_junk_uv_constraint(
 
 
 def _constrained_requirement(constraint: str, requirement: pkg_resources.Requirement) -> pkg_resources.Requirement:
-    # Both requirement classes in play (pip mode's pkg_resources one and
-    # uv mode's facade one) subclass packaging.Requirement.
-    assert isinstance(requirement, PackagingRequirement)
+    # pip mode hands in pkg_resources.Requirement, uv mode the facade's.
+    # pkg_resources' class derives from packaging.Requirement only since
+    # setuptools 75, so isinstance against the packaging base alone
+    # rejects the older vintages the pip path still runs on (the
+    # toolchain bootstrap computes with the ambient setuptools, whatever
+    # its age) — and callers pick the class, not this function: the
+    # test_all doctest feeds pkg requirements in uv mode too.  The pkg
+    # class comes from sys.modules: a pkg requirement can only arrive
+    # from a process that already imports pkg_resources, and uv mode
+    # must never trigger that import itself.  A plain
+    # packaging.Requirement is rejected on purpose: the constraint
+    # round-trip below needs the pkg-style surface (``parse``,
+    # ``__contains__``), which packaging's own class does not carry.
+    requirement_classes = [_workingset.Requirement]
+    pkg = sys.modules.get('pkg_resources')
+    if pkg is not None:
+        requirement_classes.append(pkg.Requirement)
+    assert isinstance(requirement, tuple(requirement_classes))
     if constraint[0] not in '<>':
         if constraint.startswith('='):
             assert constraint.startswith('==')
