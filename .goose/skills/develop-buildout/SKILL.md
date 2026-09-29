@@ -247,6 +247,13 @@ module's invariants and how to add cells, the local podman engine
 mechanics, and replaying the CI matrix on the committed tree
 before a push. Load it before touching `dagger/` or pre-testing
 CI locally.
+
+The **dagger** skill is the operational companion to this section:
+engine anatomy (state lives in the `dagger-cache` volume, not the
+container), the `dagger core -s version` readiness probe, the full
+remediation ladder for a wedged engine (machine → container → cache
+volume), and the run discipline in one place. Load it when a run
+cannot connect, dies mid-run, or the engine needs surgery.
 ## Reproducing CI failures: match the CI surface
 
 CI jobs run inside `devenv shell`, and the shell is part of the
