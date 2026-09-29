@@ -14,7 +14,8 @@ setup.py and the targets are found by structural anchors.
 Axis rules:
 
 - setuptools: the newest PyPI release inside the range setup.py
-  declares (the ``<82`` cap is parsed from install_requires). Only the
+  declares (an upper cap is parsed from install_requires when present;
+  none is declared since the ``<82`` ceiling was dropped). Only the
   per-version sweep matrices are bumped; the singleton pins of the
   python/mac/uv jobs carry their own semantics ("newest every Python
   supports", "the devenv pin") and are left alone.

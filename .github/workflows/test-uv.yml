@@ -18,9 +18,8 @@ on:
 # PIP_VERSION varies nothing in the code under test.
 # The uv job pins the uv under test through UV_VERSION (see the Makefile
 # test-uv target): the earliest supported 0.12.x (the setup.py floor)
-# and the five most recent, on the most recent setuptools (81.0.0 caps
-# the declared setuptools<82 range). The other jobs exercise the
-# devenv-provided uv.
+# and the five most recent, on the newest setuptools that still ships
+# pkg_resources (81.0.0). The other jobs exercise the devenv-provided uv.
 # Provisioning follows the same contract as run-tests.yml: GitHub
 # actions only bootstrap the repo-owned environment (actions/checkout
 # plus .github/actions/devenv-setup); every tool comes from the devenv.

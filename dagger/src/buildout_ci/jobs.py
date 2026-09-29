@@ -75,6 +75,21 @@ def _build_jobs() -> tuple[Job, ...]:
                 "81.0.0",
             )
         ),
+        # setuptools-latest canary: an empty pin is not threaded (main.py
+        # skips falsy values), so prepare.sh installs the newest release
+        # from PyPI.  The leg floats on purpose: it is the early warning
+        # that vendoring — not the dropped setuptools<82 cap — keeps the
+        # legacy suite alive on current setuptools.  Python 3.12 for
+        # runway (a future setuptools may drop 3.10 before we notice).
+        # Not (yet) mirrored in .github/workflows — queued as an
+        # operator decision.
+        Job(
+            name="setuptools-latest",
+            python="3.12",
+            commands=make_and_pytest,
+            family="setuptools",
+            setuptools="",
+        ),
         Job(
             name="ruff",
             python="3.12",
@@ -178,11 +193,21 @@ def _build_jobs() -> tuple[Job, ...]:
             for py in ("3.9", "3.11", "3.12", "3.13", "3.14")
         ),
         Job(name="mac-uv", python="3.10", commands=(("make", "test-uv"),), family="uv", installer="uv"),
+        # uv twin of the setuptools-latest canary above (same floating
+        # pin semantics, same runway python, same mirroring caveat).
+        Job(
+            name="setuptools-latest-uv",
+            python="3.12",
+            commands=(("make", "test-uv"),),
+            family="uv",
+            setuptools="",
+            installer="uv",
+        ),
         # the uv version matrix: the legacy suite through the uv pipeline
         # with the uv under test pinned (UV_VERSION) to the earliest
         # supported 0.12.x (the setup.py floor) and the five most recent,
-        # on the most recent setuptools (81.0.0 caps the declared
-        # setuptools<82 range)
+        # on the newest setuptools that still ships pkg_resources
+        # (81.0.0)
         *(
             Job(
                 name=f"uv-{uv}",
