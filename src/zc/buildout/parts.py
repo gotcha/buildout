@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Protocol, TextIO, Union, cast
 from packaging import utils as packaging_utils
 
 import zc.buildout.easy_install
+from zc.buildout import _workingset
 from zc.buildout.easy_install import realpath
 from zc.buildout.utils import bool_option, print_
 
@@ -375,18 +376,24 @@ def _find_upgraded_dists(
     """Return the dists in ``ws`` for ``projects`` whose loaded module
     lives outside the dist location (i.e. the dist upgrades the active
     version)."""
-    # Local import: ws is pkg_resources-shaped in both modes until
-    # easy_install's uv path is ported; keep module import clean.
-    import pkg_resources
+    # ws is facade-shaped in uv mode and pkg_resources-shaped in pip
+    # mode; parse requirements with the matching class.  pip mode
+    # imports pkg_resources lazily so uv mode never loads it.
+    parse: Callable[[str], pkg_resources.Requirement]
+    if zc.buildout.easy_install.installer() == 'uv':
+        parse = _workingset.Requirement.parse  # ty: ignore[invalid-assignment]  # facade Requirement in uv mode
+    else:
+        import pkg_resources
+        parse = pkg_resources.Requirement.parse
     upgraded = []
     for project in projects:
         canonicalized_name = packaging_utils.canonicalize_name(project)
-        req = pkg_resources.Requirement.parse(canonicalized_name)
+        req = parse(canonicalized_name)
         dist = ws.find(req)
         if dist is None and canonicalized_name != project:
             # Try with the original project name.  Depending on which setuptools
             # version is used, this is either useless or a life saver.
-            req = pkg_resources.Requirement.parse(project)
+            req = parse(project)
             dist = ws.find(req)
         importlib.import_module(project)
         if dist is None:

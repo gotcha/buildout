@@ -43,17 +43,16 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from functools import cached_property, lru_cache
 from importlib import metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, cast
 
-import pkg_resources
 from packaging import specifiers
+from packaging.requirements import Requirement as PackagingRequirement
 from packaging.utils import canonicalize_name, is_normalized_name
 from packaging.version import Version
-from pkg_resources import Distribution
 
 import zc.buildout
 import zc.buildout.rmtree
-from zc.buildout import WINDOWS
+from zc.buildout import WINDOWS, _workingset
 from zc.buildout.develop import (
     _collect_distutils_dev_scripts,
     _copyeggs,
@@ -142,6 +141,21 @@ from zc.buildout.utils import normalize_name
 from . import uv_resolve
 
 if TYPE_CHECKING:
+    # Annotations only.  pip mode keeps pkg_resources-shaped dists and
+    # imports it lazily inside the functions that need it; uv mode is
+    # served by the facade in zc.buildout._workingset and never loads
+    # pkg_resources at all.
+    import pkg_resources
+    from pkg_resources import Distribution
+
+    # The pip-mode Environment class, built on first use by
+    # _environment_class and served as a module attribute through
+    # __getattr__.  Annotations keep naming this shape; uv mode's
+    # facade (_workingset.Environment) is its behavioral twin, pinned
+    # by the parity tests, and the branches that return it carry
+    # targeted ty: ignore comments.
+    Environment = pkg_resources.Environment
+
     # Type annotations only: _package_index is the legacy pip-mode
     # package index, imported lazily at runtime (see
     # _allow_hosts_package_index) so that importing this module does
@@ -163,12 +177,13 @@ _oprp = getattr(os.path, 'realpath', lambda path: path)
 def realpath(path: str) -> str:
     return os.path.normcase(os.path.abspath(_oprp(path)))
 
-def _dist_location(dist: pkg_resources.Distribution) -> str:
+def _dist_location(dist: pkg_resources.Distribution | _workingset.Distribution) -> str:
     """The location of a distribution that is known to live on disk.
 
     pkg_resources types ``Distribution.location`` as optional, but the
     dists handled in this module are installed or downloadable dists,
-    which always have a location.
+    which always have a location.  Both dist shapes (pip mode's
+    pkg_resources one, uv mode's facade) carry it.
     """
     location = dist.location
     assert location is not None
@@ -217,13 +232,12 @@ if is_jython:
     import java.lang.System
     jython_os_name = (java.lang.System.getProperties()['os.name']).lower()
 
-# Include buildout and setuptools eggs in paths.  We get this
-# initially from the entire working set.  Later, we'll use the install
-# function to narrow to just the buildout and setuptools paths.
-buildout_and_setuptools_path = sorted({_dist_location(d) for d in pkg_resources.working_set})
-setuptools_path = buildout_and_setuptools_path
-pip_path = buildout_and_setuptools_path
-logger.debug('before restricting versions: pip_path %r', pip_path)
+# The buildout/setuptools path globals that used to be computed here
+# (and narrowed by an import-time install() call at the bottom of this
+# module) are now resolved lazily on first access -- see _toolchain()
+# below; importing this module must stay pkg_resources-free in uv mode,
+# and the installer mode is not even chosen until the configuration is
+# read.
 
 FILE_SCHEME = re.compile('file://', re.IGNORECASE).match
 DUNDER_FILE_PATTERN = re.compile(r"__file__ = '(?P<filename>.+)'$")
@@ -271,106 +285,127 @@ class EnvironmentMixin:
                 dists.sort(key=operator.attrgetter('hashcmp'), reverse=True)
 
 
-class Environment(EnvironmentMixin, pkg_resources.Environment):
-    """Buildout version of Environment with canonicalized names.
+_Environment: type | None = None
 
-    * pkg_resources defines the Environment class
-    * setuptools defines a PackageIndex class that inherits from Environment
-    * Buildout needs a few fixes that should be used by both.
 
-    The fixes are needed for this issue, where distributions created by
-    setuptools 69.3+ get a different name than with older versions:
-    https://github.com/buildout/buildout/issues/647
+def _environment_class() -> type:
+    """Build the pip-mode Environment on first use, not at import time.
 
-    And since May 2025 we override the can_add method to work better on Mac:
-    accept distributions when the architecture (machine type) matches,
-    instead of failing when the major or minor version do not match.
-    See long explanation in https://github.com/buildout/buildout/pull/707
-    It boils down to this, depending on how you installed Python:
-
-    % bin/zopepy
-    >>> import pkg_resources
-    >>> pkg_resources.get_platform()
-    'macosx-11.0-arm64'
-    >>> pkg_resources.get_supported_platform()
-    'macosx-15.4-arm64'
-
-    Here macosx-11.0 is the platform on which the Python was built/compiled.
-    And macosx-15.4 is the current platform (my laptop).
-
-    This gives problems when we get a Mac-specific wheel.  We turn it into an
-    egg that has the result of get_supported_platform() in its name.
-    Then our code in easy_install._get_matching_dist_in_location creates a
-    pkg_resources.Environment with the egg location.  Under the hood,
-    pkg_resources.compatible_platforms is called, and this does not find any
-    matching dists because it compares the platform in the egg name with that
-    of the system, which is pkg_resources.get_platform().
-
-    So an egg created on the current machine by the current Python may not be
-    recognized.  This is obviously wrong.
+    The class inherits pkg_resources.Environment, and a class
+    definition needs its base at definition time -- so a module-level
+    definition would force pkg_resources into every uv-mode run.  Only
+    pip-mode code paths instantiate it (uv mode scans with
+    zc.buildout._workingset.Environment), so building it lazily keeps
+    uv mode clean while the public name stays available for backward
+    compatibility (see the module-level __getattr__ below).
     """
+    global _Environment
+    if _Environment is None:
+        import pkg_resources
 
-    @cached_property
-    def _mac_machine_type(self) -> str:
-        """Machine type (architecture) on Mac.
+        class Environment(EnvironmentMixin, pkg_resources.Environment):
+            """Buildout version of Environment with canonicalized names.
 
-        Adapted from pkg_resources.compatible_platforms.
-        If self.platform is something like 'macosx-15.4-arm64', we return 'arm64.
-        """
-        platform = self.platform
-        # This property is only consulted when platform matching failed,
-        # which cannot happen with a None platform.
-        assert platform is not None
-        match = macosVersionString.match(platform)
-        if match is None:
-            # no Mac
-            return ""
-        return match.group(3)
+            * pkg_resources defines the Environment class
+            * setuptools defines a PackageIndex class that inherits from Environment
+            * Buildout needs a few fixes that should be used by both.
 
-    def can_add(self, dist: Distribution) -> bool:
-        """Is distribution `dist` acceptable for this environment?
+            The fixes are needed for this issue, where distributions created by
+            setuptools 69.3+ get a different name than with older versions:
+            https://github.com/buildout/buildout/issues/647
 
-        The distribution must match the platform and python version
-        requirements specified when this environment was created, or False
-        is returned.
+            And since May 2025 we override the can_add method to work better on Mac:
+            accept distributions when the architecture (machine type) matches,
+            instead of failing when the major or minor version do not match.
+            See long explanation in https://github.com/buildout/buildout/pull/707
+            It boils down to this, depending on how you installed Python:
 
-        For Mac we make a change compared to the original.  Platforms like
-        'macosx-11.0-arm64' and 'macosx-15.4-arm64' are considered compatible.
-        """
-        if super().can_add(dist):
-            return True
-        if sys.platform != "darwin":
-            # Our override is only useful on Mac OSX.
-            return False
+            % bin/zopepy
+            >>> import pkg_resources
+            >>> pkg_resources.get_platform()
+            'macosx-11.0-arm64'
+            >>> pkg_resources.get_supported_platform()
+            'macosx-15.4-arm64'
 
-        # The rest of the code is a combination of the original
-        # pkg_resources.Environment.can_add and pkg_resources.compatible_platforms.
-        py_compat = (
-            self.python is None
-            or dist.py_version is None
-            or dist.py_version == self.python
-        )
-        if not py_compat:
-            return False
-        # compatible_platforms() accepts a None provided platform, so
-        # super().can_add() would not have failed and we would not be here.
-        dist_platform = dist.platform
-        assert dist_platform is not None
-        provMac = macosVersionString.match(dist_platform)
-        if not provMac:
-            # The dist is not for Mac.
-            return False
-        provided_machine_type = provMac.group(3)
-        if provided_machine_type != self._mac_machine_type:
-            return False
-        logger.debug(
-            "Accepted dist %s although its provided platform %s does not "
-            "match our supported platform %s.",
-            dist,
-            dist.platform,
-            self.platform,
-        )
-        return True
+            Here macosx-11.0 is the platform on which the Python was built/compiled.
+            And macosx-15.4 is the current platform (my laptop).
+
+            This gives problems when we get a Mac-specific wheel.  We turn it into an
+            egg that has the result of get_supported_platform() in its name.
+            Then our code in easy_install._get_matching_dist_in_location creates a
+            pkg_resources.Environment with the egg location.  Under the hood,
+            pkg_resources.compatible_platforms is called, and this does not find any
+            matching dists because it compares the platform in the egg name with that
+            of the system, which is pkg_resources.get_platform().
+
+            So an egg created on the current machine by the current Python may not be
+            recognized.  This is obviously wrong.
+            """
+
+            @cached_property
+            def _mac_machine_type(self) -> str:
+                """Machine type (architecture) on Mac.
+
+                Adapted from pkg_resources.compatible_platforms.
+                If self.platform is something like 'macosx-15.4-arm64', we return 'arm64.
+                """
+                platform = self.platform
+                # This property is only consulted when platform matching failed,
+                # which cannot happen with a None platform.
+                assert platform is not None
+                match = macosVersionString.match(platform)
+                if match is None:
+                    # no Mac
+                    return ""
+                return match.group(3)
+
+            def can_add(self, dist: Distribution) -> bool:
+                """Is distribution `dist` acceptable for this environment?
+
+                The distribution must match the platform and python version
+                requirements specified when this environment was created, or False
+                is returned.
+
+                For Mac we make a change compared to the original.  Platforms like
+                'macosx-11.0-arm64' and 'macosx-15.4-arm64' are considered compatible.
+                """
+                if super().can_add(dist):
+                    return True
+                if sys.platform != "darwin":
+                    # Our override is only useful on Mac OSX.
+                    return False
+
+                # The rest of the code is a combination of the original
+                # pkg_resources.Environment.can_add and pkg_resources.compatible_platforms.
+                py_compat = (
+                    self.python is None
+                    or dist.py_version is None
+                    or dist.py_version == self.python
+                )
+                if not py_compat:
+                    return False
+                # compatible_platforms() accepts a None provided platform, so
+                # super().can_add() would not have failed and we would not be here.
+                dist_platform = dist.platform
+                assert dist_platform is not None
+                provMac = macosVersionString.match(dist_platform)
+                if not provMac:
+                    # The dist is not for Mac.
+                    return False
+                provided_machine_type = provMac.group(3)
+                if provided_machine_type != self._mac_machine_type:
+                    return False
+                logger.debug(
+                    "Accepted dist %s although its provided platform %s does not "
+                    "match our supported platform %s.",
+                    dist,
+                    dist.platform,
+                    self.platform,
+                )
+                return True
+
+        _Environment = Environment
+    return _Environment
 
 
 _AllowHostsPackageIndex: type | None = None
@@ -404,10 +439,17 @@ def _allow_hosts_package_index() -> type:
 
 
 def __getattr__(name: str):
-    # PEP 562: keep easy_install.AllowHostsPackageIndex importable for
-    # backward compatibility without defining it at module import time.
+    # PEP 562: keep easy_install.AllowHostsPackageIndex and
+    # easy_install.Environment importable for backward compatibility
+    # without defining them at module import time, and serve the
+    # toolchain globals (buildout_and_setuptools_dists and friends)
+    # from the first-access resolve in _toolchain().
     if name == 'AllowHostsPackageIndex':
         return _allow_hosts_package_index()
+    if name == 'Environment':
+        return _environment_class()
+    if name in _TOOLCHAIN_GLOBALS:
+        return _toolchain()[name]
     raise AttributeError(
         f"module {__name__!r} has no attribute {name!r}")
 
@@ -553,7 +595,9 @@ def _raise_if_junk_uv_constraint(
 
 
 def _constrained_requirement(constraint: str, requirement: pkg_resources.Requirement) -> pkg_resources.Requirement:
-    assert isinstance(requirement, pkg_resources.Requirement)
+    # Both requirement classes in play (pip mode's pkg_resources one and
+    # uv mode's facade one) subclass packaging.Requirement.
+    assert isinstance(requirement, PackagingRequirement)
     if constraint[0] not in '<>':
         if constraint.startswith('='):
             assert constraint.startswith('==')
@@ -570,7 +614,23 @@ def _constrained_requirement(constraint: str, requirement: pkg_resources.Require
         specifier = requirement.specifier & constraint
     constrained = copy.deepcopy(requirement)
     constrained.specifier = specifier
-    return pkg_resources.Requirement.parse(str(constrained))
+    # Round-trip through the requirement's own class: pip mode keeps
+    # pkg_resources.Requirement, uv mode the facade's.
+    return type(requirement).parse(str(constrained))
+
+
+def _requirement_parse(spec: str) -> pkg_resources.Requirement:
+    """Parse ``spec`` into the requirement class of the current mode.
+
+    pip mode keeps pkg_resources.Requirement (imported lazily, so uv
+    mode never loads pkg_resources); uv mode takes the facade class
+    from zc.buildout._workingset, whose key/specs/containment semantics
+    are pinned byte-identical to pkg_resources'.
+    """
+    if Installer._installer == 'uv':
+        return _workingset.Requirement.parse(spec)  # ty: ignore[invalid-return-type]  # facade Requirement in uv mode
+    import pkg_resources
+    return pkg_resources.Requirement.parse(spec)
 
 
 def _parse_requirements(
@@ -583,7 +643,7 @@ def _parse_requirements(
     Requirements whose environment marker does not apply are dropped;
     ``constrain`` applies the installer [versions] constraints.
     """
-    requirements = [pkg_resources.Requirement.parse(spec)
+    requirements = [_requirement_parse(spec)
                     for spec in specs]
     return [
         constrain(requirement)
@@ -597,6 +657,9 @@ def _working_set_or_default(
         ) -> pkg_resources.WorkingSet:
     """Return ``working_set``, or a fresh empty one when none was given."""
     if working_set is None:
+        if Installer._installer == 'uv':
+            return _workingset.AmbientWorkingSet([])  # ty: ignore[invalid-return-type]  # facade working set for uv mode
+        import pkg_resources
         return pkg_resources.WorkingSet([])
     return working_set
 
@@ -650,7 +713,7 @@ def _develop_dist(
         ) -> pkg_resources.Distribution | None:
     """Return the first develop dist in ``dists``, if there is one."""
     for dist in dists:
-        if dist.precedence == pkg_resources.DEVELOP_DIST:
+        if dist.precedence == _workingset.DEVELOP_DIST:
             logger.debug('We have a develop egg: %s', dist)
             return dist
     return None
@@ -661,7 +724,7 @@ def _env_dist_for_pin(
         pin: uv_resolve.PinnedDist,
         ) -> pkg_resources.Distribution | None:
     """The environment's dist exactly matching ``pin``, if there is one."""
-    wanted = pkg_resources.parse_version(pin.version)
+    wanted = Version(pin.version)
     for dist in env[pin.name]:
         if dist.parsed_version == wanted:
             return dist
@@ -708,7 +771,7 @@ def _pin_beats_env_dist(
     of the version numbers, and nothing replaces the environment's
     dist without being newer.
     """
-    pin_version = pkg_resources.parse_version(pin.version)
+    pin_version = Version(pin.version)
     env_version = env_dist.parsed_version
     if prefer_final:
         if final_version(pin_version):
@@ -793,11 +856,13 @@ def _available_dists(
         return None
 
     # Filter the available dists for the requirement and source flag
+    # (the precedence constants are plain ints, identical in
+    # pkg_resources and the facade).
     return [dist for dist in index[requirement.project_name]
             if ((dist in requirement)
                 and
                 ((not source) or
-                 (dist.precedence == pkg_resources.SOURCE_DIST)
+                 (dist.precedence == _workingset.SOURCE_DIST)
                  )
                 )
             ]
@@ -891,7 +956,7 @@ def _uv_available_dists(
         url = entry.sdist_url
     else:
         url = entry.url
-    return [Distribution(
+    return [_workingset.Distribution(  # ty: ignore[invalid-return-type]  # facade dists in uv mode
         location=url, project_name=entry.name, version=entry.version)]
 
 
@@ -1094,6 +1159,9 @@ def _best_matching_dist(
     packages, so conflicts can be fine to ignore — the correct version
     is picked up a few lines down.
     """
+    # pip-mode only (its sole caller is the install() pip loop); the
+    # lazy import keeps uv-mode runs pkg_resources-free.
+    import pkg_resources
     dist = best.get(req.key)
     if dist is None:
         try:
@@ -1234,7 +1302,9 @@ def _prepare_links(
 def _initial_path(path: list[str] | None) -> list[str]:
     """Return a copy of ``path`` plus the buildout/setuptools locations."""
     # ``path[:]`` copies: later mutations of the argument must not leak in.
-    return (path and path[:] or []) + buildout_and_setuptools_path
+    # The toolchain paths resolve on first access (they used to be a
+    # module-level global, see _toolchain).
+    return (path and path[:] or []) + _toolchain()['buildout_and_setuptools_path']
 
 
 def _unpack_dist_for_build(dist: pkg_resources.Distribution, build_tmp: str) -> str:
@@ -1313,7 +1383,9 @@ class Installer:
                  allow_unknown_extras: bool=False,
                  ) -> None:
         assert executable == sys.executable, (executable, sys.executable)
-        self._dest = dest if dest is None else pkg_resources.normalize_path(dest)
+        # _workingset._normalize_path is pkg_resources.normalize_path's
+        # normcase(realpath(normpath)) formula, cached the same way.
+        self._dest = dest if dest is None else _workingset._normalize_path(dest)
         self._allow_hosts = allow_hosts
         self._allow_unknown_extras = allow_unknown_extras
 
@@ -1368,10 +1440,23 @@ class Installer:
     def _index(self, index: _package_index.PackageIndex | None) -> None:
         self.__dict__['_index_override'] = index
 
+    def _new_environment(self, search_path: Iterable[str]) -> Environment:
+        """The dist-scanning Environment of the current mode.
+
+        pip mode gets the pkg_resources-based class (built lazily, so
+        merely importing this module stays pkg_resources-free); uv mode
+        gets the facade from zc.buildout._workingset, which reproduces
+        the same scan order, precedence rules, and macOS can_add
+        override.
+        """
+        if self._installer == 'uv':
+            return _workingset.Environment(search_path)  # ty: ignore[invalid-return-type]  # facade Environment for uv mode
+        return _environment_class()(search_path)
+
     def _make_env(self) -> Environment:
         dist_paths = self._get_dest_dist_paths()
         full_path = dist_paths + self._path
-        env = Environment(full_path)
+        env = self._new_environment(full_path)
         # this needs to be called whenever self._env is modified (or we could
         # make an Environment subclass):
         self._eggify_env_dist_dists(env, dist_paths)
@@ -1408,21 +1493,22 @@ class Installer:
         Make sure everything found at `dist_paths` is seen as an egg, even if
         it's some other kind of dist.
 
-        Both sides go through pkg_resources.normalize_path: the scan
+        Both sides go through the same normalize_path (pkg_resources'
+        normcase(realpath(normpath)) formula, from _workingset): the scan
         normalizes dist locations (realpath, plus normcase case-folding on
         Windows) while dist_paths keep the configured spelling, so raw
         string comparison silently misses — leaving wheel-installed dists
         at DEVELOP_DIST precedence, which flips offline part signatures
         from egg basename to directory hash.
         """
-        containers = {pkg_resources.normalize_path(os.path.dirname(path))
+        containers = {_workingset._normalize_path(os.path.dirname(path))
                       for path in dist_paths}
         for project_name in env:
             for dist in env[project_name]:
-                location = pkg_resources.normalize_path(
+                location = _workingset._normalize_path(
                     os.path.dirname(_dist_location(dist)))
                 if location in containers:
-                    dist.precedence = pkg_resources.EGG_DIST
+                    dist.precedence = _workingset.EGG_DIST
 
     def _version_conflict_information(self, name: str) -> str:
         """Return textual requirements/constraint information for debug purposes
@@ -1540,34 +1626,49 @@ class Installer:
         whose directory vanished are left out: their egg-link is stale
         and the configured sources get their chance instead.
 
-        Develop precedence mirrors ``_satisfied``: a develop dist wins
-        only when it satisfies every spec the batch and the [versions]
-        constraints place on its project.  A dist that fails one — an
-        exact pin at another version, say — keeps its configured
-        sources reachable, so the pin resolves the way the resolution
-        loop resolved it.
+        Develop precedence mirrors ``_satisfied``'s env filter
+        (``dist in req``): a develop dist that fails a [versions]
+        constraint or one of the batch's own requirement specs keeps
+        its configured sources reachable, so the pin resolves the way
+        the resolution loop resolved it.  Every other develop dist of
+        the environment is offered, not only the ones the batch
+        names: the compile resolves the full dependency closure, and
+        a fetched project's transitive requirements must be
+        settleable by the develop dists the legacy fetch loop would
+        have found in the environment (a develop zc.buildout
+        satisfying a recipe's zc-buildout floor, say).  uv keeps an
+        override inert wherever the closure does not reference the
+        project.  Known divergence: uv overrides are per-project, so
+        a *transitive* spec the develop version fails cannot fall
+        back to configured sources the way the legacy
+        per-requirement loop did.
         """
-        by_project: dict[str, list[pkg_resources.Requirement]] = {}
-        for requirement in requirements:
-            by_project.setdefault(
-                str(canonicalize_name(requirement.project_name)),
-                []).append(requirement)
+        batch: dict[str, list[pkg_resources.Requirement]] = {}
+        for req in requirements:
+            batch.setdefault(
+                str(canonicalize_name(req.project_name)), []).append(req)
         overrides = set()
         for project_name in self._env:
             for dist in self._env[project_name]:
-                if dist.precedence != pkg_resources.DEVELOP_DIST:
+                if dist.precedence != _workingset.DEVELOP_DIST:
                     continue
                 name = str(canonicalize_name(dist.project_name))
-                if any(dist not in req
-                       for req in by_project.get(name, [])):
-                    continue
                 constraint = self._versions.get(name)
                 if constraint:
                     spec = (constraint if constraint[0] in '<>='
                             else '==' + constraint)
-                    if dist not in pkg_resources.Requirement.parse(
-                            name + spec):
+                    # Parse with the dist's own spelling: Requirement's
+                    # key keeps _safe_name semantics (dots preserved),
+                    # so a canonicalized name here would key-mismatch
+                    # the dist before the version is ever tested
+                    # (pkg_resources behaves the same).
+                    if dist not in _workingset.Requirement.parse(
+                            dist.project_name + spec):
                         continue
+                # ``dist in req`` with the batch requirement as spelled,
+                # the same key+version test _matching_dists applies.
+                if any(dist not in req for req in batch.get(name, [])):
+                    continue
                 root = _project_root(_dist_location(dist))
                 # uv reads override metadata even for projects the
                 # compile never references, so an override must name a
@@ -1820,7 +1921,10 @@ class Installer:
             for dist in new_dists:
                 name = str(canonicalize_name(dist.project_name))
                 if name not in requested:
-                    req = self._constrain(pkg_resources.Requirement.parse(name))
+                    # uv-only path: the facade requirement is the shape
+                    # _constrain handles here (asserted against the
+                    # shared packaging base in _constrained_requirement).
+                    req = self._constrain(_workingset.Requirement.parse(name))  # ty: ignore[invalid-argument-type]
                     logger.debug('Getting required %r', str(req))
                     self._log_requirement(ws, req)
         if self._check_picked:
@@ -1838,7 +1942,9 @@ class Installer:
                 elif name in new_names:
                     self._check_picked_requirement_versions(
                         self._constrain(
-                            pkg_resources.Requirement.parse(name)),
+                            # uv-only path: the facade requirement, as
+                            # above.
+                            _workingset.Requirement.parse(name)),  # ty: ignore[invalid-argument-type]
                         [dist])
         return resolved, swept
 
@@ -1895,7 +2001,7 @@ class Installer:
             if dist is None:
                 try:
                     dist = ws.find(req)
-                except pkg_resources.VersionConflict as err:
+                except _workingset.VersionConflict as err:
                     logger.debug(
                         "Version conflict while processing requirement %s "
                         "(constrained to %s)",
@@ -1950,7 +2056,7 @@ class Installer:
                 # Oops, the "best" so far conflicts with a dependency.
                 logger.info(self._version_conflict_information(req.key))
                 raise VersionConflict(
-                    pkg_resources.VersionConflict(dist, req), ws)
+                    _workingset.VersionConflict(dist, req), ws)
             best[req.key] = dist
             if dist not in ws:
                 ws.add(dist)
@@ -2044,7 +2150,7 @@ class Installer:
             paths = call_pip_install(spec, tmp)
 
             dists = []
-            env = Environment(paths)
+            env = self._new_environment(paths)
             for project in env:
                 dists.extend(env[project])
 
@@ -2200,7 +2306,7 @@ class Installer:
     def _check_picked_requirement_versions(self, requirement: pkg_resources.Requirement, dists: list[pkg_resources.Distribution | pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution]) -> None:
         """ Check whether we picked a version and, if we did, report it """
         for dist in dists:
-            if not (dist.precedence == pkg_resources.DEVELOP_DIST
+            if not (dist.precedence == _workingset.DEVELOP_DIST
                 or
                 (len(requirement.specs) == 1
                  and
@@ -2220,14 +2326,14 @@ class Installer:
     def _maybe_add_setuptools(self, ws: pkg_resources.WorkingSet, dist: pkg_resources.DistInfoDistribution | pkg_resources.EggInfoDistribution | pkg_resources.Distribution) -> None:
         if dist_needs_pkg_resources(dist):
             # We have a namespace package but no requirement for setuptools
-            if dist.precedence == pkg_resources.DEVELOP_DIST:
+            if dist.precedence == _workingset.DEVELOP_DIST:
                 logger.warning(
                     "Develop distribution: %s\n"
                     "uses namespace packages but the distribution "
                     "does not require setuptools.",
                     dist)
             requirement = self._constrain(
-                pkg_resources.Requirement.parse('setuptools')
+                _requirement_parse('setuptools')
                 )
             if ws.find(requirement) is None:
                 self._get_dist(requirement, ws)
@@ -2275,6 +2381,12 @@ class Installer:
         if self._installer == 'uv':
             return self._install_uv(requirements, ws, for_buildout_run)
 
+        # Everything below is the pip-mode resolution loop; the lazy
+        # import keeps uv-mode runs pkg_resources-free.  The loop's
+        # Environment comes from the module-level __getattr__, which
+        # builds the pkg_resources-based class on this access.
+        import pkg_resources
+
         _fetch_requested_dists(
             requirements, ws, self._get_dist, self._maybe_add_setuptools)
 
@@ -2291,7 +2403,7 @@ class Installer:
         # Note that we don't use the existing environment, because we want
         # to look for new eggs unless what we have is the best that
         # matches the requirement.
-        env = Environment(ws.entries)
+        env = _environment_class()(ws.entries)
 
         while requirements:
             # Process dependencies breadth-first.
@@ -2338,7 +2450,7 @@ class Installer:
 
     def build(self, spec: str, build_ext: dict[str, str]) -> list[str]:
 
-        requirement = self._constrain(pkg_resources.Requirement.parse(spec))
+        requirement = self._constrain(_requirement_parse(spec))
 
         dist, avail = self._satisfied(requirement, 1)
         if dist is not None:
@@ -2542,18 +2654,132 @@ def install(specs: tuple[str, ...] | list[str], dest: str | None,
                           allow_unknown_extras=allow_unknown_extras)
     return installer.install(specs, working_set)
 
-buildout_and_setuptools_dists = list(install(['zc.buildout'], None,
-                                             check_picked=False))
-buildout_and_setuptools_path = sorted({_dist_location(d)
-                                for d in buildout_and_setuptools_dists})
+_TOOLCHAIN_GLOBALS = frozenset((
+    'buildout_and_setuptools_dists',
+    'buildout_and_setuptools_path',
+    'pip_path',
+    'pip_pythonpath',
+    'setuptools_path',
+    'setuptools_pythonpath',
+    'runsetup_template',
+))
 
-pip_dists = [d for d in buildout_and_setuptools_dists if d.project_name != 'zc.buildout']
-pip_path = sorted({_dist_location(d) for d in pip_dists})
-logger.debug('after restricting versions: pip_path %r', pip_path)
-pip_pythonpath = os.pathsep.join(pip_path)
 
-setuptools_path = pip_path
-setuptools_pythonpath = pip_pythonpath
+class _ToolchainCache(TypedDict):
+    buildout_and_setuptools_dists: list[pkg_resources.Distribution | _workingset.Distribution]
+    buildout_and_setuptools_path: list[str]
+    pip_path: list[str]
+    pip_pythonpath: str
+    setuptools_path: list[str]
+    setuptools_pythonpath: str
+    runsetup_template: str
+
+
+_toolchain_cache: _ToolchainCache | None = None
+
+
+def _toolchain() -> _ToolchainCache:
+    """The buildout/setuptools/pip dist closure, resolved on first use.
+
+    Until the uv-mode port this ran at module import time: a scan of
+    the ambient pkg_resources working set for provisional paths, then
+    an install() call narrowing them to the zc.buildout requirement
+    closure.  Importing this module must now stay pkg_resources-free in
+    uv mode, and the installer mode is not chosen until the
+    configuration is read, so the whole computation moved here, behind
+    the module-level __getattr__.  First access happens after the mode
+    is in effect (script path computation, the bootstrap/setup
+    commands, pip subprocess env prep), so the resolve runs in the mode
+    that actually applies -- in pip mode bit-identical to the old
+    import-time computation, simply later.
+
+    The provisional paths are populated before the install() call
+    because Installer construction itself reads
+    ``buildout_and_setuptools_path`` (via ``_initial_path``); that is
+    the old two-phase module-level sequence, kept intact.
+    """
+    global _toolchain_cache
+    if _toolchain_cache is None:
+        # At the old import time this computation ran before logging
+        # was configured: DEBUG and INFO records went nowhere and only
+        # WARNING+ reached stderr.  First access now happens inside a
+        # configured process, so reproduce that silence — otherwise
+        # verbose transcripts gain lines the old world never printed.
+        logging.disable(logging.INFO)
+        try:
+            _compute_toolchain()
+        finally:
+            logging.disable(logging.NOTSET)
+    # _compute_toolchain assigns the cache unconditionally; the
+    # assertion carries that across the function boundary for ty.
+    assert _toolchain_cache is not None
+    return _toolchain_cache
+
+
+def _compute_toolchain() -> None:
+    """The toolchain resolve proper; see ``_toolchain``.
+
+    Assigns the module cache twice: a provisional fill before the
+    nested install() (Installer construction re-enters ``_toolchain``
+    via ``_initial_path`` and must see it), the narrowed result after.
+    """
+    global _toolchain_cache
+    # Provisional values from the ambient environment, the old
+    # import-time whole-working-set scan.
+    if Installer._installer == 'uv':
+        provisional = sorted({
+            _dist_location(d)
+            for entry in sys.path
+            for d in _workingset.scan_path_item(entry)})
+    else:
+        import pkg_resources
+        provisional = sorted(
+            {_dist_location(d) for d in pkg_resources.working_set})
+    logger.debug('before restricting versions: pip_path %r',
+                 provisional)
+    # Provisional fill, the old module-level whole-set scan.  The
+    # runsetup_template placeholder is never observed: only the
+    # setup/runsetup commands read it, never an in-flight install.
+    _toolchain_cache = _ToolchainCache(
+        buildout_and_setuptools_dists=[],
+        buildout_and_setuptools_path=provisional,
+        pip_path=provisional,
+        pip_pythonpath=os.pathsep.join(provisional),
+        setuptools_path=provisional,
+        setuptools_pythonpath=os.pathsep.join(provisional),
+        runsetup_template='',
+    )
+    # versions={} shadows the class-level Installer._versions: the
+    # configuration's [versions] pins are installed into the class
+    # when the configuration is read (buildout.py calls
+    # default_versions), which now precedes this first access.  At
+    # the old import time no configuration had been read yet, so
+    # the resolve ran unpinned; a user pin such as
+    # ``versions:zc.buildout=91.0`` would otherwise constrain this
+    # resolve and, with dest None, die as an offline-mode error.
+    dists: list[pkg_resources.Distribution | _workingset.Distribution] = [
+        *install(['zc.buildout'], None, check_picked=False, versions={})]
+    path = sorted({_dist_location(d) for d in dists})
+    pip_dists = [d for d in dists if d.project_name != 'zc.buildout']
+    pip = sorted({_dist_location(d) for d in pip_dists})
+    logger.debug('after restricting versions: pip_path %r', pip)
+    pip_pythonpath = os.pathsep.join(pip)
+    # Narrowed to the zc.buildout requirement closure, the old
+    # post-install recomputation.
+    _toolchain_cache = _ToolchainCache(
+        buildout_and_setuptools_dists=dists,
+        buildout_and_setuptools_path=path,
+        pip_path=pip,
+        pip_pythonpath=pip_pythonpath,
+        setuptools_path=pip,
+        setuptools_pythonpath=pip_pythonpath,
+        # The template body lives in scripts.py; the substitution
+        # used to happen at module level right after the import-time
+        # resolve defined setuptools_path.  Deferred %%(...)r escapes
+        # are consumed by a later printf substitution in buildout.py;
+        # a one-pass format rewrite would break the second stage.
+        runsetup_template=_runsetup_template % pip,
+    )
 
 
 def build(spec: str, dest: str | None, build_ext: dict[str, str],
@@ -2565,14 +2791,6 @@ def build(spec: str, dest: str | None, build_ext: dict[str, str],
                           True, path, newest,
                           versions, allow_hosts=allow_hosts)
     return installer.build(spec, build_ext)
-
-
-# The template body lives in scripts.py; the substitution happens here,
-# after the import-time resolve above defines setuptools_path, where the
-# combined statement used to sit.
-runsetup_template = _runsetup_template % setuptools_path
-# plus deferred %%(...)r escapes consumed by a later printf substitution
-# in buildout.py; a one-pass format rewrite would break the second stage.
 
 
 NOT_PICKED_AND_NOT_ALLOWED = """\

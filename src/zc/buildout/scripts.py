@@ -30,11 +30,15 @@ from typing import TYPE_CHECKING
 
 from packaging.utils import canonicalize_name, is_normalized_name
 
+from zc.buildout import _workingset
+
 if TYPE_CHECKING:
     # Annotations only. Runtime uses import pkg_resources lazily inside
-    # the functions that need it, so importing this module stays
+    # the pip-mode branches that need it, so importing this module stays
     # pkg_resources-free on the uv-mode startup path (easy_install
     # imports this module for its script facade).
+    from collections.abc import Callable
+
     import pkg_resources
 
 logger = logging.getLogger('zc.buildout.easy_install')
@@ -92,11 +96,18 @@ def _find_req_dist(
     Returns ``None`` when the requirement's environment marker excludes
     the current environment; raises ``ValueError`` when no dist matches.
     """
-    # Local import: the working_set passed in is pkg_resources-shaped in
-    # both modes until easy_install's uv path is ported, so this runtime
-    # use stays lazy to keep module import pkg_resources-free.
-    import pkg_resources
-    orig_req = pkg_resources.Requirement.parse(req)
+    # The working_set is facade-shaped in uv mode and
+    # pkg_resources-shaped in pip mode; parse with the matching
+    # requirement class.  pip mode imports pkg_resources lazily so
+    # uv-mode script generation stays pkg_resources-free.
+    from zc.buildout import easy_install
+    parse: Callable[[str], pkg_resources.Requirement]
+    if easy_install.installer() == 'uv':
+        parse = _workingset.Requirement.parse  # ty: ignore[invalid-assignment]  # facade Requirement in uv mode
+    else:
+        import pkg_resources
+        parse = pkg_resources.Requirement.parse
+    orig_req = parse(req)
     if orig_req.marker and not orig_req.marker.evaluate():
         return None
     if is_normalized_name(orig_req.name):
@@ -108,7 +119,7 @@ def _find_req_dist(
     else:
         # First try finding the package by its canonical name.
         canonicalized_name = canonicalize_name(orig_req.name)
-        canonical_req = pkg_resources.Requirement.parse(canonicalized_name)
+        canonical_req = parse(canonicalized_name)
         dist = working_set.find(canonical_req)
         if dist is None:
             # Now try to find the package by the original name we got from
@@ -128,8 +139,18 @@ def _dist_entry_points(
         dist: pkg_resources.Distribution,
         ) -> list[tuple[str, str, str]]:
     # regular console_scripts entry points
-    # Local import: dist is pkg_resources-shaped in both modes until
-    # easy_install's uv path is ported; keep module import clean.
+    # The dist is facade-shaped in uv mode and pkg_resources-shaped in
+    # pip mode; both shapes preserve entry_points.txt order, so the
+    # generated script set is identical.
+    from zc.buildout import easy_install
+    if easy_install.installer() == 'uv':
+        return [
+            (entry_point.name, entry_point.module, entry_point.attr or '')
+            for entry_point in dist.entry_points  # type: ignore[attr-defined]  # facade dist
+            if entry_point.group == 'console_scripts'
+        ]
+    # Local import: pip mode keeps the pkg_resources path; the lazy
+    # import keeps uv-mode runs pkg_resources-free.
     import pkg_resources
     entry_points = []
     for name in pkg_resources.get_entry_map(dist, 'console_scripts'):
@@ -598,10 +619,10 @@ if _interactive:
 '''
 
 # easy_install.py assembles the public runsetup_template as
-# ``_runsetup_template % setuptools_path`` right after its import-time
-# resolve defines setuptools_path; substituting here would import-time
-# couple this module back into easy_install, which imports this module
-# for its facade.
+# ``_runsetup_template % setuptools_path`` inside its first-access
+# toolchain resolve; substituting here would import-time couple this
+# module back into easy_install, which imports this module for its
+# facade.
 _runsetup_template = """
 import sys
 sys.path.insert(0, %%(setupdir)r)

@@ -109,6 +109,11 @@ def test_suite():
                # uv mode's own Getting/Got lines satisfy as they are.
                zc.buildout.testing.drop_uv_install_debug_chatter,
                zc.buildout.testing.drop_uv_resolution_narrative,
+               # uv mode returns the facade working set; its repr
+               # names that class.  Normalize to the pip-mode repr.
+               (re.compile(r'<zc\.buildout\._workingset'
+                           r'\.AmbientWorkingSet object'),
+                '<pkg_resources.WorkingSet object'),
                ])
             ),
         ]

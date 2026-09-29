@@ -10,8 +10,9 @@ differences:
 
 - The signature is different: all information needed to build the working set
   is passed as parameters.
-- The return value is simpler: only an instance of ``pkg_resources.WorkingSet``
-  is returned.
+- The return value is simpler: only the working set instance is returned —
+  a ``pkg_resources.WorkingSet`` in pip mode, the facade
+  ``zc.buildout._workingset.AmbientWorkingSet`` when ``installer = uv``.
 
 Here's an example:
 
@@ -30,7 +31,12 @@ Here's an example:
     ...     links=[link_server],
     ... )
     Getting...
-    >>> isinstance(ws, pkg_resources.WorkingSet)
+    >>> import zc.buildout.easy_install
+    >>> if zc.buildout.easy_install.installer() == 'uv':
+    ...     from zc.buildout._workingset import AmbientWorkingSet as ExpectedWS
+    ... else:
+    ...     ExpectedWS = pkg_resources.WorkingSet
+    >>> isinstance(ws, ExpectedWS)
     True
 
 We keep getting more and more dependencies installed, so let's just check that the most important ones are there.
