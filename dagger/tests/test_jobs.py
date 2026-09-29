@@ -274,7 +274,11 @@ def test_workflow_cells_match_job_table(workflow, uv_workflow):
     # scripts-head-* transcribes the setuptools-head makefile variants
     # (.github/workflows/Makefile-scripts-setuptools-head) that this
     # branch's workflow does not run; module-tests is the harness itself.
-    unexpected = {name for name in extra if not name.startswith("scripts-head-")} - {"module-tests"}
+    # setuptools-latest(-uv) are local-only floating-setuptools canaries
+    # (empty pin -> prepare.sh installs the newest release), pending the
+    # workflow-mirror decision queued with the operator.
+    unexpected = {name for name in extra if not name.startswith("scripts-head-")} - {
+        "module-tests", "setuptools-latest", "setuptools-latest-uv"}
     assert not unexpected, f"Job rows matching no workflow cell: {sorted(unexpected)}"
     assert sum(name.startswith("scripts-head-") for name in extra) == 10
     assert "module-tests" in extra
@@ -292,18 +296,18 @@ def test_family_invariants():
     assert set(jobs.FAMILY_MINUTES) == set(jobs.FAMILIES)
     counts = Counter(job.family for job in jobs.JOBS)
     assert counts == {
-        "setuptools": 10,
+        "setuptools": 11,
         "python": 6,
         "pip": 14,
         "scripts": 34,
         "static": 4,
         "coverage": 3,
-        "uv": 21,
+        "uv": 22,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 93
+    assert len(jobs.JOBS) == 95
 
 
 def test_select_jobs_pip():
