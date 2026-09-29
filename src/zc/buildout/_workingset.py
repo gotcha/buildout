@@ -51,6 +51,7 @@ import zipfile
 from collections.abc import Iterable, Iterator
 from functools import lru_cache
 from importlib import metadata
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from packaging.markers import InvalidMarker, Marker
@@ -164,9 +165,13 @@ def _is_pkg_requirement(req) -> bool:
     pkg_resources' Requirement carries ``key`` (and ``project_name``);
     packaging's does not.  Attribute detection, not isinstance: since
     setuptools 75 pkg_resources.Requirement *subclasses*
-    packaging.Requirement, so isinstance cannot tell them apart.
+    packaging.Requirement, so isinstance cannot tell them apart.  The
+    facade's own Requirement reproduces ``key``, so it is excluded by
+    class: bridging facade requirements into the pkg working set would
+    hand pkg-shaped dists to a containment check that only accepts
+    facade dists, raising VersionConflict on a matching install.
     """
-    return hasattr(req, 'key')
+    return hasattr(req, 'key') and not isinstance(req, Requirement)
 
 
 def _req_key(req: pkg_resources.Requirement | PackagingRequirement) -> str:
@@ -207,10 +212,15 @@ def _as_packaging_req(
 def _version_conflict(dist, req):
     """The VersionConflict for ``dist`` not matching ``req``.
 
-    Raised through the bridge while pkg_resources is loaded; without
-    it the facade's own VersionConflict carries the same ``(dist,
-    req)`` args ``errors.VersionConflict`` formats.
+    The facade's own dists always raise the facade class, so uv-mode
+    code can catch it whether or not pkg_resources happens to be
+    loaded (the pytest process has it; production uv runs do not).
+    Foreign dists still raise through the bridge while pkg_resources
+    is loaded; without it the facade's own VersionConflict carries the
+    same ``(dist, req)`` args ``errors.VersionConflict`` formats.
     """
+    if isinstance(dist, Distribution):
+        return VersionConflict(dist, req)
     pkg_resources = sys.modules.get('pkg_resources')
     if pkg_resources is not None:
         return pkg_resources.VersionConflict(dist, req)
@@ -299,12 +309,19 @@ class AmbientWorkingSet:
         return self.by_key.get(dist_key(dist)) == dist
 
     def __iter__(self):
-        # The dists grafted into this set, in registration order.
-        # Environment dists that were never added are covered by the
-        # ``find`` bridge while pkg_resources is loaded; iteration
-        # feeds "required by" bookkeeping, where only grafted dists
-        # carry relevant edges.
-        return iter(self.by_key.values())
+        # pkg_resources.WorkingSet.__iter__: entries order, first dist
+        # per project key.  insert_on's precedence semantics (eggs
+        # ahead of their parent directory, replace front-inserts) make
+        # this differ from add order — the easy_install graft relies
+        # on replace front-insertion listing a set dependency-first.
+        seen: dict[str, bool] = {}
+        for item in self.entries:
+            if item not in self.entry_keys:
+                continue
+            for key in self.entry_keys[item]:
+                if key not in seen:
+                    seen[key] = True
+                    yield self.by_key[key]
 
     def find(
             self,
@@ -362,6 +379,25 @@ def find_available(
             continue
         if _req_contains(req, dist.version):
             return dist
+    return None
+
+
+def find_on_sys_path(req: Requirement) -> Distribution | None:
+    """The first dist on ``sys.path`` matching ``req``.
+
+    Mirrors ``pkg_resources.working_set.find(Requirement.parse(...))``
+    for the testing harness: the global working set is the sys.path
+    scan with first-found-wins per project, and a held project at a
+    non-matching version is a VersionConflict, not a miss.
+    """
+    key = _req_key(req)
+    for entry in sys.path:
+        for dist in _scan_path_item(entry):
+            if dist.key != key:
+                continue
+            if dist in req:
+                return dist
+            raise _version_conflict(dist, req)
     return None
 
 
@@ -663,17 +699,31 @@ class Requirement(PackagingRequirement):
     def __contains__(self, item) -> bool:
         # pkg_resources.Requirement.__contains__: a dist matches when
         # its key matches and its version satisfies the specifier;
-        # prereleases always allowed.
-        if isinstance(item, Distribution):
+        # prereleases always allowed.  Dist detection duck-types on
+        # key+version rather than isinstance so pkg-shaped dists from
+        # a pkg_resources-built Environment (test seams instantiate it
+        # while pkg_resources is loaded) match the same way facade
+        # dists do; in production uv mode only facade dists exist.
+        if hasattr(item, 'key') and hasattr(item, 'version'):
             if item.key != self.key:
                 return False
             version = item.version
         else:
             version = item
-        return self.specifier.contains(version, prereleases=True)
+        try:
+            return self.specifier.contains(version, prereleases=True)
+        except Exception:  # noqa: BLE001 - mirrors the patch in
+            # patches.patch_pkg_resources_requirement_contains: the
+            # InvalidVersion class may come from either packaging copy.
+            return False
 
     def __repr__(self) -> str:
         return f'Requirement.parse({str(self)!r})'
+
+
+def _metadata_fn(base: str, name: str) -> str:
+    # pkg_resources.NullProvider._fn: '/'-joined resource paths.
+    return os.path.join(base, *name.split('/')) if name else base
 
 
 class _DirMetadata:
@@ -691,6 +741,14 @@ class _DirMetadata:
         with open(os.path.join(self.path, name), encoding='utf-8') as f:
             return f.read()
 
+    def metadata_isdir(self, name: str) -> bool:
+        return os.path.isdir(_metadata_fn(self.path, name))
+
+    def metadata_listdir(self, name: str) -> list[str]:
+        # os.listdir, like pkg_resources' filesystem provider: raises
+        # FileNotFoundError when the directory does not exist.
+        return os.listdir(_metadata_fn(self.path, name))
+
 
 class _FileMetadata:
     """Metadata provider for a single-file .egg-info (PKG-INFO only)."""
@@ -706,6 +764,14 @@ class _FileMetadata:
             raise KeyError(f'No metadata named {name!r}')
         with open(self.path, encoding='utf-8') as f:
             return f.read()
+
+    def metadata_isdir(self, name: str) -> bool:
+        # pkg_resources' egg_info is the file path itself; joining a
+        # name under it is never a directory.
+        return os.path.isdir(_metadata_fn(self.path, name))
+
+    def metadata_listdir(self, name: str) -> list[str]:
+        return os.listdir(_metadata_fn(self.path, name))
 
 
 class _ZipMetadata:
@@ -730,6 +796,26 @@ class _ZipMetadata:
         with zipfile.ZipFile(self.path) as zf:
             return zf.read(f'EGG-INFO/{name}').decode('utf-8')
 
+    def metadata_isdir(self, name: str) -> bool:
+        # pkg_resources.ZipProvider._isdir over its parent->children
+        # index: a directory exists iff some entry lies under it.
+        return any(n.startswith(self._dir_prefix(name))
+                   for n in self._zip_names())
+
+    def metadata_listdir(self, name: str) -> list[str]:
+        # ZipProvider._listdir: the direct children under the prefix.
+        prefix = self._dir_prefix(name)
+        children = []
+        for n in self._zip_names():
+            if n.startswith(prefix):
+                child = n[len(prefix):].split('/')[0]
+                if child and child not in children:
+                    children.append(child)
+        return children
+
+    def _dir_prefix(self, name: str) -> str:
+        return f'EGG-INFO/{name}/' if name else 'EGG-INFO/'
+
 
 class _EmptyMetadata:
     path = ''
@@ -739,6 +825,12 @@ class _EmptyMetadata:
 
     def get_metadata(self, name: str) -> str:
         raise KeyError(f'No metadata named {name!r}')
+
+    def metadata_isdir(self, name: str) -> bool:
+        return False
+
+    def metadata_listdir(self, name: str) -> list[str]:
+        return []
 
 
 class Distribution:
@@ -822,6 +914,20 @@ class Distribution:
         if key is None:
             self._key = key = self.project_name.lower()
         return key
+
+    @property
+    def egg_info(self) -> str | None:
+        """Path of the metadata directory (pkg_resources' egg_info).
+
+        pkg_resources sets it eagerly at scan time: the EGG-INFO dir
+        for an unpacked egg, ``<zip>/EGG-INFO`` for a zipped one, the
+        .dist-info dir itself for a DistInfoDistribution.  The metadata
+        provider's path is exactly that for the directory and file
+        providers.
+        """
+        if isinstance(self._provider, _ZipMetadata):
+            return os.path.join(self._provider.path, 'EGG-INFO')
+        return getattr(self._provider, 'path', None)
 
     @property
     def version(self) -> str:
@@ -915,15 +1021,42 @@ class Distribution:
             return iter(())
         return _yield_lines(self._provider.get_metadata(name))
 
+    def metadata_isdir(self, name: str) -> bool:
+        # pkg_resources.Distribution reaches these through __getattr__
+        # delegation to the provider; the facade declares them.
+        return self._provider.metadata_isdir(name)
+
+    def metadata_listdir(self, name: str) -> list[str]:
+        return self._provider.metadata_listdir(name)
+
+    def clone(self, **kw):
+        """Copy this distribution, substituting changed keyword args.
+
+        pkg_resources.Distribution.clone: name and version pass
+        through ``__init__``'s normalizers again (idempotent); the
+        metadata provider carries over unchanged.  A dist-info dist's
+        instance-level ``PKG_INFO`` override is preserved the way
+        pkg's DistInfoDistribution subclass keeps its class value.
+        """
+        for attr in ('project_name', 'version', 'py_version',
+                     'platform', 'location', 'precedence'):
+            kw.setdefault(attr, getattr(self, attr, None))
+        kw.setdefault('provider', self._provider)
+        clone = self.__class__(**kw)
+        if 'PKG_INFO' in self.__dict__:
+            clone.PKG_INFO = self.PKG_INFO
+        return clone
+
     # -- entry points ----------------------------------------------
 
     @property
     def entry_points(self):
         # importlib parses entry_points.txt for both METADATA and
-        # EGG-INFO directory layouts.
+        # EGG-INFO directory layouts.  PathDistribution needs a real
+        # pathlib.Path (its read_text calls joinpath).
         path = getattr(self._provider, 'path', None)
         if path and os.path.isdir(path):
-            return metadata.PathDistribution(path).entry_points
+            return metadata.PathDistribution(Path(path)).entry_points
         return ()
 
     # -- dependencies ------------------------------------------------
@@ -1228,6 +1361,12 @@ def _scan_path_item(path_item: str) -> Iterator[Distribution]:
                     resolved = os.path.join(path_item, ref)
                     yield from _scan_path_item(resolved)
                     break
+
+
+# Public alias for callers porting off pkg_resources.find_distributions
+# (install_backend's pin lookup), the same scanner under its
+# single-path-item contract.
+scan_path_item = _scan_path_item
 
 
 class Environment:

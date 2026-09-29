@@ -28,9 +28,12 @@ import zc.buildout
 if TYPE_CHECKING:
     # Type annotations only: with ``from __future__ import annotations``
     # these are never evaluated at runtime, so uv mode never needs
-    # pkg_resources for this module. Callers still pass pkg_resources
-    # objects built by the legacy (pip) code paths.
+    # pkg_resources for this module. Callers pass pkg_resources objects
+    # built by the legacy (pip) code paths, or the behavioral-twin
+    # facade objects from zc.buildout._workingset on the uv path.
     import pkg_resources
+
+    from zc.buildout import _workingset
 
 
 class IncompatibleConstraintError(zc.buildout.UserError):
@@ -43,7 +46,7 @@ IncompatibleVersionError = IncompatibleConstraintError  # Backward compatibility
 
 class VersionConflict(zc.buildout.UserError):
 
-    def __init__(self, err: pkg_resources.VersionConflict, ws: Iterable[pkg_resources.Distribution]) -> None:
+    def __init__(self, err: pkg_resources.VersionConflict | _workingset.VersionConflict, ws: Iterable[pkg_resources.Distribution | _workingset.Distribution]) -> None:
         ws = list(ws)
         ws.sort()
         self.err, self.ws = err, ws
@@ -71,7 +74,7 @@ def _uv_detail_suffix(detail: str | None) -> str:
 
 class MissingDistribution(zc.buildout.UserError):
 
-    def __init__(self, req: pkg_resources.Requirement, ws: pkg_resources.WorkingSet,
+    def __init__(self, req: pkg_resources.Requirement | _workingset.Requirement, ws: pkg_resources.WorkingSet | _workingset.AmbientWorkingSet,
                  detail: str | None = None) -> None:
         sorted_dists = list(ws)
         sorted_dists.sort()

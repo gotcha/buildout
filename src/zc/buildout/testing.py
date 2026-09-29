@@ -32,10 +32,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.request import urlopen
 
-import pkg_resources
-
 import zc.buildout.buildout
 import zc.buildout.easy_install
+from zc.buildout import _workingset
 from zc.buildout.rmtree import rmtree
 
 print_ = zc.buildout.buildout.print_
@@ -655,8 +654,8 @@ def install(project, destination):
         destination = os.path.join(destination.globs['sample_buildout'],
                                    'eggs')
 
-    dist = pkg_resources.working_set.find(
-        pkg_resources.Requirement.parse(project))
+    dist = _workingset.find_on_sys_path(
+        _workingset.Requirement.parse(project))
     if dist is None:
         raise ValueError(f'Distribution not found for {project!r}')
     if dist.location is None:
@@ -679,8 +678,8 @@ def install_develop(project, destination):
         destination = os.path.join(destination.globs['sample_buildout'],
                                    'develop-eggs')
 
-    dist = pkg_resources.working_set.find(
-        pkg_resources.Requirement.parse(project))
+    dist = _workingset.find_on_sys_path(
+        _workingset.Requirement.parse(project))
     if dist is None:
         raise ValueError(f'Distribution not found for {project!r}')
     if dist.location is None:
@@ -1064,7 +1063,7 @@ def run_buildout(command):
     # Make sure we don't get .buildout
     os.environ['HOME'] = os.path.join(os.getcwd(), 'home')
     args = command.split()
-    buildout = pkg_resources.load_entry_point(
+    buildout = _workingset.load_entry_point(
         'zc.buildout', 'console_scripts', args[0])
     buildout(args[1:])
 
