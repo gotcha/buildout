@@ -26,6 +26,9 @@ Invariants: no user-visible behavior change except where a phase says so;
 every commit green under lint, ty, complexity, pytest, `make test`,
 `make test-uv`; news fragment per repo policy; author per repo policy, no
 trailers; gates close at an exact head SHA; the operator lands.
+Execution follows the poteto-mode discipline (pinned behavior contracts,
+small verified units, delegated mechanical edits with owned review) at
+every phase — stated once here, not repeated per point.
 
 ## Phase 0 — Probe (pure verification, no product change)
 
@@ -168,6 +171,10 @@ setuptools and Python.
 
 ## Close the program
 
+- [ ] Root-cause and fix the `test_runsetup` isolation flakiness (fails
+      standalone, green in full xdist runs; pre-existing on devenv —
+      proven by stash on e4de821f and 3fef1678). Every phase gates on
+      the legacy suites, so suite trust is program-critical.
 - [ ] `python -c "import zc.buildout.buildout"` in a uv-mode hermetic
       env loads neither pkg_resources nor setuptools (import-hook proof).
 - [ ] setup.py has no setuptools upper bound; easy_install.py has no
