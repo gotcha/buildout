@@ -815,7 +815,7 @@ def _get_matching_dist_in_location(dist: pkg_resources.DistInfoDistribution | pk
     Check if `locations` contain only the one intended dist.
     Return the dist with metadata in the new location.
     """
-    from zc.buildout.easy_install import Environment
+    from zc.buildout import easy_install
 
     # Getting the dist from the environment causes the distribution
     # meta data to be read. Cloning isn't good enough. We must compare
@@ -823,11 +823,16 @@ def _get_matching_dist_in_location(dist: pkg_resources.DistInfoDistribution | pk
     # may be normalized (e.g., 3.3 becomes 3.3.0 when downloaded from
     # PyPI.)
 
-    env = Environment([location])
+    if easy_install.installer() == 'uv':
+        env = _workingset.Environment([location])
+    else:
+        env = easy_install.Environment([location])
     dists = [ d for project_name in env for d in env[project_name] ]
     dist_infos = [ (normalize_name(d.project_name), d.parsed_version) for d in dists ]
     if dist_infos == [(normalize_name(dist.project_name), dist.parsed_version)]:
-        return dists.pop()
+        # Both Environment implementations feed this; the facade's dists
+        # are the uv-mode shape.
+        return dists.pop()  # ty: ignore[invalid-return-type]
 
 
 def _ensure_dest_dir(dest: str) -> None:
@@ -987,21 +992,18 @@ def _dist_for_pin(dest: str, pin: uv_resolve.PinnedDist
                   ) -> pkg_resources.Distribution | None:
     """The distribution installed in ``dest`` that ``pin`` names.
 
-    ``pkg_resources.find_distributions`` follows ``os.listdir`` order,
-    so picking its first hit is ambiguous once a batched install leaves
+    The scanner (``_workingset.scan_path_item``) follows the same
+    ``os.listdir`` order ``pkg_resources.find_distributions`` did, so
+    picking its first hit is ambiguous once a batched install leaves
     several ``.dist-info`` dirs in one directory; match the pin's
     canonicalized name and parsed version instead.
     """
     wanted = canonicalize_name(pin.name)
-    # The dists found here flow back into easy_install, which is
-    # still pkg_resources-shaped until its own unit of the uv
-    # dependency removal plan; hence the lazy import.
-    import pkg_resources
     version = parse_version(pin.version)
-    for distro in pkg_resources.find_distributions(dest):
+    for distro in _workingset.scan_path_item(dest):
         if (canonicalize_name(distro.project_name) == wanted
                 and distro.parsed_version == version):
-            return distro
+            return distro  # ty: ignore[invalid-return-type]  # facade dist (uv-only caller)
     return None
 
 
@@ -1067,7 +1069,8 @@ def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
 
 
 def sort_working_set(ws: pkg_resources.WorkingSet, eggs_dir: str, develop_eggs_dir: str) -> pkg_resources.WorkingSet:
-    from zc.buildout.easy_install import _dist_location
+    from zc.buildout import easy_install
+    _dist_location = easy_install._dist_location
     develop_paths = set()
     pattern = os.path.join(develop_eggs_dir, '*.egg-link')
     for egg_link in glob.glob(pattern):
@@ -1089,8 +1092,17 @@ def sort_working_set(ws: pkg_resources.WorkingSet, eggs_dir: str, develop_eggs_d
             other_paths.append(path)
     sorted_paths.extend(egg_paths)
     sorted_paths.extend(other_paths)
-    # Called with pkg_resources working sets in both modes until the
-    # easy_install unit; keep the import lazy.
+    if easy_install.installer() == 'uv':
+        # Facade mirror of pkg_resources.WorkingSet(sorted_paths):
+        # scan each entry (first-found-wins per project, in path
+        # order) into a working set over exactly those entries.
+        new_ws = _workingset.AmbientWorkingSet(sorted_paths)
+        for path in sorted_paths:
+            for dist in _workingset.scan_path_item(path):
+                new_ws.add(dist, entry=path)
+        return new_ws  # ty: ignore[invalid-return-type]  # facade working set for uv mode
+    # pip mode keeps the pkg_resources working set; the lazy import
+    # keeps uv-mode runs pkg_resources-free.
     import pkg_resources
     return pkg_resources.WorkingSet(sorted_paths)
 

@@ -162,6 +162,11 @@ def test_requirement_discrimination():
     assert _workingset._is_pkg_requirement(pkg_req)
     assert not _workingset._is_pkg_requirement(
         PackagingRequirement('foo>=1.0'))
+    # The facade's own Requirement reproduces ``key`` but must not be
+    # bridged into the pkg working set: pkg would return pkg-shaped
+    # dists the facade containment check rejects as VersionConflict.
+    assert not _workingset._is_pkg_requirement(
+        _workingset.Requirement.parse('foo>=1.0'))
 
 
 def test_load_entry_point_and_missing_errors():
