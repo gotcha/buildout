@@ -22,14 +22,19 @@ def _run_in_subprocess(code: str) -> subprocess.CompletedProcess:
     )
 
 
-def test_importing_buildout_does_not_import_pkg_resources():
-    # The uv-mode property: importing zc.buildout installs the patch
-    # trigger but must not load pkg_resources.
+def test_importing_buildout_aliases_the_vendored_pkg_resources():
+    # Post-vendoring contract: importing zc.buildout installs its own
+    # pkg_resources copy as plain `pkg_resources` (setuptools >= 82 no
+    # longer ships one), so the module is present right away — and it
+    # must be ours, not an installed setuptools' copy.  (On setuptools
+    # < 68 the installed copy is dragged in by `import setuptools`
+    # itself before our alias can install; this lane runs on the
+    # pinned hermetic setuptools, which is newer.)
     result = _run_in_subprocess(
         'import sys\n'
         'import zc.buildout\n'
-        "assert 'pkg_resources' not in sys.modules, "
-        "'pkg_resources loaded at import'\n"
+        "name = sys.modules['pkg_resources'].__name__\n"
+        "assert name == 'zc.buildout._vendor.pkg_resources', name\n"
     )
     assert result.returncode == 0, result.stderr
 

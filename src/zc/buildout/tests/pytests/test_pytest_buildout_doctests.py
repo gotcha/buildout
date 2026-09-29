@@ -632,6 +632,7 @@ uses namespace packages but the distribution does not require setuptools.
 -  foox-0.0.0-py2.4.egg
 -  packaging.egg-link
 -  pip.egg-link
+-  platformdirs.egg-link
 -  setuptools.egg-link
 -  uv.egg-link
 -  wheel.egg-link
