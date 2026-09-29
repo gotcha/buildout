@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from packaging.utils import canonicalize_name
-from packaging.version import InvalidVersion
+from packaging.version import InvalidVersion, Version
 from packaging.version import parse as parse_version
 
 import zc.buildout
@@ -810,6 +810,26 @@ UNPACKERS = {
 }
 
 
+def _version_equality_key(version: object) -> Version | str:
+    """Re-parse a possibly foreign parsed version for comparison.
+
+    The dist handed in can carry a ``parsed_version`` built by
+    ``pkg_resources.parse_version``; on setuptools older than 71 that
+    is setuptools' *vendored* copy of packaging, whose ``Version``
+    class is a different type than the packaging this module imports.
+    Two different ``Version`` classes never compare equal — not even
+    for equivalent versions like 3.3 and 3.3.0, which PR #452 requires
+    to match — so both sides of the comparison are re-parsed with the
+    same parser here.  Versions packaging cannot parse (legacy ones,
+    which pkg_resources tolerates) fall back to their string form,
+    keeping their old compare-by-exact-string semantics.
+    """
+    try:
+        return parse_version(str(version))
+    except InvalidVersion:
+        return str(version)
+
+
 def _get_matching_dist_in_location(dist: pkg_resources.DistInfoDistribution | pkg_resources.Distribution, location: str) -> pkg_resources.Distribution | pkg_resources.DistInfoDistribution | None:
     """
     Check if `locations` contain only the one intended dist.
@@ -828,8 +848,12 @@ def _get_matching_dist_in_location(dist: pkg_resources.DistInfoDistribution | pk
     else:
         env = easy_install.Environment([location])
     dists = [ d for project_name in env for d in env[project_name] ]
-    dist_infos = [ (normalize_name(d.project_name), d.parsed_version) for d in dists ]
-    if dist_infos == [(normalize_name(dist.project_name), dist.parsed_version)]:
+    dist_infos = [
+        (normalize_name(d.project_name), _version_equality_key(d.parsed_version))
+        for d in dists
+    ]
+    if dist_infos == [(normalize_name(dist.project_name),
+                       _version_equality_key(dist.parsed_version))]:
         # Both Environment implementations feed this; the facade's dists
         # are the uv-mode shape.
         return dists.pop()  # ty: ignore[invalid-return-type]
