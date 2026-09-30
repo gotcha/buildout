@@ -22,19 +22,39 @@ def _run_in_subprocess(code: str) -> subprocess.CompletedProcess:
     )
 
 
+def _setuptools_import_drags_pkg_resources() -> bool:
+    """Whether ``import setuptools`` loads an installed pkg_resources.
+
+    True on setuptools < 68: its own import drags pkg_resources into
+    sys.modules, so the vendored-copy alias finds the module already
+    loaded and keeps it (module identity, see zc/buildout/__init__.py).
+    Probe in a fresh interpreter — this test process has long imported
+    both, so its sys.modules cannot answer the question.
+    """
+    result = _run_in_subprocess(
+        'import sys\n'
+        'import setuptools\n'
+        "print('pkg_resources' in sys.modules)\n"
+    )
+    return result.stdout.strip() == 'True'
+
+
 def test_importing_buildout_aliases_the_vendored_pkg_resources():
     # Post-vendoring contract: importing zc.buildout installs its own
     # pkg_resources copy as plain `pkg_resources` (setuptools >= 82 no
     # longer ships one), so the module is present right away — and it
-    # must be ours, not an installed setuptools' copy.  (On setuptools
-    # < 68 the installed copy is dragged in by `import setuptools`
-    # itself before our alias can install; this lane runs on the
-    # pinned hermetic setuptools, which is newer.)
+    # must be ours, not an installed setuptools' copy.  Except on
+    # setuptools < 68: there `import setuptools` itself drags the
+    # installed copy in before the alias can install, and that copy is
+    # kept by design.
+    expected = ('pkg_resources'
+                if _setuptools_import_drags_pkg_resources()
+                else 'zc.buildout._vendor.pkg_resources')
     result = _run_in_subprocess(
         'import sys\n'
         'import zc.buildout\n'
         "name = sys.modules['pkg_resources'].__name__\n"
-        "assert name == 'zc.buildout._vendor.pkg_resources', name\n"
+        f"assert name == {expected!r}, name\n"
     )
     assert result.returncode == 0, result.stderr
 

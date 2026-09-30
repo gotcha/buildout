@@ -50,7 +50,12 @@ def test_requirement_str_repr_key_specs_match_pkg_resources():
         assert repr(adapted) == repr(legacy), case
         assert adapted.key == legacy.key, case
         assert adapted.project_name == legacy.project_name, case
-        assert adapted.specs == legacy.specs, case
+        # .specs order is the underlying packaging's SpecifierSet
+        # iteration order: canonical-sorted in modern packaging, but
+        # raw set order in the packagings old setuptools vendor —
+        # hash-random per process there.  The constraint set is the
+        # parity contract, not the incidental order.
+        assert sorted(adapted.specs) == sorted(legacy.specs), case
         assert list(adapted.extras) == list(legacy.extras), case
 
 

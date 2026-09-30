@@ -252,6 +252,20 @@ def patch_pkg_resources_requirement_contains() -> None:
                 return False
 
             item = item.version
+        else:
+            # Also accept dist-shaped objects that are not a Distribution
+            # of whichever pkg_resources copy is live: uv mode's facade
+            # dists (zc.buildout._workingset.Distribution) deliberately do
+            # not subclass it.  Falling through to the specifier with the
+            # object itself makes old vendored packagings (setuptools
+            # < 68's copy) raise TypeError instead of comparing versions.
+            item_key = getattr(item, 'key', None)
+            item_version = getattr(item, 'version', None)
+            if item_key is not None and item_version is not None:
+                if normalize_name(item_key) != normalize_name(self.key):
+                    return False
+
+                item = item_version
 
         # Allow prereleases always in order to match the previous behavior of
         # this method. In the future this should be smarter and follow PEP 440
