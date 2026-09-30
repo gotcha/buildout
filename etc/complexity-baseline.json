@@ -477,7 +477,7 @@
  "src/zc/buildout/buildout.py:_check_for_unused_options_in_section": 4,
  "src/zc/buildout/buildout.py:_default_globals": 2,
  "src/zc/buildout/buildout.py:_dir_hash": 14,
- "src/zc/buildout/buildout.py:_dir_hash_file_ignored": 2,
+ "src/zc/buildout/buildout.py:_dir_hash_file_ignored": 3,
  "src/zc/buildout/buildout.py:_dists_sig": 4,
  "src/zc/buildout/buildout.py:_doing": 7,
  "src/zc/buildout/buildout.py:_error": 1,

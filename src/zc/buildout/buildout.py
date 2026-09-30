@@ -1576,13 +1576,21 @@ _dir_hashes = {}
 def _dir_hash_file_ignored(name: str) -> bool:
     """Files _dir_hash must not see.
 
-    pyc/pyo are interpreter caches. SOURCES.txt is setuptools' sdist
+    pyc/pyo are interpreter caches.  SOURCES.txt is setuptools' sdist
     manifest: any packaging run on the source tree (python -m build,
     setup.py sdist) regenerates it with varying content while the
     installed dist is unchanged, so hashing it flips develop-dist
-    signatures and forces spurious part reinstalls.
+    signatures and forces spurious part reinstalls.  Coverage's
+    parallel-mode data files (.coverage.<host>.<pid>.<serial>) are the
+    same hazard from the other side: under COVERAGE_PROCESS_START every
+    instrumented subprocess drops one into COVERAGE_FILE's directory —
+    the checkout root in CI — while other buildout runs hash the tree,
+    so a develop signature can flip between two runs of one narrative
+    (GH's coverage pytest job: test_buildout_prefer_final_option).
     """
-    return name.endswith(('pyc', 'pyo')) or name == 'SOURCES.txt'
+    return (name.endswith(('pyc', 'pyo'))
+            or name == 'SOURCES.txt'
+            or name.startswith('.coverage'))
 
 
 def _dir_hash(dir: str) -> str:
