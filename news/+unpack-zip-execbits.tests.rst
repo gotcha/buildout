@@ -1,0 +1,1 @@
+Fixed test_unpack_egg_unpacks_zip_archive on Windows: unix exec bits cannot exist there (os.chmod only toggles the read-only bit), so the mode assertion is now POSIX-only. The archive-content and traversal-protection assertions still run on every platform. [gotcha]

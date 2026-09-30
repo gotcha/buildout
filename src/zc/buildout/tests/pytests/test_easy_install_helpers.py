@@ -1466,8 +1466,11 @@ def test_unpack_egg_unpacks_zip_archive(tmp_path):
 
     assert (dest / 'demo' / '__init__.py').read_text() == 'x = 1\n'
     assert (dest / 'demo' / 'data.txt').read_text() == 'payload'
-    mode = (dest / 'demo' / 'run.sh').stat().st_mode
-    assert mode & 0o111  # unix exec bits restored
+    if sys.platform != 'win32':
+        # os.chmod only toggles the read-only bit on Windows; unix exec
+        # bits exist solely on POSIX.
+        mode = (dest / 'demo' / 'run.sh').stat().st_mode
+        assert mode & 0o111  # unix exec bits restored
     assert not (dest / 'absolute.txt').exists()
     assert not (tmp_path / 'traversal.txt').exists()
 
