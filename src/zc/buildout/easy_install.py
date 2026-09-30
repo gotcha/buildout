@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, cast
 from packaging import specifiers
 from packaging.requirements import Requirement as PackagingRequirement
 from packaging.utils import canonicalize_name, is_normalized_name
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 
 import zc.buildout
 import zc.buildout.rmtree
@@ -770,6 +770,23 @@ def _project_root(location: str) -> str:
     return location
 
 
+def _env_dist_version(dist: pkg_resources.Distribution) -> Version:
+    """``dist``'s version parsed by *this* packaging copy.
+
+    On setuptools < 68 legs the environment's dists come from the
+    installed pkg_resources, whose vendored packaging builds a Version
+    class that raises TypeError when compared with this copy's — so the
+    pin comparisons in ``_pin_beats_env_dist`` re-parse from the string
+    rather than use ``dist.parsed_version``.  An unparseable version
+    keeps ``parsed_version``'s forgiving parse (a LegacyVersion on old
+    vendored packagings), which still compares against anything.
+    """
+    try:
+        return Version(dist.version)
+    except InvalidVersion:
+        return dist.parsed_version
+
+
 def _pin_beats_env_dist(
         pin: uv_resolve.PinnedDist,
         env_dist: pkg_resources.Distribution,
@@ -787,7 +804,7 @@ def _pin_beats_env_dist(
     dist without being newer.
     """
     pin_version = Version(pin.version)
-    env_version = env_dist.parsed_version
+    env_version = _env_dist_version(env_dist)
     if prefer_final:
         if final_version(pin_version):
             if final_version(env_version):
