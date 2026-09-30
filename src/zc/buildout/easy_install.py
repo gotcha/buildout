@@ -27,9 +27,11 @@ import email
 import email.parser
 import errno
 import glob
+import importlib.util
 import logging
 import operator
 import os
+import pathlib
 import posixpath
 import re
 import shutil
@@ -2733,6 +2735,19 @@ def _toolchain() -> _ToolchainCache:
     return _toolchain_cache
 
 
+def _uv_provisional_paths() -> list[str]:
+    """The uv-mode provisional scan: every dist the facade sees on
+    ``sys.path``.
+
+    Extracted from ``_compute_toolchain`` so the pip-mode guard and
+    the per-mode resolve specs fit its complexity budget.
+    """
+    return sorted({
+        _dist_location(d)
+        for entry in sys.path
+        for d in _workingset.scan_path_item(entry)})
+
+
 def _compute_toolchain() -> None:
     """The toolchain resolve proper; see ``_toolchain``.
 
@@ -2744,11 +2759,15 @@ def _compute_toolchain() -> None:
     # Provisional values from the ambient environment, the old
     # import-time whole-working-set scan.
     if Installer._installer == 'uv':
-        provisional = sorted({
-            _dist_location(d)
-            for entry in sys.path
-            for d in _workingset.scan_path_item(entry)})
+        provisional = _uv_provisional_paths()
     else:
+        pip_spec = importlib.util.find_spec('pip')
+        if pip_spec is None:
+            raise zc.buildout.UserError(
+                "The 'pip' installer requires pip, which is not "
+                "installed in this environment. Install the extra "
+                "with `uv pip install 'zc.buildout[pip]'`, or switch "
+                "to `installer = uv`.")
         import pkg_resources
         provisional = sorted(
             {_dist_location(d) for d in pkg_resources.working_set})
@@ -2774,11 +2793,27 @@ def _compute_toolchain() -> None:
     # the resolve ran unpinned; a user pin such as
     # ``versions:zc.buildout=91.0`` would otherwise constrain this
     # resolve and, with dest None, die as an offline-mode error.
+    # The specs stay ['zc.buildout'] in both modes — see the pip_path
+    # comment below for why pip is not an explicit spec.
     dists: list[pkg_resources.Distribution | _workingset.Distribution] = [
         *install(['zc.buildout'], None, check_picked=False, versions={})]
     path = sorted({_dist_location(d) for d in dists})
     pip_dists = [d for d in dists if d.project_name != 'zc.buildout']
-    pip = sorted({_dist_location(d) for d in pip_dists})
+    # pip used to ride into the closure via install_requires, so
+    # pip_path listed it; pip is an opt-in extra now.  In pip mode the
+    # guard above guarantees pip is importable, and its location joins
+    # pip_path explicitly: the pip subprocess env (_pip_install_env)
+    # puts pip_path on PYTHONPATH, and a pip living outside the
+    # interpreter's site-packages (egg topology) is only importable
+    # there because this process's sys.path carries it.  Resolving pip
+    # as an extra spec instead would poison the resolver's
+    # once-built Environment with pip's whole site-packages and
+    # silently drop every satisfied dependency from the result.
+    pip_locations = {_dist_location(d) for d in pip_dists}
+    if Installer._installer != 'uv':
+        pip_pkg_dir = next(iter(pip_spec.submodule_search_locations or ()))
+        pip_locations.add(str(pathlib.Path(pip_pkg_dir).parent))
+    pip = sorted(pip_locations)
     logger.debug('after restricting versions: pip_path %r', pip)
     pip_pythonpath = os.pathsep.join(pip)
     # Narrowed to the zc.buildout requirement closure, the old

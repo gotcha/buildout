@@ -55,7 +55,11 @@ setup(
     install_requires = [
         'setuptools>=61.0.0',
         'packaging>=23.2',
-        'pip',
+        # pip is NOT a dependency: the uv installer never touches it,
+        # the legacy pip installer requires it via the
+        # 'zc.buildout[pip]' extra below, and pip mode raises a clear
+        # error when pip is missing (guard in
+        # easy_install._compute_toolchain).
         # platformdirs is used by the vendored pkg_resources copy, see
         # src/zc/buildout/_vendor/README.rst
         'platformdirs',
@@ -71,7 +75,8 @@ setup(
     extras_require = {
         "test": ['zope.testing', 'manuel',
               'bobo ==2.3.0', 'zdaemon', 'zc.zdaemonrecipe',
-              'zc.recipe.deployment']},
+              'zc.recipe.deployment'],
+        "pip": ["pip"]},
     zip_safe=False,
     classifiers = [
        'Development Status :: 6 - Mature',

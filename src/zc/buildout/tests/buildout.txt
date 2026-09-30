@@ -59,7 +59,6 @@ The ``eggs`` directory has installed distributions, now in a directory per forma
     d  v5
     >>> ls(sample_buildout, 'eggs', 'v5')
     -  packaging.egg-link
-    -  pip.egg-link
     -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
