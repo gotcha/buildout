@@ -115,16 +115,16 @@ ground truth (final artifacts:
 
 ## Phase 2 — Core pkg_resources layer (both modes benefit)
 
-- [ ] Port the ~10 core call sites to stdlib/packaging equivalents:
+- [x] Port the ~10 core call sites to stdlib/packaging equivalents:
       `Requirement.parse` -> `packaging.Requirement`;
       `load_entry_point`/`iter_entry_points` -> `importlib.metadata.entry_points`;
       `WorkingSet`/`working_set.resolve` -> `importlib.metadata.distributions`
       plus the dist model the uv seam already uses;
       `DistributionNotFound` -> `importlib.metadata.PackageNotFoundError`;
       `DEVELOP_DIST` precedence -> our own editable detection.
-- [ ] Keep the legacy suite's monkeypatch points working (facade or
+- [x] Keep the legacy suite's monkeypatch points working (facade or
       shim where the suite patches these names).
-- [ ] Gate: full unit ladder + ten-lane live harness, both modes.
+- [x] Gate: full unit ladder + ten-lane live harness, both modes.
 
 ## Phase 3 — Legacy suite on newer setuptools via vendored pkg_resources
 
@@ -132,21 +132,24 @@ The compatibility shim that lets the <82 caps die while legacy pip mode
 keeps working, and that keeps the legacy doctest corpus green on newer
 setuptools and Python.
 
-- [ ] Vendor pkg_resources (upstream's approach in #751, a84d9c5b — take
+- [x] Vendor pkg_resources (upstream's approach in #751, a84d9c5b — take
       it per se if it applies cleanly) and repoint legacy-mode imports
       (easy_install.py, _package_index.py, scripts.py resource access)
       to the vendored copy.
-- [ ] Drop the `setuptools<82` cap in setup.py and the `<82` restriction
+- [x] Drop the `setuptools<82` cap in setup.py and the `<82` restriction
       in easy_install.py (legacy path keeps working through the vendored
       pkg_resources, not through setuptools' copy).
-- [ ] Legacy suite proven with newer setuptools: keep the hermetic seed
+- [x] Legacy suite proven with newer setuptools: keep the hermetic seed
       floor (testing.py, currently 75.8.2) for reproducibility AND add a
       setuptools-latest leg; `make test` and `make test-uv` both green on
       it. This is the acceptance test that the vendoring, not the cap,
       is what keeps legacy alive.
 - [ ] Make pip legacy-only: drop `'pip'` from unconditional
-      install_requires (setup.py:53); pip mode provisions it itself,
-      test scaffolding keeps seeding it. User-visible for anyone
+      install_requires (setup.py); pip becomes the opt-in
+      `zc.buildout[pip]` extra and pip mode fails fast with a clear
+      error when pip is missing (owner decision 2026-09-30: B+C —
+      explicit error plus extra, no auto-provisioning).
+      Test scaffolding keeps seeding it. User-visible for anyone
       relying on zc.buildout to pull pip in — news fragment calls it
       out. After this, uv mode has no pip dependency at all.
 - [ ] Keep the Python window 3.9-3.14; add a 3.15 leg when the nix
@@ -154,9 +157,15 @@ setuptools and Python.
 
 ## Phase 4 — Script stragglers (uv path)
 
-- [ ] Windows `cli.exe`: vendor the static launcher binary once, or
-      declare gui-script support dropped (operator decision — the only
-      intentional user-visible break candidate in this plan).
+- [ ] ~~Windows `cli.exe`~~ **DEFERRED (owner decision 2026-09-30).**
+      Verified empirically: every setuptools from 75.8.2 through 84.0.0
+      still ships all eight launcher binaries (cli/gui × 32/64/arm64),
+      and setuptools' NEWS records no removal or deprecation. The
+      premise was defensive. Re-open only if upstream announces a
+      removal — the floating setuptools-latest canary legs would show
+      it first. Original options preserved for that day: vendor the
+      static launcher binaries once (console), and declare gui_scripts
+      unsupported (our generator only ever produced console launchers).
 - [ ] Retire or rewrite the `_runsetup` template (scripts.py:593) so
       generated scripts never `import setuptools` in uv mode.
 
