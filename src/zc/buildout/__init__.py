@@ -18,6 +18,11 @@
 # see https://github.com/pypa/pip/issues/8761 to understand
 # the reason for the hack.
 # I think it is reasonable to assume we will not run into the race.
+# pip itself is no longer imported here: it is not a dependency of
+# zc.buildout anymore — only the legacy pip installer needs it, and it
+# provisions it on demand (see install_backend._provision_pip).  The
+# hack deletion stays unconditional so a later pip import in pip mode
+# is always safe.
 import setuptools
 
 try:
@@ -26,8 +31,6 @@ try:
         del DistutilsMetaFinder.spec_for_pip
 except ImportError:
     pass
-
-import pip
 
 import sys
 

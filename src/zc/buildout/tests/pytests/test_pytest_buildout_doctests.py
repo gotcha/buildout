@@ -631,7 +631,6 @@ uses namespace packages but the distribution does not require setuptools.
     assert_output(capture_print(ls, 'eggs', 'v5'), """
 -  foox-0.0.0-py2.4.egg
 -  packaging.egg-link
--  pip.egg-link
 -  platformdirs.egg-link
 -  setuptools.egg-link
 -  uv.egg-link

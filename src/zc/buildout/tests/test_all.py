@@ -1029,7 +1029,6 @@ On the other hand, if we have a zipped egg, rather than a develop egg:
     >>> ls('eggs', 'v5')
     -  foox-0.0.0-py2.4.egg
     -  packaging.egg-link
-    -  pip.egg-link
     -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link

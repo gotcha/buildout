@@ -76,7 +76,6 @@ d  recipes
     assert_output(capture_print(ls, sample_buildout, 'eggs'), 'd  v5', N)
     assert_output(capture_print(ls, sample_buildout, 'eggs', 'v5'), """
 -  packaging.egg-link
--  pip.egg-link
 -  platformdirs.egg-link
 -  setuptools.egg-link
 -  uv.egg-link
@@ -3492,7 +3491,7 @@ d  parts
     assert_output(capture_print(ls, sample_bootstrapped, 'bin'), '-  buildout', N)
     _ = (ls(sample_bootstrapped, 'eggs', 'v5'),
          ls(sample_bootstrapped, 'develop-eggs'))
-    # TODO assert: '-  packaging.egg-link\n-  pip.egg-link\n-  setuptools.egg-link'
+    # TODO assert: '-  packaging.egg-link\n-  setuptools.egg-link'
     # (We list both the ``eggs`` and ``develop-eggs`` directories because the
     # buildout or setuptools egg could be installed in the ``develop-eggs``
     # directory if the original buildout had develop eggs for either

@@ -40,7 +40,6 @@ We also get other buildout artifacts::
     >>> _ = (ls(sample_bootstrapped, 'eggs', 'v5'),
     ...      ls(sample_bootstrapped, 'develop-eggs'))
     -  packaging.egg-link
-    -  pip.egg-link
     -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
