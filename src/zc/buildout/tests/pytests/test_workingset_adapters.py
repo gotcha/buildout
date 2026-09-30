@@ -20,6 +20,12 @@ import pytest
 import zc.buildout.easy_install
 from zc.buildout import _workingset
 
+# Egg file names carry the running interpreter's tag: the Environment
+# scanners reject dists tagged for a different Python, so a hard-coded
+# tag silently empties the fixtures on any other interpreter (the CI
+# sweep legs run 3.10 while this module was written under 3.12).
+PYVER = f'py{sys.version_info.major}.{sys.version_info.minor}'
+
 REQUIREMENT_CASES = [
     'zc.buildout',
     'foo>=1.0',
@@ -107,7 +113,7 @@ def fixture_tree(tmp_path):
         directory.mkdir()
 
     # Classic unpacked egg with the full metadata set.
-    egg_info = eggs / 'foo-1.0-py3.12.egg' / 'EGG-INFO'
+    egg_info = eggs / f'foo-1.0-{PYVER}.egg' / 'EGG-INFO'
     _write(egg_info / 'PKG-INFO', _pkg_info('foo', '1.0'))
     _write(egg_info / 'requires.txt',
            '# comment line\n'
@@ -124,7 +130,7 @@ def fixture_tree(tmp_path):
 
     # Platform egg from an older macOS major (exercises the can_add
     # machine-type override on darwin).
-    _write(eggs / 'bar-2.0-py3.12-macosx-11.0-arm64.egg'
+    _write(eggs / f'bar-2.0-{PYVER}-macosx-11.0-arm64.egg'
            / 'EGG-INFO' / 'PKG-INFO',
            _pkg_info('bar', '2.0'))
 
@@ -133,13 +139,13 @@ def fixture_tree(tmp_path):
            _pkg_info('old', '1.0'))
 
     # Zipped egg.
-    zip_path = eggs / 'zipped-3.1-py3.12.egg'
+    zip_path = eggs / f'zipped-3.1-{PYVER}.egg'
     with zipfile.ZipFile(zip_path, 'w') as zf:
         zf.writestr('EGG-INFO/PKG-INFO', _pkg_info('zipped', '3.1'))
         zf.writestr('EGG-INFO/requires.txt', 'qux\n')
 
     # Zipped egg without metadata: invisible to pkg_resources.
-    with zipfile.ZipFile(eggs / 'meta-less-1.0-py3.12.egg', 'w') as zf:
+    with zipfile.ZipFile(eggs / f'meta-less-1.0-{PYVER}.egg', 'w') as zf:
         zf.writestr('meta/__init__.py', '')
 
     # dist-info directly on the path entry (site-packages style).
@@ -183,9 +189,14 @@ def test_environment_scan_matches_easy_install(fixture_tree):
     legacy = zc.buildout.easy_install.Environment(paths)
     adapted = _workingset.Environment(paths)
     adapted_dists = _environment_dists(adapted, True)
-    # Guard against a vacuous equality on an empty scan.
-    assert {'foo', 'bar', 'qux', 'baz', 'legacy', 'zbc',
-            'zipped'} <= set(adapted_dists)
+    # Guard against a vacuous equality on an empty scan.  'bar' is a
+    # macosx platform egg: off macOS both environments reject it (the
+    # equality below is still checked there); on Apple silicon the
+    # machine-type override accepts it.
+    expected = {'foo', 'qux', 'baz', 'legacy', 'zbc', 'zipped'}
+    if sys.platform == 'darwin':
+        expected.add('bar')
+    assert expected <= set(adapted_dists)
     assert adapted_dists == _environment_dists(legacy, False)
 
 
@@ -267,7 +278,7 @@ def test_distribution_comparison_semantics():
 
 
 def test_distribution_str_and_repr_match_pkg_resources(tmp_path):
-    location = str(tmp_path / 'foo-1.0-py3.12.egg')
+    location = str(tmp_path / f'foo-1.0-{PYVER}.egg')
     legacy = pkg_resources.Distribution(
         location=location, project_name='Foo_Bar', version='1.0')
     adapted = _workingset.Distribution(
@@ -306,11 +317,11 @@ def test_metadata_isdir_and_listdir_match_pkg_resources(tmp_path):
     # The distutils-scripts discovery in scripts.py reads
     # metadata_isdir/metadata_listdir; pkg_resources' Distribution
     # reaches them through provider delegation.
-    egg = tmp_path / 'foo-1.0-py3.12.egg'
+    egg = tmp_path / f'foo-1.0-{PYVER}.egg'
     _write(egg / 'EGG-INFO' / 'PKG-INFO', _pkg_info('foo', '1.0'))
     _write(egg / 'EGG-INFO' / 'scripts' / 'run.sh', '#!/bin/sh\n')
     _write(egg / 'EGG-INFO' / 'scripts' / 'sub' / 'deep.sh', '#!/bin/sh\n')
-    zip_path = tmp_path / 'zip-2.0-py3.12.egg'
+    zip_path = tmp_path / f'zip-2.0-{PYVER}.egg'
     with zipfile.ZipFile(zip_path, 'w') as zf:
         zf.writestr('EGG-INFO/PKG-INFO', _pkg_info('zip', '2.0'))
         zf.writestr('EGG-INFO/scripts/tool.sh', '#!/bin/sh\n')
@@ -339,7 +350,7 @@ def test_clone_matches_pkg_resources(tmp_path):
     # (carry-over plus keyword substitution) are the contract.
     _write(tmp_path / 'qux-4.2.dist-info' / 'METADATA',
            'Metadata-Version: 2.1\nName: qux\nVersion: 4.2\n')
-    _write(tmp_path / 'foo-1.0-py3.12.egg' / 'EGG-INFO' / 'PKG-INFO',
+    _write(tmp_path / f'foo-1.0-{PYVER}.egg' / 'EGG-INFO' / 'PKG-INFO',
            _pkg_info('foo', '1.0'))
     legacy_env = pkg_resources.Environment([str(tmp_path)])
     adapted_env = _workingset.Environment([str(tmp_path)])
@@ -380,7 +391,7 @@ def test_working_set_iteration_follows_entry_order():
     legacy_ws = pkg_resources.WorkingSet([])
     adapted_ws = _workingset.AmbientWorkingSet([])
     for name in ('demo', 'demoneeded'):
-        location = f'/eggs/{name}-1.0-py3.12.egg'
+        location = f'/eggs/{name}-1.0-{PYVER}.egg'
         legacy_ws.add(
             pkg_resources.Distribution(
                 location=location, project_name=name, version='1.0'),
@@ -394,7 +405,7 @@ def test_working_set_iteration_follows_entry_order():
 
 
 def _insertion_scenarios(tmp_path):
-    egg = str(tmp_path / 'eggs' / 'foo-1.0-py3.12.egg')
+    egg = str(tmp_path / 'eggs' / f'foo-1.0-{PYVER}.egg')
     parent = str(tmp_path / 'eggs')
     other = str(tmp_path / 'other')
     return [
@@ -408,7 +419,7 @@ def _insertion_scenarios(tmp_path):
 
 def test_insert_on_matches_pkg_resources(tmp_path):
     for name, initial, kwargs in _insertion_scenarios(tmp_path):
-        egg = str(tmp_path / 'eggs' / 'foo-1.0-py3.12.egg')
+        egg = str(tmp_path / 'eggs' / f'foo-1.0-{PYVER}.egg')
         legacy = pkg_resources.Distribution(
             location=egg, project_name='foo', version='1.0',
             precedence=pkg_resources.EGG_DIST)
