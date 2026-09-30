@@ -70,13 +70,13 @@ else
   $PYTHON -m venv "$VENV"
 fi
 
-PIP_ARGS="$PIP_ARGS pip"
-if test $PIP_VERSION; then
-	# PIP_ARGS="$PIP_ARGS pip==$PIP_VERSION"
-    # We already have something like '-U pip'.
-    # Make this '-U pip==version'.
-	PIP_ARGS="$PIP_ARGS==$PIP_VERSION"
-fi
+# pip itself is pinned (or upgraded) only after the seed downloads
+# further down: the seed must carry exactly the versions the install
+# pass resolves, and an old pinned pip cannot even see current
+# releases' metadata (platformdirs 4.12.2 is invisible to pip 23.3.2 —
+# GH run 36651680268's pip-23.3.2 leg failed its seed download over
+# that).  A current pip is brought in right after the venv creation
+# instead, and the pin lands once the seed no longer needs the network.
 WHEEL_VERSION=""
 PIP_ARGS="$PIP_ARGS setuptools"
 if test $SETUPTOOLS_VERSION; then
@@ -112,14 +112,12 @@ fi
 PIP_ARGS="$PIP_ARGS packaging platformdirs build>=1 uv"
 echo
 echo "Using arguments for pip install: $PIP_ARGS"
+# Bring pip current first: the install and seed passes must read
+# current release metadata; an old pin lands only once the seed is
+# downloaded (see the note where PIP_ARGS is built).
+"$VENV_PYTHON" -m pip install $PIP_ARGS pip
 # "$VENV_PYTHON" -m pip install -e .[test] -e zc.recipe.egg_[test] $PIP_ARGS
 "$VENV_PYTHON" -m pip install $PIP_ARGS
-echo
-echo "pip freeze output:"
-"$VENV_PYTHON" -m pip freeze --all
-echo
-echo "pip list output:"
-"$VENV_PYTHON" -m pip list --verbose
 
 echo
 echo "Seeding downloads/test-seed with the setuptools and wheel wheels just installed."
@@ -140,7 +138,14 @@ SEED_WHEEL=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version(
 SEED_UV=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("uv"))')
 SEED_PACKAGING=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("packaging"))')
 SEED_PLATFORMDIRS=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("platformdirs"))')
-SEED_PIP=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("pip"))')
+# The seed mirrors the *final* environment, whose pip is the pin when
+# one is set — but the pin lands only after the downloads below, so
+# take the version from the setting then, not from the metadata.
+if test "$PIP_VERSION"; then
+  SEED_PIP="$PIP_VERSION"
+else
+  SEED_PIP=$("$VENV_PYTHON" -c 'import importlib.metadata as m; print(m.version("pip"))')
+fi
 # tomli is a zc.buildout runtime requirement on Python < 3.11 only, so
 # the venv has it exactly on those interpreters.  The seed must carry
 # it there too: a compile carrying the zc.buildout develop override
@@ -185,6 +190,21 @@ if test "$SV" -lt "$SF"; then
       "setuptools==$SEED_FLOOR_SETUPTOOLS"
   ls -l "$SEED"
 fi
+
+# The seed no longer needs the network: the pip pin lands now.
+if test "$PIP_VERSION"; then
+  echo
+  echo "Pinning pip to $PIP_VERSION (deferred until after the seed downloads:"
+  echo "an old pip cannot read current releases' metadata)."
+  "$VENV_PYTHON" -m pip install $PIP_ARGS "pip==$PIP_VERSION"
+fi
+
+echo
+echo "pip freeze output:"
+"$VENV_PYTHON" -m pip freeze --all
+echo
+echo "pip list output:"
+"$VENV_PYTHON" -m pip list --verbose
 
 echo
 echo "Building source dist, so we get an egg-info directory."
