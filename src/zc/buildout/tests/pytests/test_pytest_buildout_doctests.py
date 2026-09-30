@@ -839,6 +839,31 @@ def test_dir_hash_ignores_sources_txt(easy_install_env):
     write('pkg', 'other.py', "y = 2\n")
     assert _dir_hash('pkg') != before
 
+def test_dir_hash_ignores_coverage_data_files(easy_install_env):
+    mkdir = easy_install_env['mkdir']
+    write = easy_install_env['write']
+
+    # Coverage's parallel-mode data files (.coverage.<host>.<pid>.<serial>)
+    # are dropped by every instrumented subprocess while a coverage suite
+    # runs — into the checkout root, which develop-dist signatures hash.
+    # One landing between two buildout runs of the same narrative flips
+    # the recipe signature and forces a spurious Uninstalling/Installing
+    # (GH coverage-pytest flake: test_buildout_prefer_final_option).
+    from zc.buildout.buildout import _dir_hash, _dir_hashes
+    # NB: _dir_hash caches by the path string as given, so a name shared
+    # with another test (e.g. 'pkg' above) collides within an xdist
+    # worker; use a private name and start from a cleared cache.
+    mkdir('covpkg')
+    write('covpkg', 'mod.py', "x = 1\n")
+    _dir_hashes.clear()
+    before = _dir_hash('covpkg')
+    _dir_hashes.clear()
+    write('covpkg', '.coverage.myhost.12345.67890', "not-really-coverage\n")
+    assert _dir_hash('covpkg') == before
+    _dir_hashes.clear()
+    write('covpkg', 'mod2.py', "y = 2\n")
+    assert _dir_hash('covpkg') != before
+
 def test_o_option_sets_offline(easy_install_env):
     join = easy_install_env['join']
     sample_buildout = easy_install_env['sample_buildout']
