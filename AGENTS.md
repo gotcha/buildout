@@ -30,3 +30,15 @@ Before anything else, load the repo's skills:
   workspace — never /tmp or disposable scratch dirs.
 - If the CI matrix widens, re-verify on the new platform before claiming
   green.
+
+## Closing the loop
+
+- Every report ends in a terminal state: a result, a blocker, or a
+  question. Work that shipped gets a closing line (merge hash, CI run
+  URL) — no silent closes in either direction.
+- The maintainer gives every delivered report a terminal signal: an
+  acknowledgement (one line or an emoji) or a revision request. Wins get
+  acknowledged too — agents calibrate on confirming signal, not only on
+  correction.
+- If a report hangs without a terminal signal, re-ping once. Never read
+  silence as consent.
