@@ -1,0 +1,32 @@
+# Agent working agreement — zc.buildout
+
+Before anything else, load the repo's skills:
+
+- `.goose/skills/develop-buildout/` — the process side: every non-trivial
+  change carries a towncrier news entry in `news/`; branches integrate by
+  rebasing onto the base branch so merges stay fast-forward (no merge
+  commits).
+- `.goose/skills/verify-buildout/` — the behavioral side: drive
+  `bin/buildout` from this checkout against throwaway projects the way a
+  user would, plus the repo's two test suites (`make test` / `make
+  pytest`) as the deep proof layer.
+
+## Rules
+
+- Plan first: no implementation before the plan has been reviewed and
+  approved.
+- Push policy: push only to your own fork remote. Never push to the
+  remote that points at `github.com/buildout/buildout` without explicit
+  approval — remote names vary per clone, check `git remote -v`.
+- One task, one worktree: never work in a checkout another session or
+  person is using — shared checkouts have produced wrong-branch commits.
+- Suite doctrine: full `make test` unless the change is confined to CI
+  yaml or agent guidance (`.github/workflows/`, `.goose/`), where no
+  local suite can measure it; the verify ladder details live in the
+  verify-buildout skill.
+- Reporting: include CI run URLs, exact test counts, and commit hashes.
+  If a verify rung was skipped, say which and why.
+- Evidence must outlive the session: write it into the repo or the team
+  workspace — never /tmp or disposable scratch dirs.
+- If the CI matrix widens, re-verify on the new platform before claiming
+  green.
