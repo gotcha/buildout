@@ -42,3 +42,8 @@ Before anything else, load the repo's skills:
   correction.
 - If a report hangs without a terminal signal, re-ping once. Never read
   silence as consent.
+- A PR whose work landed is closed in the same act — never via GitHub's
+  merge button: either marked merged by pushing the rebased head before
+  the fast-forward, or closed with a comment naming the landing hashes
+  and CI run. No PR hangs open after its work shipped; the command-level
+  mechanics live in develop-buildout's linear-history section.
