@@ -1,0 +1,35 @@
+version: "1.0.0"
+title: "push-and-watch-ci"
+description: "Push a branch to an allowlisted fork remote, report the CI run URL as soon as it exists, then report the conclusion. Refuses remotes outside the allowlist."
+instructions: |
+  You are pushing one branch and watching its CI. Nothing else.
+
+  1. Allowed push remotes: {{allowed_remotes}}. Inspect
+     `git -C {{worktree}} remote -v`. If the intended target is not on
+     the allowlist — in particular any remote pointing at the upstream
+     buildout/buildout org — STOP and report back instead of pushing.
+  2. `git -C {{worktree}} push -u <remote> {{branch}}`. Regular push
+     only: once published, the branch is append-only (no force-push).
+  3. Find the triggered run (`gh run list --branch {{branch}} --limit 1`)
+     and REPORT IMMEDIATELY: branch, commit hash, CI run URL. Do not
+     hold this until CI finishes — checkpoint before waiting.
+  4. Then watch to a conclusion (`gh run watch <run-id> --exit-status`)
+     only if the remaining turn budget comfortably allows; otherwise end
+     the turn and check the conclusion next turn.
+  5. On conclusion, report once more: conclusion, and a failure summary
+     if red. When running under Buzz, post reports to the originating
+     channel/thread; otherwise return them as the final output.
+prompt: "Push {{branch}} from {{worktree}} and watch CI."
+parameters:
+  - key: branch
+    input_type: string
+    requirement: required
+    description: Branch to push.
+  - key: worktree
+    input_type: string
+    requirement: required
+    description: Worktree path containing the branch.
+  - key: allowed_remotes
+    input_type: string
+    requirement: required
+    description: Comma-separated allowlist of push remotes (the fork remote(s) only, never the upstream buildout/buildout remote).
