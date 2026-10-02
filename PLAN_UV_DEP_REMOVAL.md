@@ -94,7 +94,7 @@ ground truth (final artifacts:
       references), so 170 lines of dead code went away and no
       packaging-based port was needed. easy_install.py's remaining
       dead `Wheel` import went in c6c7f509.
-- [ ] Drop the bare `import setuptools` warning-hygiene import in
+- [x] Drop the bare `import setuptools` warning-hygiene import in
       `__init__.py` once nothing else pulls setuptools in uv mode.
       Deferred to Phase 3 on evidence: after units 1-3 the probe still
       attributes `setuptools` to `_package_index` (imported top-level
@@ -130,6 +130,15 @@ ground truth (final artifacts:
       `setuptools` not in sys.modules after `import
       zc.buildout.buildout`, landed failing first and turned green by
       the removals.
+      Done in 92d82be3 (contract pinned failing first in 28d6818f;
+      baseline refreshed for line drift in f5e5416d).  Verified on
+      f5e5416d: contract pytest green (red reproduced against the
+      28d6818f tree via git archive), make lint / make complexity
+      (931 blocks within budget) / make typecheck (ty: all checks
+      passed) / make pytest (820 passed) green, make test 661 tests
+      0 failures; the acceptance probe prints False for `setuptools`
+      in sys.modules after `import zc.buildout.buildout`
+      (`pkg_resources` True, the vendored shim, as designed).
 - [x] Gate: unit ladder green; live lanes regression/develop/uv-resolve
       identical vs pre-phase base.
       Per unit: lint, ty, typecheck-any, complexity and pytest green.
