@@ -26,7 +26,6 @@ inside ``_handle_buildout_error`` keep their historical laziness.
 
 from __future__ import annotations
 
-import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import sys
 from importlib import metadata
 from typing import NoReturn
@@ -270,6 +269,9 @@ def _handle_buildout_error(debug: bool) -> NoReturn:
         sys.stderr.write('\nStarting pdb:\n')
         pdb.post_mortem(exc_info[2])
     else:
+        # Lazy: a runtime setuptools import via _distutils_hack, so it
+        # fires only on the failure path, never at cli.py import time.
+        import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
         if isinstance(v, (zc.buildout.UserError,
                           distutils.errors.DistutilsError
                           )

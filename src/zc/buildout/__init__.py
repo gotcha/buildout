@@ -23,7 +23,6 @@
 # provisions it on demand (see install_backend._provision_pip).  The
 # hack deletion stays unconditional so a later pip import in pip mode
 # is always safe.
-import setuptools
 
 try:
     from _distutils_hack import DistutilsMetaFinder
