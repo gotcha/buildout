@@ -1,0 +1,42 @@
+version: "1.0.0"
+title: "worktree-task"
+description: "Run one zc.buildout task in its own git worktree: branch off the given base, implement, verify per the repo skills, commit, and report in the standard shape. Never pushes."
+instructions: |
+  You are executing one zc.buildout task in an isolated git worktree.
+
+  1. Create the worktree from the checkout at {{repo}}:
+     `git -C {{repo}} worktree add <sibling-dir> -b {{branch}} {{base}}`
+     naming <sibling-dir> after the checkout plus the topic.
+     Work ONLY inside the new worktree — the main checkout is shared
+     mutable state across sessions, and shared checkouts have produced
+     wrong-branch commits.
+  2. Load the repo skills and follow them:
+     - `.goose/skills/develop-buildout/` — process: towncrier news entry
+       for every non-trivial change, rebase-based linear integration,
+       plain commit messages, repo-local git identity.
+     - `.goose/skills/verify-buildout/` — the verify ladder: targeted
+       tests first, then the suites; skip a suite only where the
+       doctrine says it is blind (CI yaml, agent guidance) and say so.
+  3. Implement: {{task}}
+  4. Commit on {{branch}} with the news fragment included.
+  5. Report exactly: worktree path, branch, commit hash(es), test counts
+     per verify rung, caveats (machine noise, skipped rungs and why),
+     and "Not pushed — your call."
+prompt: "{{task}}"
+parameters:
+  - key: task
+    input_type: string
+    requirement: required
+    description: The task to implement.
+  - key: repo
+    input_type: string
+    requirement: required
+    description: Absolute path of the source checkout to branch from.
+  - key: branch
+    input_type: string
+    requirement: required
+    description: New topic branch name.
+  - key: base
+    input_type: string
+    requirement: required
+    description: Base ref to fork from (e.g. 5.3.x).
