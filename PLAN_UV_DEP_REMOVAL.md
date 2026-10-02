@@ -104,6 +104,32 @@ ground truth (final artifacts:
       vendored pkg_resources in Phase 3, which is what unblocks this.
       easy_install.py and develop.py top-level setuptools imports
       (the Phase 0 precondition) are gone as of c6c7f509.
+      Amendment 2026-10-03 (owner-approved unit): the Phase 3 repoint
+      has landed, so the deferral precondition is met and this item
+      executes now.  Discovery expanding the item: a top-level
+      `import distutils.errors` is a runtime setuptools import, not a
+      stdlib one — on Python 3.12+ (no stdlib distutils) it resolves
+      through setuptools' `_distutils_hack` meta-finder, which imports
+      setuptools itself, so the pull is invisible to a grep for
+      `setuptools`.  Proven standalone on the pinned 3.12/75.8.2 env:
+      a fresh interpreter running only `import distutils.errors` ends
+      with `setuptools` in sys.modules.  Three top-level sites keep
+      setuptools in every startup: buildout.py:21 is dead (zero other
+      distutils refs in the file) and is deleted; easy_install.py:25
+      has one real use (:1358, legacy-only setup-script discovery) and
+      moves inside `_unpack_dist_for_build`; cli.py:29 has one real
+      use (:274, the isinstance in the failure reporter) and moves
+      inside `_handle_buildout_error`; then `__init__.py:26` drops.
+      pep425tags.py's top-level `import distutils.util` is not a
+      startup puller (configsetup.py imports pep425tags lazily) and
+      stays.  Accepted edge: a FAILING uv-mode run imports setuptools
+      inside the error reporter just before exit (the lazy cli.py
+      import fires on the failure path); removing that would re-type
+      the raised error and change legacy-mode-visible behavior, which
+      the invariants forbid.  Contract: a subprocess pytest asserting
+      `setuptools` not in sys.modules after `import
+      zc.buildout.buildout`, landed failing first and turned green by
+      the removals.
 - [x] Gate: unit ladder green; live lanes regression/develop/uv-resolve
       identical vs pre-phase base.
       Per unit: lint, ty, typecheck-any, complexity and pytest green.
