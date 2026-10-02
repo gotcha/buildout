@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import copy
 import csv
-import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import email
 import email.parser
 import errno
@@ -1340,6 +1339,9 @@ def _initial_path(path: list[str] | None) -> list[str]:
 
 def _unpack_dist_for_build(dist: pkg_resources.Distribution, build_tmp: str) -> str:
     """Unpack ``dist`` into ``build_tmp`` and return its setup base dir."""
+    # Lazy: this legacy-only path must not import distutils (a runtime
+    # setuptools import via _distutils_hack) at module import time.
+    import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
     unpack_archive(_dist_location(dist), build_tmp)
     base = build_tmp
     if not os.path.exists(os.path.join(build_tmp, 'setup.py')):

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import copy
 import datetime
-import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
 import glob
 import importlib
 import inspect
