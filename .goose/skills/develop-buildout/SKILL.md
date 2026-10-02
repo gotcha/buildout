@@ -79,6 +79,31 @@ defect: they tangle review order and break the clean `git log` story.
 - Rewrite only unpublished history. Nothing in this workflow is pushed
   until the owner says so — until then, rebasing and resetting local
   branches is safe. Once a branch is pushed, history is append-only.
+  One carve-out: a topic branch backing an open PR may be force-pushed
+  with `--force-with-lease` by its author, so the PR head tracks the
+  rebased tip. The base branch stays strictly append-only.
+
+### Closing the PR record
+
+Integration is local rebase + fast-forward only — GitHub's merge button
+is never used (it would create server-side commits and rewrite SHAs).
+A PR whose work landed is closed in the same act, one of two ways:
+
+- **Preferred — let GitHub detect the merge.** After the final rebase,
+  push the rebased topic to the PR head
+  (`git push --force-with-lease <fork-remote> <topic>`), then
+  fast-forward the base to that same tip and push it. GitHub sees
+  base == PR head and marks the PR merged on its own; the record
+  carries the exact local commits.
+- **Fallback — close with a comment.** When the landed commits
+  legitimately differ from the PR head (squash, cherry-pick, stacked
+  integration), close the PR with the pointer to the truth:
+
+  ```sh
+  gh pr close <N> --comment "Landed as <hashes> on <base> (rebased from <old-head>). CI: <run-url>."
+  ```
+
+A PR never hangs open after its work shipped.
 - Rebasing preserves authorship; keep the repo-local `user.name` /
   `user.email` identity and match the surrounding commit-message style
   (plain messages, no trailers, unless the repo asks otherwise).
