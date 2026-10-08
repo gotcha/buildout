@@ -641,6 +641,37 @@ with open(%%(setup)r) as f:
     exec(compile(f.read(), %%(setup)r, 'exec'))
 """
 
+# uv mode: same template without the setuptools pre-import.  A uv
+# install carries no setuptools runtime dependency to pre-import (the
+# point of Phase 4 of PLAN_UV_DEP_REMOVAL.md); setup.py files that
+# need setuptools import it themselves.
+_runsetup_template_uv = """
+import sys
+sys.path.insert(0, %%(setupdir)r)
+sys.path[0:0] = %r
+
+import os
+
+%%(extra)s
+
+__file__ = %%(__file__)r
+
+os.chdir(%%(setupdir)r)
+sys.argv[0] = %%(setup)r
+
+with open(%%(setup)r) as f:
+    exec(compile(f.read(), %%(setup)r, 'exec'))
+"""
+
+
+def _runsetup_template_for(selected_installer: str) -> str:
+    """The runsetup template for the installer mode: only the
+    pip/legacy template pre-imports setuptools.
+    """
+    if selected_installer == 'uv':
+        return _runsetup_template_uv
+    return _runsetup_template
+
 disable_root_logger = """
 import logging
 root_logger = logging.getLogger()

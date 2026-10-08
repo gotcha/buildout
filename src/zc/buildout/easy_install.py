@@ -121,7 +121,7 @@ from zc.buildout.scripts import (
     _relative_path,
     _relative_path_and_setup,
     _relativitize,
-    _runsetup_template,
+    _runsetup_template_for,
     _script,
     _script_paths,
     _script_target,
@@ -2835,7 +2835,9 @@ def _compute_toolchain() -> None:
         # resolve defined setuptools_path.  Deferred %%(...)r escapes
         # are consumed by a later printf substitution in buildout.py;
         # a one-pass format rewrite would break the second stage.
-        runsetup_template=_runsetup_template % pip,
+        # Only the pip/legacy template pre-imports setuptools; the uv
+        # variant drops that import (Phase 4 of PLAN_UV_DEP_REMOVAL.md).
+        runsetup_template=_runsetup_template_for(Installer._installer) % pip,
     )
 
 
