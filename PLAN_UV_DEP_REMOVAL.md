@@ -201,8 +201,26 @@ setuptools and Python.
       it first. Original options preserved for that day: vendor the
       static launcher binaries once (console), and declare gui_scripts
       unsupported (our generator only ever produced console launchers).
-- [ ] Retire or rewrite the `_runsetup` template (scripts.py:593) so
+- [x] Retire or rewrite the `_runsetup` template (scripts.py:593) so
       generated scripts never `import setuptools` in uv mode.
+      Done in 7a60669d (contract pinned red) and 0ff84026 (option B+C):
+      scripts.py gained `_runsetup_template_uv` — the same template
+      without the `import os, setuptools` line — and
+      `_runsetup_template_for`, picked by installer mode at
+      easy_install's single assembly site. Pip/legacy mode is
+      bit-identical. Contract: subprocess template assembly per mode
+      (uv: no setuptools import; pip: still pre-imports). No doc-leg
+      adjustment was needed: with setuptools still installed in the
+      test environments, its vendored distutils keeps resolving
+      `bdist_egg` for distutils-style setup.py files, so
+      runsetup.txt/setup.txt/repeatable.txt/windows.txt pass unchanged
+      in both lanes. The accepted trade-off (distutils-style setup.py
+      leaning on the pre-import loses bdist_egg) only materializes
+      once setuptools stops being installed — a later phase.
+      Runtime evidence: a real `bin/buildout setup` uv-mode run of a
+      setup.py asserting `'setuptools' not in sys.modules` printed
+      `SETUPTOOLS_PREIMPORTED: False` (pip-mode control: `True`) and
+      produced the sdist.
 
 ## Phase 5 — Develop eggs (frontier, may be split out)
 
