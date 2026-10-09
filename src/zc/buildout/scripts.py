@@ -72,6 +72,22 @@ def working_set(specs: tuple[str, ...], executable: str, path: list[str] | None=
 
 
 
+def _pep660_pth_paths(locations: list[str]) -> list[str]:
+    """The plain paths named by .pth files next to the given locations.
+
+    A PEP 660 develop install keeps the dist's importable code at the
+    plain paths of the .pth files sitting next to the dist-info in the
+    develop-eggs directory; the location itself imports nothing.  Paths
+    already among the locations are not repeated.
+    """
+    paths: list[str] = []
+    for location in locations:
+        for pth_path in get_pth_paths(location):
+            if pth_path not in locations and pth_path not in paths:
+                paths.append(pth_path)
+    return paths
+
+
 def _script_paths(
         working_set: pkg_resources.WorkingSet,
         extra_paths: tuple[str, ...] | list[str],
@@ -79,14 +95,7 @@ def _script_paths(
     from zc.buildout.easy_install import _dist_location, realpath
 
     path = [_dist_location(dist) for dist in working_set]
-    # PEP 660 editable installs keep the dist's importable code at the
-    # plain paths named by .pth files sitting next to the dist-info
-    # (a metadata-only directory like develop-eggs imports nothing);
-    # add those paths next to the dist locations they belong to.
-    for location in list(path):
-        for pth_path in get_pth_paths(location):
-            if pth_path not in path:
-                path.append(pth_path)
+    path.extend(_pep660_pth_paths(path))
     path.extend(extra_paths)
     # order preserving unique
     unique_path = []

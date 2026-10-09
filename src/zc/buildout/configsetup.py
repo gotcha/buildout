@@ -105,6 +105,25 @@ def _new_develop_eggs(dest: str, old_files: list[str]) -> str:
          ])
 
 
+def _expected_develop_eggs_entry(path: str, old_files: list[str]) -> bool:
+    """True for develop-eggs entries a run legitimately leaves behind.
+
+    ``old_files`` are the entries that predate the run; the file kinds
+    are what editable installs place there: egg-links, plus the PEP 660
+    artifacts (``.dist-info``/``.egg-info`` metadata directories, plain
+    ``.pth`` path files and ``__editable__`` finder modules) of
+    pyproject-only develop packages.
+    """
+    name = os.path.basename(path)
+    return (name in old_files or name == '__pycache__'
+            or (os.path.isfile(path)
+                and (name.endswith(('.egg-link', '.pth'))
+                     or (name.startswith('__editable__')
+                         and name.endswith('.py'))))
+            or (os.path.isdir(path)
+                and name.endswith(('.dist-info', '.egg-info'))))
+
+
 def _resolve_config_file(
         config_file: str | None,
         command: str | None,

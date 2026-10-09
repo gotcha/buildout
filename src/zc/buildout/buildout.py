@@ -92,6 +92,7 @@ from zc.buildout.configsetup import (
     _create_cache_dirs,
     _default_versions,
     _develop_source_dir,
+    _expected_develop_eggs_entry,
     _get_user_config,
     _links_and_hosts,
     _load_config,
@@ -774,17 +775,9 @@ class Buildout(DictMixin):
 
     def _sanity_check_develop_eggs_files(self, dest: str, old_files: list[str]) -> None:
         for f in os.listdir(dest):
-            if f in old_files or f == '__pycache__':
-                continue
-            path = os.path.join(dest, f)
-            if os.path.isfile(path):
-                if (f.endswith('.egg-link') or f.endswith('.pth')
-                        or (f.startswith('__editable__') and f.endswith('.py'))):
-                    continue
-            elif f.endswith('.dist-info') or f.endswith('.egg-info'):
-                continue
-            self._logger.warning(
-                "Unexpected entry, %r, in develop-eggs directory.", f)
+            if not _expected_develop_eggs_entry(os.path.join(dest, f), old_files):
+                self._logger.warning(
+                    "Unexpected entry, %r, in develop-eggs directory.", f)
 
     def _compute_part_signatures(self, parts: Sequence[str]) -> None:
         # Compute recipe signature and add to options
