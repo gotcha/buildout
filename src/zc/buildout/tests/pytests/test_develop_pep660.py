@@ -54,6 +54,42 @@ def test_dist_metadata_present(tmp_path):
     assert develop._dist_metadata_present(str(tmp_path))
 
 
+def test_pep660_pth_paths_skips_locations_and_duplicates(tmp_path):
+    from zc.buildout.scripts import _pep660_pth_paths
+
+    (tmp_path / 'a.pth').write_text(f'{tmp_path / "src"}\n')
+    locations = [str(tmp_path), str(tmp_path / 'src')]
+    assert _pep660_pth_paths(locations) == []
+    (tmp_path / 'b.pth').write_text(f'{tmp_path / "lib"}\n{tmp_path / "lib"}\n')
+    found = _pep660_pth_paths([str(tmp_path)])
+    assert sorted(found) == sorted([str(tmp_path / 'src'), str(tmp_path / 'lib')])
+    assert len(found) == len(set(found))
+
+
+def test_expected_develop_eggs_entry(tmp_path):
+    from zc.buildout.configsetup import _expected_develop_eggs_entry
+
+    (tmp_path / 'demo.egg-link').write_text('/x\n.')
+    (tmp_path / 'plain.pth').write_text('/x\n')
+    (tmp_path / '__editable___demo_finder.py').write_text('')
+    (tmp_path / 'demo-1.dist-info').mkdir()
+    (tmp_path / 'demo-1.egg-info').mkdir()
+    (tmp_path / 'stray.py').write_text('')
+    (tmp_path / 'odd-dir').mkdir()
+
+    def ask(name):
+        return _expected_develop_eggs_entry(str(tmp_path / name), ['kept.zip'])
+
+    assert ask('kept.zip')
+    assert ask('demo.egg-link')
+    assert ask('plain.pth')
+    assert ask('__editable___demo_finder.py')
+    assert ask('demo-1.dist-info')
+    assert ask('demo-1.egg-info')
+    assert not ask('stray.py')
+    assert not ask('odd-dir')
+
+
 PACKAGE_PYPROJECT = '''
 [build-system]
 requires = ["hatchling"]
