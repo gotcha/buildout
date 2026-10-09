@@ -384,12 +384,14 @@ _applying = False
 def apply_patches() -> None:
     """Apply the pkg_resources patches; safe to call repeatedly.
 
-    Each patch function is idempotent.  Since zc.buildout vendors its
-    own pkg_resources copy (aliased to plain ``pkg_resources`` at
-    package import, see src/zc/buildout/_vendor/README.rst), the copy
-    to patch is normally already loaded when this module is first
-    imported; the import trigger below covers any remaining
-    load-later ordering.
+    Each patch function is idempotent.  The pkg_resources copy to patch
+    is either already loaded when this module is first imported (a real
+    copy pre-imported under setuptools < 82, covered by the
+    module-bottom branch below) or loads post-init on demand: the
+    bridge in zc/buildout/__init__.py resolves ``pkg_resources``
+    imports to the vendored copy and calls this function as part of
+    that load, bit-identical to the legacy timing — the patches are in
+    place before any pkg_resources object is used.
 
     ``patch_PackageIndex`` is deliberately not applied here: it needs
     ``zc.buildout._package_index``, which is legacy pip-mode-only, and
@@ -418,8 +420,9 @@ def apply_index_patch() -> None:
     Runs from the ``zc.buildout._package_index`` import trigger, after
     the module's exec completed, so the names it imports are fully
     initialized.  Also applies the pkg_resources patches first: a
-    direct import of _package_index fires the pkg_resources trigger
-    mid-exec, which covers those, and the call is idempotent anyway.
+    direct import of _package_index fires the zc/buildout/__init__.py
+    bridge mid-exec, which covers those, and the call is idempotent
+    anyway.
     """
     apply_patches()
     global _applying
@@ -448,20 +451,22 @@ class _PatchTriggerLoader(importlib.abc.Loader):
 
 
 class _PatchTriggerFinder(importlib.abc.MetaPathFinder):
-    """Apply the pkg_resources patches when pkg_resources is imported.
+    """Apply the PackageIndex patch when zc.buildout._package_index loads.
 
-    The patches used to run when this module was imported, which pulled
-    pkg_resources into every process that imported zc.buildout, uv mode
-    included.  Triggering on the first import of pkg_resources instead
-    keeps the legacy (pip) behavior bit-identical -- the patches are in
-    place before any pkg_resources object is used -- while uv mode,
-    which never imports pkg_resources, never pays for it.
+    pkg_resources itself is no longer a trigger name here: the
+    on-demand bridge in zc/buildout/__init__.py resolves
+    ``pkg_resources`` imports to the vendored copy and applies the
+    pkg_resources patches as part of that load.  Resolving it through
+    PathFinder as well would hand a real pkg_resources to processes
+    running with an old setuptools that ships one, against the bridge
+    policy (the vendored copy answers unless pkg_resources was already
+    imported before zc.buildout).
 
-    ``zc.buildout._package_index`` is a second trigger: it imports
+    ``zc.buildout._package_index`` stays a trigger: it imports
     pkg_resources at its own top, and if it is imported directly, the
-    pkg_resources trigger fires while _package_index is only partially
-    initialized, so its own patch (``patch_PackageIndex``) is applied
-    only once the module finishes loading.
+    bridge fires while _package_index is only partially initialized, so
+    its own patch (``patch_PackageIndex``) is applied only once the
+    module finishes loading.
     """
 
     def find_spec(
@@ -470,16 +475,12 @@ class _PatchTriggerFinder(importlib.abc.MetaPathFinder):
         path: Sequence[str] | None = None,
         target: ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
-        if fullname == 'pkg_resources':
-            apply = apply_patches
-        elif fullname == 'zc.buildout._package_index':
-            apply = apply_index_patch
-        else:
+        if fullname != 'zc.buildout._package_index':
             return None
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
         if spec is None or spec.loader is None:
             return None
-        spec.loader = _PatchTriggerLoader(spec.loader, apply)
+        spec.loader = _PatchTriggerLoader(spec.loader, apply_index_patch)
         return spec
 
 
@@ -497,15 +498,12 @@ install_import_hook()
 
 
 # When pkg_resources is already loaded by the time this module is first
-# imported, the import trigger installed above can never fire for it —
-# and since zc.buildout vendors its own pkg_resources copy (aliased to
-# plain ``pkg_resources`` at package import, see
-# src/zc/buildout/_vendor/README.rst), that is the normal case now:
-# the alias is installed before this module is reached (and on
-# setuptools < 68 the installed copy is loaded even earlier, as a side
-# effect of ``import setuptools`` at package init).  The patches are
-# required in both modes — Requirement.__contains__ name normalization
-# backs the membership checks uv mode gates on — so apply them now.
+# imported — a real copy from setuptools < 82 that some code imported
+# before zc.buildout — the bridge never fires for it (finders are not
+# consulted for modules in sys.modules), so its load would never pick
+# up the patches.  The patches are required in both modes —
+# Requirement.__contains__ name normalization backs the membership
+# checks uv mode gates on — so apply them on the pre-existing copy now.
 # The module is already loaded, so this costs no import, and each
 # patch is idempotent.
 if 'pkg_resources' in sys.modules:
