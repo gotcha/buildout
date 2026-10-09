@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 from packaging.utils import canonicalize_name, is_normalized_name
 
 from zc.buildout import _workingset
+from zc.buildout.utils import get_pth_paths
 
 if TYPE_CHECKING:
     # Annotations only. Runtime uses import pkg_resources lazily inside
@@ -78,6 +79,14 @@ def _script_paths(
     from zc.buildout.easy_install import _dist_location, realpath
 
     path = [_dist_location(dist) for dist in working_set]
+    # PEP 660 editable installs keep the dist's importable code at the
+    # plain paths named by .pth files sitting next to the dist-info
+    # (a metadata-only directory like develop-eggs imports nothing);
+    # add those paths next to the dist locations they belong to.
+    for location in list(path):
+        for pth_path in get_pth_paths(location):
+            if pth_path not in path:
+                path.append(pth_path)
     path.extend(extra_paths)
     # order preserving unique
     unique_path = []
