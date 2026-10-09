@@ -467,16 +467,44 @@ class Buildout(DictMixin):
         if args:
             self.install(())
 
+    def _update_sys_path(self) -> None:
+        # Add the develop-eggs directory to the path so that it gets
+        # searched for dists, and process its .pth files via the site
+        # machinery: PEP 660 develop installs keep their editable .pth
+        # in develop-eggs, and plain .pth path lines only take effect
+        # when site processes them (import-hook lines are executed the
+        # same way).
+        dev_eggs_dir = self['buildout']['develop-eggs-directory']
+        if not os.path.exists(dev_eggs_dir):
+            return
+        import site
+
+        # The directory itself goes first so that buildout's priority
+        # (develop eggs first) is preserved, and so that a .pth
+        # import-hook can import its finder module from here.
+        if dev_eggs_dir not in sys.path:
+            sys.path.insert(0, dev_eggs_dir)
+
+        # site.addsitedir appends; move what it adds to the front for
+        # the same priority reason.
+        old_path = list(sys.path)
+        site.addsitedir(dev_eggs_dir)
+        new_paths = [p for p in sys.path if p not in old_path]
+        for p in new_paths:
+            if p in sys.path:
+                sys.path.remove(p)
+        for p in reversed(new_paths):
+            sys.path.insert(0, p)
+
     @command
     def install(self, install_args: list[str] | tuple[str, ...]) -> None:
         with _activity('Installing.'):
 
+            # Process existing develop-eggs metadata before extensions
+            # load (an extension may come from a develop package).
+            self._update_sys_path()
             self._load_extensions()
             self._setup_directories()
-
-            # Add develop-eggs directory to path so that it gets searched
-            # for eggs:
-            sys.path.insert(0, self['buildout']['develop-eggs-directory'])
 
             # Check for updates. This could cause the process to be restarted
             self._maybe_upgrade()
@@ -492,6 +520,9 @@ class Buildout(DictMixin):
                 installed_part_options['buildout'].get(
                     'installed_develop_eggs', '')
                 )
+            # Process the .pth files of any PEP 660 develop installs
+            # created above: recipes may import from them in-process.
+            self._update_sys_path()
             installed_part_options['buildout']['installed_develop_eggs'
                                                ] = installed_develop_eggs
 
@@ -621,8 +652,10 @@ class Buildout(DictMixin):
         """Install sources by running in editable mode.
 
         Traditionally: run `setup.py develop` on them.
-        Nowadays: run `pip install -e` on them, as there may not be a `setup.py`,
-        but `pyproject.toml` instead, using for example `hatchling`.
+        Nowadays: run an editable install on them — `pip install -e`, or
+        `uv pip install -e` with `installer = uv` — as there may not be a
+        `setup.py`, but `pyproject.toml` instead, using for example
+        `hatchling`.
 
         Reinstalling an editable install is only needed when its packaging
         metadata may have changed: an editable install does not copy any
@@ -741,12 +774,17 @@ class Buildout(DictMixin):
 
     def _sanity_check_develop_eggs_files(self, dest: str, old_files: list[str]) -> None:
         for f in os.listdir(dest):
-            if f in old_files:
+            if f in old_files or f == '__pycache__':
                 continue
-            if not (os.path.isfile(os.path.join(dest, f))
-                    and f.endswith('.egg-link')):
-                self._logger.warning(
-                    "Unexpected entry, %r, in develop-eggs directory.", f)
+            path = os.path.join(dest, f)
+            if os.path.isfile(path):
+                if (f.endswith('.egg-link') or f.endswith('.pth')
+                        or (f.startswith('__editable__') and f.endswith('.py'))):
+                    continue
+            elif f.endswith('.dist-info') or f.endswith('.egg-info'):
+                continue
+            self._logger.warning(
+                "Unexpected entry, %r, in develop-eggs directory.", f)
 
     def _compute_part_signatures(self, parts: Sequence[str]) -> None:
         # Compute recipe signature and add to options
