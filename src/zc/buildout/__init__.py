@@ -80,7 +80,11 @@ class _VendoredPkgResourcesLoader(importlib.abc.Loader):
     """
 
     def exec_module(self, module: ModuleType) -> None:
-        from zc.buildout._vendor import pkg_resources as vendored
+        with warnings.catch_warnings():
+            # Don't show warnings from importing pkg_resources.
+            # We know it is deprecated, but we have vendorized it.
+            warnings.simplefilter("ignore")
+            from zc.buildout._vendor import pkg_resources as vendored
         _install_pkg_resources_warning_filters(vendored)
         sys.modules['pkg_resources'] = vendored
         # The patches land before any pkg_resources object is used, as
