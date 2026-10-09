@@ -80,6 +80,12 @@ TRANSIENT_SIGNATURES = (
 # image, module graft, exec layers), not repo coverage.
 SMOKE_JOBS = ("ruff", "ty", "radon", "module-tests", "scripts-zest.releaser-py3.12")
 
+# The Plone proof matrix: a separate harness repo driven by
+# plone_matrix() below. The ref is pinned for reproducibility — bump it
+# deliberately when the harness lands a change the job depends on.
+PLONE_MATRIX_REPO = "https://github.com/gotcha/buildout-uv-plone-matrix"
+PLONE_MATRIX_REF = "6c7c34c48b8d6aabb53e7e3c40f5154c6d5d8365"
+
 
 def _exec_output(exc: dagger.ExecError) -> str:
     # the failed exec's combined stdout+stderr; each attribute may be
@@ -200,6 +206,72 @@ class BuildoutCi:
         if any(result.startswith("FAIL") for result in results):
             raise JobFailures(summary)
         return summary
+
+    @function
+    async def plone_matrix(
+        self,
+        source: Source,
+        plone: str,
+        python: str,
+        matrix_ref: str = PLONE_MATRIX_REF,
+        matrix_src: dagger.Directory | None = None,
+    ) -> str:
+        """Install Plone <plone> with this checkout's buildout and prove it boots; return the harness's OK line.
+
+        The harness is the gotcha/buildout-uv-plone-matrix cell runner,
+        grafted at matrix_ref (pinned) unless matrix_src points at a
+        local checkout (for exercising uncommitted harness edits).
+        Unlike the ci jobs there is no PyPI zc.buildout involved: the
+        mounted source is installed into the container and the harness
+        runs in its Mode B — no versions:zc.buildout pin, no setuptools
+        anywhere on the installer=uv path.
+        """
+        job = Job(
+            name=f"plone-matrix-{plone}-py{python}",
+            python=python,
+            commands=(),
+            family="plone-matrix",
+            # no SETUPTOOLS_VERSION export: prepare.sh never runs here
+            # and the fn's whole point is a setuptools-free environment
+            setuptools="",
+        )
+        ctr = self._base(source, job)
+        # The buildout under test is the mounted source, not a PyPI
+        # release; --system puts the `buildout` console script on PATH.
+        ctr = ctr.with_exec(["uv", "pip", "install", "--system", "/src"])
+        # lsof is in the harness's port-cleanup contract but not in the
+        # full python image; curl already ships there.
+        ctr = ctr.with_exec(["sh", "-c", "apt-get update -qq && apt-get install -qq -y --no-install-recommends lsof"])
+        matrix = matrix_src if matrix_src is not None else dag.git(PLONE_MATRIX_REPO).commit(matrix_ref).tree()
+        ctr = (
+            ctr.with_directory("/matrix", matrix)
+            .with_workdir("/matrix")
+            .with_env_variable("CELL_NO_DEVENV", "1")
+        )
+        command = ["bash", "tools/cell-inner.sh", "check", plone, "installed", python]
+        # Same transient-fetch tolerance as _run: the buildout run inside
+        # the cell resolves hundreds of pins from PyPI/dist.plone.org.
+        attempts = 3
+        while True:
+            try:
+                output = await ctr.with_exec(command).stdout()
+                break
+            except dagger.ExecError as exc:
+                attempts -= 1
+                out = f"{exc}\n{_exec_output(exc)}"
+                if attempts == 0 or not any(sig in out for sig in TRANSIENT_SIGNATURES):
+                    tail = "\n".join(out.splitlines()[-30:])
+                    raise RuntimeError(
+                        f"{job.name}: `{shlex.join(command)}` failed with {exc}\nlast output lines:\n{tail}"
+                    ) from exc
+        ok_prefix = f"OK {plone} (zc.buildout "
+        for line in output.splitlines():
+            if line.startswith(ok_prefix) and ": HTTP 200" in line:
+                return line
+        raise RuntimeError(
+            f"{job.name}: harness exited 0 but no {ok_prefix}...: HTTP 200 line in output\n"
+            f"last output lines:\n" + "\n".join(output.splitlines()[-30:])
+        )
 
     def _base(self, source: dagger.Directory, job: Job) -> dagger.Container:
         ctr = (
