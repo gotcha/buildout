@@ -10,3 +10,10 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 dagger-io = { path = "sdk", editable = true }
+
+[tool.dagger]
+# The SDK module runtime defaults to docker.io/library/python:3.14-slim
+# (same tag+digest as pinned here, engine v0.21.9). GH-hosted runners
+# exhaust docker.io's anonymous pull quota; the mirror serves the
+# identical image from Google's infra with no quota.
+base-image = "mirror.gcr.io/library/python:3.14-slim@sha256:486b8092bfb12997e10d4920897213a06563449c951c5506c2a2cfaf591c599f"

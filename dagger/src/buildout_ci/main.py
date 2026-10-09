@@ -204,7 +204,11 @@ class BuildoutCi:
     def _base(self, source: dagger.Directory, job: Job) -> dagger.Container:
         ctr = (
             dag.container()
-            .from_(f"python:{job.python}")
+            # Pull through the Docker Hub mirror on Google's infra:
+            # GH-hosted runners share IPs and exhaust docker.io's
+            # anonymous pull quota, which failed every dagger cell's
+            # base-image resolution with toomanyrequests.
+            .from_(f"mirror.gcr.io/library/python:{job.python}")
             .with_env_variable("PYTHONWARNINGS", "ignore")
             .with_env_variable("USE_UV", "1")
             .with_env_variable("UV_VENV_CLEAR", "1")
