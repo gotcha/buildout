@@ -16,6 +16,44 @@ import os
 
 import pytest
 
+from zc.buildout import develop, utils
+
+
+def test_get_pth_paths(tmp_path):
+    (tmp_path / 'plain.pth').write_text(
+        '/opt/p5/src\n# a comment\n\nimport some_finder\nrelative-dir\n')
+    assert utils.get_pth_paths(str(tmp_path)) == [
+        '/opt/p5/src', str(tmp_path / 'relative-dir')]
+
+
+def test_get_pth_paths_without_directory(tmp_path):
+    assert utils.get_pth_paths(str(tmp_path / 'missing')) == []
+    (tmp_path / 'lone.pth').write_text('/opt/p5/src\n')
+    assert utils.get_pth_paths(str(tmp_path / 'lone.pth')) == []
+
+
+def test_copy_metadata_moves_pep660_artifacts(tmp_path):
+    src = tmp_path / 'tmp3'
+    dest = tmp_path / 'develop-eggs'
+    src.mkdir()
+    dest.mkdir()
+    (src / 'demo-1.dist-info').mkdir()
+    (src / 'plain.pth').write_text('/x\n')
+    (src / '__editable___demo_finder.py').write_text('')
+    (src / '.lock').write_text('')
+    (src / 'stray.py').write_text('')
+    develop._copy_metadata(str(src), str(dest), [])
+    assert sorted(os.listdir(dest)) == [
+        '__editable___demo_finder.py', 'demo-1.dist-info', 'plain.pth']
+    assert sorted(os.listdir(src)) == ['.lock', 'stray.py']
+
+
+def test_dist_metadata_present(tmp_path):
+    assert not develop._dist_metadata_present(str(tmp_path))
+    (tmp_path / 'demo-1.egg-info').mkdir()
+    assert develop._dist_metadata_present(str(tmp_path))
+
+
 PACKAGE_PYPROJECT = '''
 [build-system]
 requires = ["hatchling"]

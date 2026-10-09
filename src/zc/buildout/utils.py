@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import sys
 from importlib.metadata import version
@@ -28,6 +29,33 @@ def normalize_name(name: str) -> str:
     which turns "foo.bar" into "foo-bar", so it is different.
     """
     return re.sub(r"[-_.]+", "-", name).lower().replace('-', '_')
+
+
+def get_pth_paths(loc: str) -> list[str]:
+    """Plain paths referenced by the ``*.pth`` files in directory ``loc``.
+
+    A PEP 660 editable install lands a ``.pth`` file next to the
+    ``.dist-info`` in the target directory; for a hatchling src-layout
+    project that file is one line naming the checkout's ``src``
+    directory.  ``import`` lines (setuptools' ``__editable__`` finders)
+    and comments carry no path.  Relative entries resolve against the
+    directory holding the ``.pth`` file, mirroring ``site``'s reading.
+    """
+    paths: list[str] = []
+    if not os.path.isdir(loc):
+        return paths
+    for name in os.listdir(loc):
+        if not name.endswith('.pth'):
+            continue
+        with open(os.path.join(loc, name)) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') \
+                        and not line.startswith('import '):
+                    path = os.path.abspath(os.path.join(loc, line))
+                    if path not in paths:
+                        paths.append(path)
+    return paths
 
 
 def _print_options(sep: str=' ', end: str='\n', file: TextIO | None=None) -> tuple[str, str, TextIO | None]:
