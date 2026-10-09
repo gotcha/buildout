@@ -224,12 +224,28 @@ setuptools and Python.
 
 ## Phase 5 — Develop eggs (frontier, may be split out)
 
-- [ ] Route develop through PEP 660 editable installs via uv
+- [x] Route develop through PEP 660 editable installs via uv
       (`uv pip install -e`), building on the editable/egg-link/pth
       handling install_backend.py already maps for setuptools 79/80+.
       Retire the setup.py-develop fallback in develop.py for uv mode.
       Rhymes with upstream #746; port its zc.recipe.egg half if it
       applies.
+
+      Done 2026-10-09 (f2bdda07..595a6d13).  The "route" and "retire"
+      clauses were already absorbed by earlier branch units (develop
+      already went through `uv pip install -e`; no setup.py-develop
+      code remained).  The shipped work is the #746-shaped gap the
+      sleuth map exposed: pyproject-only (PEP 660, e.g. hatchling)
+      develop packages left no metadata in the checkout, so the
+      fabricated egg-link resolved to nothing in BOTH installer modes.
+      The editable install's .dist-info and plain-path .pth are now
+      kept in develop-eggs (conditional on a metadata-less checkout,
+      so setuptools layouts are bit-identical), scripts resolve the
+      .pth's plain path, and the buildout process site-processes
+      develop-eggs so recipes can entry-point-import from them.
+      Import-hook-only editables without checkout metadata are a
+      documented non-goal.  The zc.recipe.egg half of #746 needed no
+      port: the conditional copy provoked no listing churn there.
 
 ## Close the program
 
