@@ -239,9 +239,10 @@ class BuildoutCi:
         # The buildout under test is the mounted source, not a PyPI
         # release; --system puts the `buildout` console script on PATH.
         ctr = ctr.with_exec(["uv", "pip", "install", "--system", "/src"])
-        # lsof is in the harness's port-cleanup contract but not in the
-        # full python image; curl already ships there.
-        ctr = ctr.with_exec(["sh", "-c", "apt-get update -qq && apt-get install -qq -y --no-install-recommends lsof"])
+        # No apt here: the harness's lsof port-cleanup in cell-inner.sh
+        # is best-effort (`|| true`); inside the single-process cell the
+        # trap's `kill $FG` of the foreground instance suffices, and the
+        # full python image already carries curl, the one hard need.
         matrix = matrix_src if matrix_src is not None else dag.git(PLONE_MATRIX_REPO).commit(matrix_ref).tree()
         ctr = (
             ctr.with_directory("/matrix", matrix)
