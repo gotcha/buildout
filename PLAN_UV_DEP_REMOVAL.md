@@ -294,7 +294,26 @@ setuptools and Python.
       finds only comments describing the issue #685 keep-existing-copy
       behavior; and '82' has zero hits in easy_install.py (grep exit 1
       at 3f03d923).
-- [ ] Legacy suite green with setuptools-latest under both installer
+- [x] Legacy suite green with setuptools-latest under both installer
       modes, Python 3.9 and newest supported.
+
+      Done 2026-10-09 (four-leg matrix, all green at 8ee14d9b).
+      'Setuptools-latest' resolves per cell by requires_python: py3.9
+      legs carry 82.0.1 (latest line for 3.9 — 84.0.0 needs >=3.10),
+      py3.14 legs carry 84.0.0. Legs (each via Makefile PYTHON_VERSION
+      knob, logs in ~/.buzz/.scratch/close-item4/):
+      `make test PYTHON_VERSION=3.9` 661/661, 0F/0E (leg-39-pip.log);
+      `make test-uv PYTHON_VERSION=3.9` 657/657, 0F/0E (leg-39-uv.log);
+      `make test PYTHON_VERSION=3.14` 661/661, 0F/0E (leg-314-pip.log);
+      `make test-uv PYTHON_VERSION=3.14` 657/657, 0F/0E
+      (leg-314-uv.log). The first py3.9 leg's 3F+6E were root-caused by
+      gt-sleuth to one staging bug (an intermediate zc.recipe.egg=4.0.0
+      pin excluded the 4.0.1.dev0 develop checkout, so the index egg
+      was fetched and globbed — both the 3 doctest failures and the 6
+      fixture-wheel setUp errors follow from that); the fix is the
+      staging commited as 8ee14d9b (zc.recipe.egg deliberately
+      unpinned; py<3.10 runner tools pinned). No py3.9 + setuptools-82
+      branch incompatibility: the same cell builds the fixture wheel
+      cleanly when resolution points at the develop checkout.
 - [ ] Every box above ticked with evidence (paths, SHAs, logs); operator
       lands each phase on devenv.
