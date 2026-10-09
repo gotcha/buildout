@@ -41,14 +41,27 @@ def _rm(*paths: str) -> None:
             os.remove(path)
 
 
+def _egg_link_target(directory: Path) -> str:
+    """The checkout path an egg-link for ``directory`` should point at.
+
+    Two common cases are supported: a src-layout (the ``src``
+    directory) and a layout with the code at the checkout's top level.
+    """
+    egg_path = os.path.realpath(directory)
+    assert os.path.isdir(egg_path)
+    if 'src' in os.listdir(egg_path):
+        egg_path = os.path.join(egg_path, 'src')
+    return egg_path
+
+
 def _create_egg_link(directory: Path, dest: str, egg_name: str) -> str:
     """Create egg-link file.
 
     setuptools 80 basically removes its own 'setup.py develop' code, and
     replaces it with 'pip install -e' (which then calls setuptools again,
     but okay). See https://github.com/pypa/setuptools/pull/4955
-    This leads to a different outcome.  There is no longer an .egg-link file
-    that we can copy.
+    Other PEP 660 build backends (hatchling) never created an .egg-link
+    file either.
     So we create it ourselves, based on the previous setuptools code.
 
     So what should be in the .egg-link file?  Two lines: an egg path and a
@@ -60,25 +73,65 @@ def _create_egg_link(directory: Path, dest: str, egg_name: str) -> str:
 
     The relative setup.py path on the second line does not seem really used,
     but it should be there according to some checks, so let's try to get it
-    right.  There is only so much we can do, but we support two common cases:
-    a src-layout and a layout with the code starting at the same level as
-    the setup.py file.
+    right.
     """
-    egg_path = os.path.realpath(directory)
-    assert os.path.isdir(egg_path)
+    root = os.path.realpath(directory)
     if not egg_name:
-        egg_name = os.path.basename(egg_path)
-    if 'src' in os.listdir(egg_path):
-        egg_path = os.path.join(egg_path, 'src')
-        setup_path = '..'
-    else:
-        setup_path = '.'
+        egg_name = os.path.basename(root)
+    egg_path = _egg_link_target(directory)
+    setup_path = '..' if egg_path != root else '.'
     # Return TWO lines, so NO line ending on the last line.
     contents = f"{egg_path}\n{setup_path}"
     egg_link = os.path.join(dest, egg_name) + '.egg-link'
     with open(egg_link, "w") as myfile:
         myfile.write(contents)
     return egg_link
+
+
+def _dist_metadata_present(target: str) -> bool:
+    """True when an editable install left dist metadata at ``target``.
+
+    setuptools writes ``*.egg-info`` into the source checkout; pyproject
+    -only backends like hatchling leave the checkout bare, in which case
+    the metadata only exists in the installer target directory.
+    """
+    return bool(glob.glob(os.path.join(target, '*.egg-info'))
+                or glob.glob(os.path.join(target, '*.dist-info')))
+
+
+def _copy_metadata(src: str, dest: str, undo: list[Callable]) -> None:
+    """Move PEP 660 editable-install metadata from ``src`` into ``dest``.
+
+    A ``pip``/``uv install -e`` of a pyproject-only package puts its
+    ``.dist-info`` and a ``.pth`` file in the target directory ``src``
+    and writes nothing into the source checkout.  Moving the metadata
+    into the develop-eggs directory ``dest`` keeps the dist visible to
+    the working set scanner, lets the buildout process import the
+    package once develop-eggs is processed with ``site.addsitedir``,
+    and lets script generation resolve the ``.pth``'s plain path.
+
+    Only plain-path ``.pth`` files get resolved for generated scripts
+    (``get_pth_paths``); a backend whose editable install is carried by
+    an ``import`` hook line alone (no metadata in the checkout, no
+    plain path) is outside the supported realistic layouts — its dist
+    metadata is kept, but imports from generated scripts will fail.
+
+    ``undo`` is accepted for interface symmetry with ``_copyeggs``: the
+    final ``rmtree`` of ``src`` removes whatever stays behind, and a
+    failed develop run rolls the develop-eggs directory back as a
+    whole.
+    """
+    for name in os.listdir(src):
+        if name == '__pycache__':
+            continue
+        if not (name.endswith('.dist-info') or
+                name.endswith('.egg-info') or
+                name.endswith('.pth') or
+                (name.startswith('__editable__') and name.endswith('.py'))):
+            continue
+        new = os.path.join(dest, name)
+        _rm(new)
+        os.rename(os.path.join(src, name), new)
 
 
 def _copyeggs(src: str, dest: str, suffix: str, undo: list[Callable]) -> str | None:
@@ -191,16 +244,21 @@ def develop(setup: str, dest: str,
             executable: str=sys.executable) -> str | None:
     """Make a development/editable install of a package.
 
-    This expects to get a path to a directory or a file as the first argument.
-    If it is a file, we used to expect it to be a `setup.py` file.
-    And then we would basically call `python setup.py develop`.
-    Nowadays it could also be a `pyproject.toml` file.
+    This expects a path to a directory or a file as the first argument.
+    The file may be a ``setup.py`` or a ``pyproject.toml``; we basically
+    ignore it and take its directory instead.  The directory is
+    installed in editable mode with ``pip install -e`` or, in uv mode,
+    ``uv pip install -e``.
 
-    Calling `setup.py develop` is a deprecated way of installing a package.
-    In setuptools 80 this still works, but setuptools has internally
-    changed to call `pip install`.  Since zc.buildout 5 we also do that.
-
-    We basically ignore the file, and just get its directory instead.
+    setuptools older than 80 writes an ``.egg-link`` file into the
+    installer's target directory, which we move into the develop-eggs
+    directory.  Newer setuptools and other PEP 660 backends leave no
+    egg-link, so we fabricate one pointing at the checkout.  setuptools
+    additionally leaves its ``*.egg-info`` in the checkout, which is
+    what the fabricated link resolves against; a pyproject-only backend
+    like hatchling leaves no metadata in the checkout at all, so its
+    ``.dist-info`` and ``.pth`` are kept in the develop-eggs directory
+    instead (see ``_copy_metadata``).
 
     With the `build_ext` option you can influence how C extensions in the
     package are built.  This may not be possible in a project that is using
@@ -261,21 +319,24 @@ def develop(setup: str, dest: str,
         # Can't be helped, I think.
         _detect_distutils_scripts(tmp3)
 
-        # This won't find anything on setuptools 80+.
-        # But on older setuptools it still works fine.
+        # setuptools older than 80 still puts an .egg-link in tmp3; newer
+        # setuptools and other PEP 660 backends do not.
         egg_link = _copyeggs(tmp3, dest, '.egg-link', undo)
         if egg_link:
             logger.debug("Successfully made editable install: %s", egg_link)
             return egg_link
 
+        # Fabricate the egg-link (kept for backward compatibility with
+        # existing tests and tools).  When the editable install left no
+        # dist metadata in the source checkout — pyproject-only backends
+        # like hatchling — the fabricated link alone cannot make the dist
+        # visible, so keep the PEP 660 metadata in the develop-eggs
+        # directory as well.
         egg_link = _create_egg_link(directory, dest, egg_name)
-        if egg_link:
-            logger.debug("Successfully made editable install: %s", egg_link)
-            return egg_link
-        logger.error(
-            "Failure making editable install: no egg-link created for %s",
-            setup,
-        )
+        if not _dist_metadata_present(_egg_link_target(directory)):
+            _copy_metadata(tmp3, dest, undo)
+        logger.debug("Successfully made editable install: %s", egg_link)
+        return egg_link
 
     finally:
         undo.reverse()
