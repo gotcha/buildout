@@ -1,0 +1,9 @@
+``import zc.buildout.buildout`` no longer loads pkg_resources — any
+lineage, the vendored copy included (close-the-program item 2 of the uv
+dependency removal plan).  The vendored pkg_resources copy is now
+resolved on demand by a meta_path bridge in ``zc/buildout/__init__.py``:
+``import pkg_resources`` by buildout itself, recipes or extensions still
+yields the vendored copy with full module identity, and a pre-imported
+real copy (setuptools < 82) keeps its place.  The pkg_resources warning
+filters and the ``Requirement.__contains__`` / ``WorkingSet.find``
+patches move to bridge-fire time.  [gt-coleader]

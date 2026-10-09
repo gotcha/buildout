@@ -13,8 +13,9 @@ it was removed in setuptools 82.0.0.
 
 ``zc.buildout`` (and many recipes and extensions) use the ``pkg_resources``
 API as their data model for distributions, requirements and working sets,
-so buildout ships its own copy and installs it as ``sys.modules
-['pkg_resources']`` early in ``zc/buildout/__init__.py``.  See
+so buildout ships its own copy and serves it on demand as
+``sys.modules['pkg_resources']`` through a meta_path bridge in
+``zc/buildout/__init__.py``.  See
 https://github.com/buildout/buildout/issues/685 for the background.
 
 Note that this copy is only importable *inside* a buildout run (or after

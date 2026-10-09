@@ -128,27 +128,28 @@ class TestVendoredPkgResources(unittest.TestCase):
         # Importing zc.buildout guarantees that `import pkg_resources`
         # works afterwards, whatever setuptools version is installed:
         # either something imported a real pkg_resources first
-        # (setuptools < 82) or the vendored copy was aliased.
+        # (setuptools < 82) and is kept, or the on-demand bridge in
+        # zc/buildout/__init__.py serves the vendored copy.
         import sys
 
         import zc.buildout  # noqa: F401
-        # The guarantee, stated directly: the package import is what put
-        # pkg_resources in place.  Kept as a separate statement so isort
-        # cannot sort the pkg_resources import ahead of it — on
-        # setuptools >= 82 that ordering would make the test need an
+        # zc.buildout must be imported before pkg_resources, or on
+        # setuptools >= 82 the pkg_resources import below would need an
         # installed pkg_resources, which is the opposite of the point.
-        self.assertIn('pkg_resources', sys.modules)
+        # The assertion also keeps isort from sorting the two imports.
+        self.assertIn('zc.buildout', sys.modules)
 
         import pkg_resources
         self.assertIs(sys.modules['pkg_resources'], pkg_resources)
         self.assertTrue(hasattr(pkg_resources, 'WorkingSet'))
 
     def test_alias_in_fresh_process(self):
-        # In a fresh process, importing zc.buildout installs the vendored
-        # copy as `pkg_resources` (nothing else imported it before).
-        # Exception: on setuptools < 68, `import setuptools` at package
-        # init loads the installed pkg_resources first (its version.py
-        # imports it), and module identity requires keeping that copy.
+        # In a fresh process, `import pkg_resources` after importing
+        # zc.buildout resolves to the vendored copy (nothing else
+        # imported it before, so the bridge serves our copy).
+        # Exception: on setuptools < 68, `import setuptools` loads the
+        # installed pkg_resources first (its version.py imports it), and
+        # module identity requires keeping that copy.
         # Boundary measured empirically: 63.0.0/65.7.0/67.0.0 pre-load,
         # 68.0.0 and newer do not.
         import os
@@ -160,7 +161,7 @@ class TestVendoredPkgResources(unittest.TestCase):
         env['PYTHONPATH'] = os.pathsep.join(
             zc.buildout.easy_install.buildout_and_setuptools_path)
         code = (
-            "import zc.buildout, sys, setuptools; "
+            "import zc.buildout, sys, setuptools, pkg_resources; "
             "name = sys.modules['pkg_resources'].__name__; "
             "st_major = int(setuptools.__version__.split('.')[0]); "
             "expected = ('pkg_resources' if st_major < 68 "
