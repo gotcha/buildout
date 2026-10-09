@@ -130,6 +130,9 @@ echo "they are zc.buildout runtime requirements, so a compile carrying"
 echo "the zc.buildout develop project as an override must find them in"
 echo "the seeded sources."
 echo "tomli joins the seed on Python < 3.11, where zc.buildout requires it."
+echo "hatchling joins too (with editables and the rest of its dependency set,"
+echo "downloaded after the pinned wheels): the PEP 660 develop tests build a"
+echo "pyproject-only package and the spawned installers run index-hermetic."
 SEED="$HERE/downloads/test-seed"
 mkdir -p "$SEED"
 rm -f "$SEED"/*.whl
@@ -160,6 +163,14 @@ fi
     "setuptools==$SEED_SETUPTOOLS" "wheel==$SEED_WHEEL" "uv==$SEED_UV" \
     "packaging==$SEED_PACKAGING" "platformdirs==$SEED_PLATFORMDIRS" \
     "pip==$SEED_PIP" $SEED_TOMLI_SPEC
+echo
+echo "Seeding hatchling (and editables, its editable-build helper) with deps."
+echo "The PEP 660 develop tests build a pyproject-only package, and the"
+echo "spawned installers' build isolation must resolve hatchling from the"
+echo "seed: with it absent, the hermetic suites cannot build the sample."
+echo "Unpinned and with dependencies, so each Python matrix cell resolves"
+echo "versions compatible with that cell's interpreter."
+"$VENV_PYTHON" -m pip download --quiet --dest "$SEED" hatchling editables
 ls -l "$SEED"
 
 # The uv resolve seam gets its own copy of the seed, snapshotted before
