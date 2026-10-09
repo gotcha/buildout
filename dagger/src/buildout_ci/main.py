@@ -47,6 +47,26 @@ Source = Annotated[
             # built for the host platform must never shadow the
             # container's own install
             ".uv-pin",
+            # heavyweight host-only trees that nothing in any job reads:
+            # real checkouts / CI clones carry a full .git (worktrees a
+            # 4K file), python_builds/pythons are local CPython build
+            # dirs (containers use the python:X base image), and the
+            # rest are dev-machine state or tools working areas.
+            # doc/ deliberately stays: the pytest legs run manuel over
+            # doc/*.rst (src/zc/buildout/tests/pytests/test_pytest_docs.py).
+            ".git",
+            ".worktrees",
+            ".scratch",
+            ".tox",
+            ".venv",
+            ".direnv",
+            ".vscode",
+            ".goose",
+            ".installed.cfg",
+            "python_builds",
+            "pythons",
+            "mutation-testing",
+            "old-tutorial",
         ]
     ),
 ]
@@ -58,6 +78,26 @@ ModuleSource = Annotated[
     dagger.Directory,
     DefaultPath("dagger"),
     Ignore(["sdk", ".venv", "__pycache__"]),
+]
+
+# A local plone-matrix harness checkout (plone_matrix's matrix_src).
+# The checkout carries .git and local-wheels/, the binary wheels the
+# 5.2.x/3.9 rows need — rows this job never runs (the CI matrix is all
+# 6.x), while Mode A uses them straight from the host. Excluding them
+# here only trims the upload; they stay available for Mode A.
+# The Ignore wraps the whole Optional: annotation metadata inside a
+# union is dropped by the SDK's parameter resolution.
+MatrixSrc = Annotated[
+    dagger.Directory | None,
+    Ignore(
+        [
+            ".git",
+            "local-wheels",
+            ".devenv",
+            ".venv",
+            "__pycache__",
+        ]
+    ),
 ]
 
 
@@ -214,13 +254,15 @@ class BuildoutCi:
         plone: str,
         python: str,
         matrix_ref: str = PLONE_MATRIX_REF,
-        matrix_src: dagger.Directory | None = None,
+        matrix_src: MatrixSrc = None,
     ) -> str:
         """Install Plone <plone> with this checkout's buildout and prove it boots; return the harness's OK line.
 
         The harness is the gotcha/buildout-uv-plone-matrix cell runner,
         grafted at matrix_ref (pinned) unless matrix_src points at a
-        local checkout (for exercising uncommitted harness edits).
+        local checkout (for exercising uncommitted harness edits); a
+        local checkout uploads without its .git and local-wheels (see
+        MatrixSrc), which the 6.x rows never need.
         Unlike the ci jobs there is no PyPI zc.buildout involved: the
         mounted source is installed into the container and the harness
         runs in its Mode B — no versions:zc.buildout pin, no setuptools
