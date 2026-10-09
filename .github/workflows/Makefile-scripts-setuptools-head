@@ -5,6 +5,12 @@
 # seeds no setuptools on Python 3.12+, but the uninstall makes the
 # "no bundled setuptools" precondition explicit on every version, matching
 # the old `virtualenv --no-setuptools` behavior.
+# Installed as a regular wheel build from git, not with -e: a PEP 660
+# editable install bypasses setuptools' custom `install` command
+# (install_with_pth in its setup.py), so it never emits
+# distutils-precedence.pth, and on Python 3.12+ nothing activates the
+# _distutils_hack shim — `import distutils` then raises
+# ModuleNotFoundError (zc/buildout/_package_index.py depends on it).
 # Upgrade packaging: the version bundled with the seeded venv can be too old
 # for the requirements of the packages installed in the test buildout
 # (e.g. twine 7 needs packaging>=26.1), and buildout cannot upgrade a
@@ -12,7 +18,7 @@
 sandbox/bin/python:
 	uv venv --seed --python "$$(command -v python)" sandbox
 	sandbox/bin/pip uninstall --yes setuptools
-	sandbox/bin/pip install -e "git+https://github.com/pypa/setuptools.git#egg=setuptools"
+	sandbox/bin/pip install "git+https://github.com/pypa/setuptools.git#egg=setuptools"
 	sandbox/bin/pip install --upgrade packaging
 
 sandbox/bin/buildout: sandbox/bin/python
