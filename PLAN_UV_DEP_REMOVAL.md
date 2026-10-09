@@ -249,10 +249,24 @@ setuptools and Python.
 
 ## Close the program
 
-- [ ] Root-cause and fix the `test_runsetup` isolation flakiness (fails
+- [x] Root-cause and fix the `test_runsetup` isolation flakiness (fails
       standalone, green in full xdist runs; pre-existing on devenv —
       proven by stash on e4de821f and 3fef1678). Every phase gates on
       the legacy suites, so suite trust is program-critical.
+
+      Done 2026-10-09 (047ef10a).  Root cause was never isolation:
+      every Makefile gate sets PYTHONWARNINGS=ignore while bare
+      invocations do not, and testing.system() forwarded the ambient
+      environment — so ad-hoc runs leaked two warning banners (the
+      vendored pkg_resources deprecation, the setuptools 75.8.2
+      setup.py banner) into compared output.  A/B runs ruled out
+      xdist, test ordering and egg-cache drift; the minimal enabler
+      was the env var alone.  Fix is one seam: system() defaults
+      PYTHONWARNINGS to ignore unless the caller set it.  Also
+      retires the bad_py / show_who_requires watch items (same
+      family, verified ad-hoc green).  Full ladder green on the
+      final tree (lint/typecheck/typecheck-any/complexity, pytest
+      837, test 661/661, test-uv 657/657).
 - [ ] `python -c "import zc.buildout.buildout"` in a uv-mode hermetic
       env loads neither pkg_resources nor setuptools (import-hook proof).
 - [ ] setup.py has no setuptools upper bound; easy_install.py has no
