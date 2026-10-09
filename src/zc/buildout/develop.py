@@ -124,10 +124,8 @@ def _copy_metadata(src: str, dest: str, undo: list[Callable]) -> None:
     for name in os.listdir(src):
         if name == '__pycache__':
             continue
-        if not (name.endswith('.dist-info') or
-                name.endswith('.egg-info') or
-                name.endswith('.pth') or
-                (name.startswith('__editable__') and name.endswith('.py'))):
+        if not (name.endswith(('.dist-info', '.egg-info', '.pth'))
+                or (name.startswith('__editable__') and name.endswith('.py'))):
             continue
         new = os.path.join(dest, name)
         _rm(new)
