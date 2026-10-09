@@ -267,10 +267,33 @@ setuptools and Python.
       family, verified ad-hoc green).  Full ladder green on the
       final tree (lint/typecheck/typecheck-any/complexity, pytest
       837, test 661/661, test-uv 657/657).
-- [ ] `python -c "import zc.buildout.buildout"` in a uv-mode hermetic
+- [x] `python -c "import zc.buildout.buildout"` in a uv-mode hermetic
       env loads neither pkg_resources nor setuptools (import-hook proof).
-- [ ] setup.py has no setuptools upper bound; easy_install.py has no
+
+      Done 2026-10-09 (7e3b5aa4 RED contract, 3f03d923 implementation).
+      The eager vendored-pkg_resources aliasing in zc/buildout/__init__.py
+      is replaced by a meta_path bridge serving the vendored copy on
+      demand: import-hooks are never consulted for pre-imported copies
+      (module identity under issue #685 preserved), and nothing of the
+      setuptools/pkg_resources/vendored lineages loads on a plain
+      import.  The warning filters and the Requirement/WorkingSet
+      patches move to bridge-fire time, bit-identical to legacy timing.
+      Proof is import-hook based, not grep: a raising meta_path blocker
+      in a hermetic uv env (Python 3.13, buildout installed from the
+      checkout, no setuptools import allowed) prints PROBE GREEN, and
+      test_no_setuptools_or_pkg_resources_import pins the same contract
+      in-repo.  Full ladder green on the final tree:
+      lint/typecheck/typecheck-any/complexity, pytest 847 passed,
+      test 661/661, test-uv 657/657.
+- [x] setup.py has no setuptools upper bound; easy_install.py has no
       <82 clause.
+
+      Done 2026-10-09 (verify tick — earlier phases removed both).
+      Evidence: setup.py:56 carries the only packaging specifier,
+      'setuptools>=61.0.0'; a first-party-wide scan for 'setuptools <'
+      finds only comments describing the issue #685 keep-existing-copy
+      behavior; and '82' has zero hits in easy_install.py (grep exit 1
+      at 3f03d923).
 - [ ] Legacy suite green with setuptools-latest under both installer
       modes, Python 3.9 and newest supported.
 - [ ] Every box above ticked with evidence (paths, SHAs, logs); operator
