@@ -1,0 +1,58 @@
+name: plone-matrix
+
+on:
+  push:
+    # The windows-iter scratch branch is the fast iteration loop
+    # (windows-iter.yml): the full matrix must not run there.
+    branches-ignore: [windows-iter]
+  pull_request:
+  # Allow to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Proof that old Plone releases install and boot under THIS checkout's
+# buildout (installer=uv, no setuptools anywhere). The dagger module's
+# plone-matrix function (dagger/src/buildout_ci/main.py) installs the
+# mounted checkout into a python:<X> container and drives the Mode B
+# cell runner in the harness repo
+# (gotcha/buildout-uv-plone-matrix, ref pinned in
+# PLONE_MATRIX_REF): boot bin/instance, assert HTTP 200 on :8080.
+# No 3.9 anywhere: 3.9 maps to 5.2.x in the harness, whose repair wheels
+# are cp39 macOS-only; the oldest row that needs zero local wheels is
+# 6.0.x/3.10.
+
+jobs:
+  plone:
+    name: plone ${{ matrix.plone }} / python ${{ matrix.python }}
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - plone: "6.0.15"
+            python: "3.10"
+          - plone: "6.1.5"
+            python: "3.12"
+          - plone: "6.2.2"
+            python: "3.13"
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Free runner disk
+      # A cell keeps several GB in the engine cache (base image plus
+      # committed exec layers); runners ship ~14 GB free. Same cleanup
+      # the run-tests.yml dagger job uses.
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet \
+          /usr/share/swift /opt/ghc /usr/local/.ghcup \
+          /opt/hostedtoolcache /usr/local/julia* \
+          /usr/local/share/powershell || true
+        df -h /
+    - uses: dagger/dagger-for-github@v8.4.1
+      with:
+        # Keep in sync with engineVersion in dagger.json.
+        version: "0.21.9"
+    - name: Run plone-matrix cell
+      # plain progress: the default TTY rendering floods the log of a
+      # multi-minute cell run.
+      run: dagger --progress=plain call plone-matrix --plone "${{ matrix.plone }}" --python "${{ matrix.python }}"

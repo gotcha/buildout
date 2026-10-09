@@ -1,0 +1,1 @@
+New ``plone-matrix`` GitHub workflow: a dagger job (new module function ``call plone-matrix --plone X --python Y``) installs this checkout into a ``python:X`` container and drives the buildout-uv-plone-matrix harness in its new setuptools-free Mode B, proving Plone 6.0.15/3.10, 6.1.5/3.12 and 6.2.2/3.13 install and boot with the uv installer. [gt-coleader]
