@@ -79,13 +79,17 @@ ground truth (final artifacts:
 - [x] Replace `setuptools.archive_util.unpack_archive`
       (install_backend.py) with shutil/zipfile/tarfile handling that
       preserves current semantics (incl. the unpack_zipfile comment at
-      :644).
+      :644 — pin verified imprecise at audit 2026-10-09: the `.whl`
+      comment lives at :840 and `_unpack_zipfile` at :775 of the
+      current tree; substance verified independently).
       Done in fa2ce89d: stdlib `unpack_archive` (dir/zip/tar drivers,
       absolute/traversal entries skipped, unix modes restored,
       UserError on unrecognized) verified against the setuptools
       75.8.2 source; the `.whl` comment now points at
       `_unpack_zipfile`; four new pytests cover the seam.
-- [x] Replace `setuptools.wheel.Wheel` usage (install_backend.py:671)
+- [x] Replace `setuptools.wheel.Wheel` usage (install_backend.py —
+      the :671 pin was stale; the actual era site was :644, and the
+      names are gone from the current tree entirely)
       with `packaging`-based name/metadata parsing (packaging is already
       a dependency).
       Done in fd497f42 by deletion instead: `unpack_wheel`,
@@ -157,9 +161,20 @@ ground truth (final artifacts:
       plus the dist model the uv seam already uses;
       `DistributionNotFound` -> `importlib.metadata.PackageNotFoundError`;
       `DEVELOP_DIST` precedence -> our own editable detection.
+      Evidence (annotated at close-out audit 2026-10-09): unit commits
+      a391db18, 1a1f7cf4, 8ddbf811, a8849112, 030d558d, 179e3fc1,
+      95733941, 801b97a3 in-branch; src/zc/buildout/_workingset.py
+      carries the dist model; easy_install.py's remaining pkg_resources
+      references are function-local only (zero top-level imports).
 - [x] Keep the legacy suite's monkeypatch points working (facade or
       shim where the suite patches these names).
+      Evidence (annotated at close-out audit 2026-10-09): the
+      _workingset facade bridges the patched names; suite greens
+      corroborated per unit in the work log (PHASE_*_EVIDENCE).
 - [x] Gate: full unit ladder + ten-lane live harness, both modes.
+      Evidence (annotated at close-out audit 2026-10-09): da9fff8c,
+      f7c46e7a in-branch; dagger uv lanes 21/21 + static tier 4/4
+      recorded in the work log; era suites 656/656 + 652/652 per unit.
 
 ## Phase 3 — Legacy suite on newer setuptools via vendored pkg_resources
 
@@ -171,15 +186,29 @@ setuptools and Python.
       it per se if it applies cleanly) and repoint legacy-mode imports
       (easy_install.py, _package_index.py, scripts.py resource access)
       to the vendored copy.
+      Evidence (annotated at close-out audit 2026-10-09): in-branch
+      72ce3219; upstream commit a84d9c5b exists as a local object;
+      vendored tree at src/zc/buildout/_vendor/pkg_resources/; the
+      meta_path bridge (zc/buildout/__init__.py:95-114) resolves
+      `pkg_resources` to the vendored copy — proven import-clean by
+      the close-item-2 hermetic probe (re-executed green at audit).
 - [x] Drop the `setuptools<82` cap in setup.py and the `<82` restriction
       in easy_install.py (legacy path keeps working through the vendored
       pkg_resources, not through setuptools' copy).
+      Evidence (annotated at close-out audit 2026-10-09): in-branch
+      469e169d; setup.py:56 `setuptools>=61.0.0` is the only setuptools
+      specifier; `easy_install.py` has zero `82` hits (grep exit 1).
 - [x] Legacy suite proven with newer setuptools: keep the hermetic seed
       floor (testing.py, currently 75.8.2) for reproducibility AND add a
       setuptools-latest leg; `make test` and `make test-uv` both green on
       it. This is the acceptance test that the vendoring, not the cap,
       is what keeps legacy alive.
-- [ ] Make pip legacy-only: drop `'pip'` from unconditional
+      Evidence (annotated at close-out audit 2026-10-09): in-branch
+      e8e33677 + 2224e92f; floating setuptools leg carries
+      `setuptools=""` in dagger/src/buildout_ci/jobs.py (:91, :203);
+      the full four-leg matrix landed under close-the-program item 4
+      (below) with all greens.
+- [x] Make pip legacy-only: drop `'pip'` from unconditional
       install_requires (setup.py); pip becomes the opt-in
       `zc.buildout[pip]` extra and pip mode fails fast with a clear
       error when pip is missing (owner decision 2026-09-30: B+C —
@@ -187,6 +216,11 @@ setuptools and Python.
       Test scaffolding keeps seeding it. User-visible for anyone
       relying on zc.buildout to pull pip in — news fragment calls it
       out. After this, uv mode has no pip dependency at all.
+      Done 2026-09-30 (ticked at close-out audit 2026-10-09 — the work
+      landed on time; the box was a tick-sync miss): in-branch
+      967bf1f7 "Phase 3 item 4: make pip an opt-in extra";
+      setup.py:58-61 comment + :79 `"pip": ["pip"]` extra;
+      news/+pip-extra.breaking.rst.
 - [ ] Keep the Python window 3.9-3.14; add a 3.15 leg when the nix
       toolchain carries it (upstream #765 in the same vein).
 
@@ -317,3 +351,36 @@ setuptools and Python.
       cleanly when resolution points at the develop checkout.
 - [ ] Every box above ticked with evidence (paths, SHAs, logs); operator
       lands each phase on devenv.
+
+### Closing evidence packet (close-out audit, 2026-10-09)
+
+Audit: read-only pass over every checkbox vs. disk and git at
+6099ef60 (full dated record in
+WORK_LOGS/UV_DEP_REMOVAL_2026-09-26.md, section
+`2026-10-09 (gt-sleuth) — item 5 closing audit`). Verdict: every
+claim in this plan re-verified positively; the hygiene misses found
+(a landed-but-unticked Phase-3 box, six bare ticks, two stale line
+pins) were repaired in the same pass. The hermetic import probe was
+re-executed against the exactly-current source (PROBE GREEN, exit 0).
+
+History: program range is `daa3d91f..6099ef60` (51 commits). The
+2026-10-09 rebase onto 5.3.x is proven content-preserving — all 27
+pre-rebase commits map 1:1 via range-diff (the `!` inter-diffs are
+complexity-baseline line-pin drift plus three context-only hunks),
+the two patch-id spot-checks MATCH, and the dropped cherry-pick trio
+is patch-id-identical to its 5.3.x originals. Pre-rebase SHAs cited
+above (e.g. fa2ce89d, fd497f42, cc1b8163) exist as git objects with
+verified in-branch equivalents (see the audit map).
+
+Ladder (final-tree results): static tier green per gated unit;
+pytest 847 passed at item-2 head; `make test` 661/661 and
+`make test-uv` 657/657 at items 1-2 and as the item-4 legs
+(py3.9 pip 661 0F/0E, py3.9 uv 657 0F/0E, py3.14 pip 661 0F/0E,
+py3.14 uv 657 0F/0E — logs logged beside the legs); hermetic probe
+green. News: 32 program fragments under news/.
+
+Landing note: pushing `uv-dep-removal` to the fork's existing branch
+tip (07d4382c) is non-fast-forward because of the rebase — the
+landing route (force-with-lease over the pre-rebase shadows vs.
+merge onto devenv) is the operator's call. Tick this last box when
+landed.
