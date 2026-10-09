@@ -132,6 +132,10 @@ def system(command, input='', with_exit_code=False, env=None):
     # https://github.com/buildout/buildout/pull/311
     # http://bugs.python.org/issue19884
     sub_env = dict(os.environ, TERM='dumb')
+    # The Makefile gates all run under PYTHONWARNINGS=ignore; give ad-hoc
+    # runs the same default so warning banners don't leak into the output
+    # that doctests and pytests compare against.
+    sub_env.setdefault('PYTHONWARNINGS', 'ignore')
     if env is not None:
         sub_env.update(env)
 
