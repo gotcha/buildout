@@ -436,7 +436,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        family: [setuptools, python, pip, scripts, static, coverage, uv, module]
+        family: [setuptools, python, pip, scripts, static, coverage, uv, projects, module]
     steps:
     - uses: actions/checkout@v6.0.2
     - name: Free runner disk

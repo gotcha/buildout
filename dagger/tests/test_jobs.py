@@ -274,8 +274,11 @@ def test_workflow_cells_match_job_table(workflow, uv_workflow):
     # setuptools-latest(-uv) are local-only floating-setuptools canaries
     # (empty pin -> prepare.sh installs the newest release), pending the
     # workflow-mirror decision queued with the operator.
+    # projects-* are the upstream 6.0.0 test-project scenarios ported as
+    # harness lanes (plan D3): upstream's projects: GHA job is
+    # deliberately not transcribed, so the lanes have no workflow cell.
     unexpected = {name for name in extra if not name.startswith("scripts-head-")} - {
-        "module-tests", "setuptools-latest", "setuptools-latest-uv"}
+        "module-tests", "setuptools-latest", "setuptools-latest-uv", "projects-namespaces"}
     assert not unexpected, f"Job rows matching no workflow cell: {sorted(unexpected)}"
     assert sum(name.startswith("scripts-head-") for name in extra) == 10
     assert "module-tests" in extra
@@ -300,11 +303,12 @@ def test_family_invariants():
         "static": 4,
         "coverage": 3,
         "uv": 19,
+        "projects": 1,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 79
+    assert len(jobs.JOBS) == 80
 
 
 def test_select_jobs_pip():

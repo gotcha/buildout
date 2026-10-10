@@ -61,6 +61,17 @@ test-uv: bin/test $(if $(UV_VERSION),$(UV_PIN_DIR)/uv-$(UV_VERSION)/bin/uv,)
 		$(if $(UV_VERSION),PATH="$(UV_PIN_DIR)/uv-$(UV_VERSION)/bin:$$PATH",) \
 		bin/test -pvc
 
+# Phase-5 scenario lanes (upstream 6.0.0 PR #766 ported per plan decision
+# D3: harness lanes, not upstream's projects: GHA job). The ported
+# projects/ scenarios split into two lanes by what they cover:
+# namespaces runs the all-develop namespace scenario plus the mixed
+# develop+wheel namespace one (the case upstream most expected to fail).
+# The HERMETIC_ENV wrapper serves the same purpose as for the suites:
+# spawned bin/buildout children must not resolve ambient devenv
+# site-packages.
+test-projects-namespaces: bin/buildout
+	$(HERMETIC_ENV) $(MAKE) -C projects namespaces mixed
+
 # Coverage variants of both suites. etc/coverage/sitecustomize.py on
 # PYTHONPATH starts coverage in the suite process itself and in every
 # spawned Python subprocess (bin/buildout drives, pip installs, xdist
