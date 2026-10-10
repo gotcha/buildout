@@ -487,10 +487,18 @@ if is_win32:
     # In setuptools 80.3 the setuptools.command.easy_install module was first
     # removed, and later only partially restored as wrapper around the new
     # setuptools._scripts module.
-    try:
-        from setuptools._scripts import get_win_launcher
-    except ImportError:
-        from setuptools.command.easy_install import get_win_launcher
+    # Deferred import: resolving get_win_launcher at module scope imports
+    # setuptools, breaching the import contract (importing
+    # zc.buildout.buildout must not import setuptools).  Resolve it only
+    # when a Windows script actually needs a launcher.
+    def get_win_launcher(kind: str) -> bytes:
+        try:
+            from setuptools._scripts import (
+                get_win_launcher as _get_win_launcher)
+        except ImportError:
+            from setuptools.command.easy_install import (
+                get_win_launcher as _get_win_launcher)
+        return _get_win_launcher(kind)
 else:
     get_win_launcher = None
 
