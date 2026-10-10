@@ -266,6 +266,19 @@ def _build_jobs() -> tuple[Job, ...]:
             family="projects",
             setuptools="84.0.0",
         ),
+        # Lane B: mixed backends — hatchdemo via the hatchling PEP 660
+        # hook and setuptoolsdemo via legacy develop (buildouts/simple),
+        # then the wheel-build+install scenario (buildouts/final: all
+        # five packages built to downloads/dist and installed from
+        # wheels). This is the coverage protecting the PEP 660/develop
+        # work.
+        Job(
+            name="projects-backends",
+            python="3.14",
+            commands=(("make", "test-projects-backends"),),
+            family="projects",
+            setuptools="84.0.0",
+        ),
         # the harness itself, dogfooded as a CI cell: Source ignores
         # dagger/src (module edits must not bust cell caches), so
         # main.py grafts the dagger/ dir into /src for this family
