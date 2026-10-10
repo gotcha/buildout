@@ -223,7 +223,13 @@ setuptools and Python.
       setup.py:58-61 comment + :79 `"pip": ["pip"]` extra;
       news/+pip-extra.breaking.rst.
 - [ ] Keep the Python window 3.10-3.14; add a 3.15 leg when the nix
-      toolchain carries it (upstream #765 in the same vein).
+      toolchain carries it (upstream #765 in the same vein). M9 fold
+      (upstream-port unit 4.3, 2026-10-10): the nix-gated leg stays the
+      single 3.15 effort; when it lands it carries the M12 pins as of
+      that date (setuptools-latest in the python jobs, encoded 84.0.0
+      today; pip-latest 26.2.1 where pip legs apply), matching upstream's
+      shape of one python job cell at the newest setuptools. No separate
+      M9 leg is created in CI now: plan-doc item only.
 
 ## Phase 4 — Script stragglers (uv path)
 
