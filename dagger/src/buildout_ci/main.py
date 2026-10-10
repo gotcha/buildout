@@ -265,8 +265,10 @@ class BuildoutCi:
         MatrixSrc), which the 6.x rows never need.
         Unlike the ci jobs there is no PyPI zc.buildout involved: the
         mounted source is installed into the container and the harness
-        runs in its Mode B — no versions:zc.buildout pin, no setuptools
-        anywhere on the installer=uv path.
+        runs in its Mode B — versions:zc.buildout pins the ambient dev
+        version (so the self-upgrade check resolves locally instead of
+        fetching the Plone release pin), no setuptools pin anywhere on
+        the installer=uv path.
         """
         job = Job(
             name=f"plone-matrix-{plone}-py{python}",
@@ -291,6 +293,15 @@ class BuildoutCi:
             .with_workdir("/matrix")
             .with_env_variable("CELL_NO_DEVENV", "1")
         )
+        # Seed the harness's find-links with this checkout as a wheel:
+        # Mode B pins versions:zc.buildout to the ambient dev version,
+        # and uv must resolve that pin for every recipe whose metadata
+        # depends on zc.buildout. The version exists nowhere on PyPI,
+        # so it has to come from the local directory. This also
+        # recreates /matrix/local-wheels, which the matrix_src upload
+        # prune leaves absent (uv errors on a missing --find-links).
+        ctr = ctr.with_exec(
+            ["uv", "build", "--wheel", "--out-dir", "local-wheels", "/src"])
         command = ["bash", "tools/cell-inner.sh", "check", plone, "installed", python]
         # Same transient-fetch tolerance as _run: the buildout run inside
         # the cell resolves hundreds of pins from PyPI/dist.plone.org.
