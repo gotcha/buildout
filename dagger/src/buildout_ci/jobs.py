@@ -150,7 +150,7 @@ def _build_jobs() -> tuple[Job, ...]:
             if st == "75.8.2" or pip in ("25.3", "26.2.1")
         ),
         # named after the macos workflow job: same make targets, but in a Linux container
-        Job(name="mac", python="3.10", commands=make_and_pytest, family="python"),
+        Job(name="mac", python="3.10", commands=make_and_pytest, family="python", setuptools="84.0.0"),
         # the test-uv.yml parallel set: the legacy suite through the uv
         # install pipeline. No pytest step there (no uv variant of it)
         # and no pip matrix (the uv seam never spawns pip).
@@ -184,7 +184,7 @@ def _build_jobs() -> tuple[Job, ...]:
             )
             for py in ("3.11", "3.12", "3.13", "3.14")
         ),
-        Job(name="mac-uv", python="3.10", commands=(("make", "test-uv"),), family="uv", installer="uv"),
+        Job(name="mac-uv", python="3.10", commands=(("make", "test-uv"),), family="uv", setuptools="84.0.0", installer="uv"),
         # uv twin of the setuptools-latest canary above (same floating
         # pin semantics, same runway python, same mirroring caveat).
         Job(
