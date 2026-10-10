@@ -1057,6 +1057,23 @@ def test_dist_entry_points_without_metadata_returns_empty(tmp_path):
     assert _dist_entry_points(_make_scripts_dist(tmp_path)) == []
 
 
+def test_dist_entry_points_dispatches_on_dist_shape(tmp_path, monkeypatch):
+    # Mode and shape diverge when a legacy recipe rebuilds the working
+    # set with pkg_resources.WorkingSet (zc.recipe.egg 2.0.7, pulled in
+    # by plone.recipe.zope2instance 8.0.0 — the Plone 6.0 pin): a
+    # uv-mode run then holds pkg-shaped dists.  The extraction must
+    # dispatch on the dist shape; keying on the installer mode probed
+    # the facade-only `entry_points` attribute and crashed with
+    # "'PathMetadata' object has no attribute 'entry_points'".  Pin the
+    # pkg shape under both installer modes.
+    dist = _make_scripts_dist(
+        tmp_path,
+        entry_points_txt='[console_scripts]\ndemo-cli = demo.cli:main\n')
+    for mode in ('pip', 'uv'):
+        monkeypatch.setattr(easy_install.Installer, '_installer', mode)
+        assert _dist_entry_points(dist) == [('demo-cli', 'demo.cli', 'main')]
+
+
 def test_dist_distutils_scripts_reads_scripts_metadata(tmp_path):
     dist = _make_scripts_dist(
         tmp_path, scripts_meta={'run': '#!python\nprint(1)\n'})
