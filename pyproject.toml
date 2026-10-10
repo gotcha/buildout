@@ -13,10 +13,10 @@ exclude = ["src/zc/buildout/_vendor", "etc/tracing", "dagger"]
 # static tier, which has no Any rule). mypy is devenv-provided, and the
 # dagger static cell pip-installs the same version, so the local gate
 # and CI agree by construction. python_version
-# matches the support floor (setup.py python_requires >=3.9). mypy maps
+# matches the support floor (setup.py python_requires >=3.10). mypy maps
 # this src layout to `buildout.*` module names (src/zc has no
 # __init__.py), so the overrides below use those names.
-python_version = "3.9"
+python_version = "3.10"
 ignore_missing_imports = true
 disallow_any_explicit = true
 # _vendor is frozen third-party code (the pkg_resources v81 fork):
@@ -42,8 +42,8 @@ disallow_any_explicit = false
 consider_namespace_packages = true
 
 [tool.ruff]
-# The repo supports Python 3.9+ (setup.py python_requires).
-target-version = "py39"
+# The repo supports Python 3.10+ (setup.py python_requires).
+target-version = "py310"
 # _vendor is frozen third-party code (the pkg_resources v81 fork):
 # not gateable signal, excluded like the ty/mypy static tiers.
 extend-exclude = ["src/zc/buildout/_vendor"]
@@ -59,7 +59,7 @@ select = [
     "E4", "E7", "E9", "F",
     # Import sorting (the load-bearing dances are per-file-ignored below).
     "I001",
-    # pyupgrade, py39 floor
+    # pyupgrade, py310 floor
     "UP004", "UP006", "UP007", "UP008", "UP009", "UP010", "UP012",
     "UP024", "UP030", "UP031", "UP032", "UP034", "UP035", "UP037", "UP045",
     # Comprehensions

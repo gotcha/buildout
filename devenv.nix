@@ -109,6 +109,6 @@
 
   enterShell = ''
     echo "zc.buildout devenv — python $(python --version 2>&1 | awk '{print $2}') (PYTHON_VERSION=$PYTHON_VERSION)"
-    echo "Override python: devenv shell --option languages.python.version:string <3.9-3.14>"
+    echo "Override python: devenv shell --option languages.python.version:string <3.10-3.14>"
   '';
 }
