@@ -26,7 +26,7 @@ import errno
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from packaging.utils import canonicalize_name, is_normalized_name
 
@@ -154,25 +154,38 @@ def _find_req_dist(
 
 
 def _dist_entry_points(
-        dist: pkg_resources.Distribution,
+        dist: pkg_resources.Distribution | _workingset.Distribution,
         ) -> list[tuple[str, str, str]]:
     # regular console_scripts entry points
-    # The dist is facade-shaped in uv mode and pkg_resources-shaped in
-    # pip mode; both shapes preserve entry_points.txt order, so the
-    # generated script set is identical.
-    from zc.buildout import easy_install
-    if easy_install.installer() == 'uv':
+    # Dispatch on the dist's shape, not on the installer mode: the
+    # facade exposes `entry_points`, pkg_resources dists do not (their
+    # __getattr__ delegates unknown attributes to the metadata provider,
+    # which lacks it, so the probe below is a safe shape test).  Mode
+    # and shape diverge when a legacy recipe rebuilds the working set
+    # itself — zc.recipe.egg 2.0.7 wraps the installed paths in
+    # pkg_resources.WorkingSet, and inside a buildout process that
+    # import binds the vendored copy — so a uv-mode run can hold
+    # pkg-shaped dists (observed on the Plone 6.0 matrix cell).
+    facade_entry_points = getattr(dist, 'entry_points', None)
+    if facade_entry_points is not None:
+        # facade shape: importlib.metadata-style EntryPoints.
         return [
             (entry_point.name, entry_point.module, entry_point.attr or '')
-            for entry_point in dist.entry_points  # type: ignore[attr-defined]  # facade dist
+            for entry_point in facade_entry_points
             if entry_point.group == 'console_scripts'
         ]
-    # Local import: pip mode keeps the pkg_resources path; the lazy
-    # import keeps uv-mode runs pkg_resources-free.
+    # pkg shape: pip mode, or the legacy-recipe case above.  A
+    # pkg-shaped dist in hand means the pkg_resources copy it belongs
+    # to is already live, and the import binds exactly that copy.
+    # Both shapes preserve entry_points.txt order, so the generated
+    # script set is identical.
     import pkg_resources
+    # The shape probe above returned, so dist cannot be facade-shaped
+    # (the facade always defines `entry_points`).
+    pkg_dist = cast('pkg_resources.Distribution', dist)
     entry_points = []
-    for name in pkg_resources.get_entry_map(dist, 'console_scripts'):
-        entry_point = dist.get_entry_info('console_scripts', name)
+    for name in pkg_resources.get_entry_map(pkg_dist, 'console_scripts'):
+        entry_point = pkg_dist.get_entry_info('console_scripts', name)
         # The name comes from the dist's own entry map, so the
         # entry point is guaranteed to exist.
         assert entry_point is not None
