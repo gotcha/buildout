@@ -697,15 +697,20 @@ class Requirement(PackagingRequirement):
         return hash(self._hashcmp)
 
     def __contains__(self, item) -> bool:
-        # pkg_resources.Requirement.__contains__: a dist matches when
-        # its key matches and its version satisfies the specifier;
-        # prereleases always allowed.  Dist detection duck-types on
+        # patches.patch_pkg_resources_requirement_contains (not the
+        # unpatched pkg_resources original): the keys match up to
+        # normalization — 'zc-buildout' satisfies 'zc.buildout' — and
+        # the version satisfies the specifier, prereleases always
+        # allowed.  The normalization is load-bearing: wheel dist-info
+        # directories escape dots to underscores, so a wheel-installed
+        # zc.buildout is keyed 'zc-buildout' while requirement strings
+        # spell 'zc.buildout'.  Dist detection duck-types on
         # key+version rather than isinstance so pkg-shaped dists from
         # a pkg_resources-built Environment (test seams instantiate it
         # while pkg_resources is loaded) match the same way facade
         # dists do; in production uv mode only facade dists exist.
         if hasattr(item, 'key') and hasattr(item, 'version'):
-            if item.key != self.key:
+            if normalize_name(item.key) != normalize_name(self.key):
                 return False
             version = item.version
         else:
