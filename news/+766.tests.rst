@@ -1,0 +1,1 @@
+Port the upstream 6.0.0 test projects (PR #766): the ``projects/`` demo scenarios (namespace packages including a setup.py-era one, mixed develop/final installs, hatchling PEP 660 + setuptools develop backends, wheel build + install) run as Makefile lane targets and dagger CI jobs rather than GitHub Actions wiring. [gt-builder]
