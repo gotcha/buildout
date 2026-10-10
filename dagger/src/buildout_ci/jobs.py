@@ -26,14 +26,14 @@ class Job:
     uv: str = ""
 
 
-FAMILIES = ("setuptools", "python", "pip", "scripts", "static", "coverage", "uv")
+FAMILIES = ("setuptools", "python", "pip", "scripts", "static", "coverage", "uv", "projects")
 
 # valid --family values: the repo families plus the harness's own
 # module family (kept out of FAMILIES: it runs no repo workflow job)
 VALID_FAMILIES = FAMILIES + ("module",)
 
 # rough duration hints for scheduling only, not gates
-FAMILY_MINUTES = {"coverage": 15, "pip": 8, "python": 7, "setuptools": 4, "scripts": 1, "static": 1, "uv": 35}
+FAMILY_MINUTES = {"coverage": 15, "pip": 8, "python": 7, "setuptools": 4, "scripts": 1, "static": 1, "uv": 35, "projects": 6}
 
 
 def _scripts_commands(makefile: str, check_downloads: bool = True) -> tuple[tuple[str, ...], ...]:
@@ -251,6 +251,20 @@ def _build_jobs() -> tuple[Job, ...]:
             )
             for py in ("3.10", "3.11", "3.12", "3.13", "3.14")
             for pkg in ("zest.releaser", "pyspf")
+        ),
+        # the ported upstream 6.0.0 test projects (PR #766), run as
+        # harness lanes per plan decision D3 instead of upstream's
+        # projects: GHA job, whose python/setuptools cell (3.14/84.0.0)
+        # the lanes mirror. Lane A: namespace packages, all-develop
+        # (buildouts/namespaces) plus the mixed develop+wheel case
+        # (buildouts/mixed) — ns.ancient's legacy setup.py exercises
+        # setup.py-era namespace handling under the modern floor.
+        Job(
+            name="projects-namespaces",
+            python="3.14",
+            commands=(("make", "test-projects-namespaces"),),
+            family="projects",
+            setuptools="84.0.0",
         ),
         # the harness itself, dogfooded as a CI cell: Source ignores
         # dagger/src (module edits must not bust cell caches), so
