@@ -84,20 +84,20 @@ ModuleSource = Annotated[
 # The checkout carries .git and local-wheels/, the binary wheels the
 # 5.2.x/3.9 rows need — rows this job never runs (the CI matrix is all
 # 6.x), while Mode A uses them straight from the host. Excluding them
-# here only trims the upload; they stay available for Mode A.
-# The Ignore wraps the whole Optional: annotation metadata inside a
-# union is dropped by the SDK's parameter resolution.
-MatrixSrc = Annotated[
-    dagger.Directory | None,
-    Ignore(
-        [
-            ".git",
-            "local-wheels",
-            ".devenv",
-            ".venv",
-            "__pycache__",
-        ]
-    ),
+# only trims the upload; they stay available for Mode A.
+# Not Annotated[..., Ignore([...])]: the SDK applies an Ignore to the
+# argument's default value too, and crashes on nil ("must be of type
+# Directory to apply ignore pattern"). The exclusion lives in
+# plone_matrix's body instead (with_directory's exclude).
+MatrixSrc = dagger.Directory | None
+
+# Directory-upload exclusions applied when matrix_src is passed.
+MATRIX_SRC_EXCLUDE = [
+    ".git",
+    "local-wheels",
+    ".devenv",
+    ".venv",
+    "__pycache__",
 ]
 
 
@@ -124,7 +124,7 @@ SMOKE_JOBS = ("ruff", "ty", "radon", "module-tests", "scripts-zest.releaser-py3.
 # plone_matrix() below. The ref is pinned for reproducibility — bump it
 # deliberately when the harness lands a change the job depends on.
 PLONE_MATRIX_REPO = "https://github.com/gotcha/buildout-uv-plone-matrix"
-PLONE_MATRIX_REF = "6c7c34c48b8d6aabb53e7e3c40f5154c6d5d8365"
+PLONE_MATRIX_REF = "9b2fd075925fdfa91eeedc01f7b45094703e6301"
 
 
 def _exec_output(exc: dagger.ExecError) -> str:
@@ -287,7 +287,14 @@ class BuildoutCi:
         # is best-effort (`|| true`); inside the single-process cell the
         # trap's `kill $FG` of the foreground instance suffices, and the
         # full python image already carries curl, the one hard need.
-        matrix = matrix_src if matrix_src is not None else dag.git(PLONE_MATRIX_REPO).commit(matrix_ref).tree()
+        if matrix_src is not None:
+            # with_directory's exclude is where MATRIX_SRC_EXCLUDE
+            # applies — see MatrixSrc for why this isn't an Ignore.
+            matrix = dag.directory().with_directory(
+                "/", matrix_src, exclude=MATRIX_SRC_EXCLUDE
+            )
+        else:
+            matrix = dag.git(PLONE_MATRIX_REPO).commit(matrix_ref).tree()
         ctr = (
             ctr.with_directory("/matrix", matrix)
             .with_workdir("/matrix")
