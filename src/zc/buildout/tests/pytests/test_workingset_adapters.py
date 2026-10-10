@@ -165,6 +165,16 @@ def fixture_tree(tmp_path):
     _write(site / 'baz-1.0-1.dist-info' / 'METADATA',
            'Metadata-Version: 2.1\nName: baz\nVersion: 1.0.post1\n')
 
+    # dist-info in wheel-escaped spelling: the directory name carries
+    # the dot of 'zc.buildout' as an underscore, so both environments
+    # key the dist 'zc-buildout' (safe_name runs to dashes) while
+    # requirement strings keep spelling 'zc.buildout'.  Matching the
+    # requirement to the dist goes through the canonicalized seams:
+    # the Environment keying and the normalized keys in the patched
+    # Requirement.__contains__ (patches.py).
+    _write(site / 'zc_buildout-3.5.0.dist-info' / 'METADATA',
+           'Metadata-Version: 2.1\nName: zc.buildout\nVersion: 3.5.0\n')
+
     # Single-file egg-info.
     _write(site / 'legacy-0.1.egg-info', _pkg_info('legacy', '0.1'))
 
@@ -316,6 +326,31 @@ def test_requirement_contains_matches_pkg_resources(tmp_path):
     adapted_req = _workingset.Requirement.parse('foo>=1.0')
     legacy_dist, adapted_dist = pair('1.1a1')
     assert (adapted_dist in adapted_req) == (legacy_dist in legacy_req)
+
+
+def test_requirement_contains_normalizes_divergent_keys(fixture_tree):
+    # A zc.buildout-lookalike installed from a wheel: the dist-info
+    # directory spells the dot as an underscore, so the dist is keyed
+    # 'zc-buildout' (safe_name, directory name) while the requirement
+    # string spells 'zc.buildout'.  Requirement.__contains__ must
+    # treat them as the same project, as the patched pkg_resources
+    # does (patches.patch_pkg_resources_requirement_contains): this is
+    # the lookup the offline toolchain resolve relies on, and its
+    # failure is the "can't install one in offline (no-install) mode"
+    # boot error against wheel-installed buildouts.
+    _eggs, site, _proj = fixture_tree
+    legacy_env = zc.buildout.easy_install.Environment([str(site)])
+    adapted_env = _workingset.Environment([str(site)])
+    for spec in ('zc.buildout', 'zc-buildout', 'zc_buildout'):
+        legacy_req = pkg_resources.Requirement.parse(spec)
+        adapted_req = _workingset.Requirement.parse(spec)
+        legacy_matches = [d.version
+                          for d in legacy_env['zc.buildout']
+                          if d in legacy_req]
+        adapted_matches = [d.version
+                           for d in adapted_env['zc.buildout']
+                           if d in adapted_req]
+        assert adapted_matches == legacy_matches == ['3.5.0'], spec
 
 
 def test_metadata_isdir_and_listdir_match_pkg_resources(tmp_path):
