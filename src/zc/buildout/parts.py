@@ -32,7 +32,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Protocol, TextIO, Union, cast
+from typing import TYPE_CHECKING, Protocol, TextIO, cast
 
 from packaging import utils as packaging_utils
 
@@ -62,9 +62,7 @@ class _Updatable(Protocol):
 # ``install()`` and/or ``update()`` take no arguments and return
 # ``None``, a path, or a sequence of paths.  Entry-point-loaded recipes
 # may carry either or both methods, so the seam types the union.
-# typing.Union because the 3.9 runtime cannot evaluate ``X | Y`` on
-# classes at module level.
-Recipe = Union[_InstallOnly, _Updatable]
+Recipe = _InstallOnly | _Updatable
 
 
 class _UpdateInstalled(Protocol):
