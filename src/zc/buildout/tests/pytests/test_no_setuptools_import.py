@@ -72,3 +72,37 @@ def test_no_setuptools_or_pkg_resources_import():
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == '[]', result.stdout
+
+
+def test_init_tolerates_preimported_pkg_resources_without_warning_class():
+    # horse-with-no-namespace scenario (upstream 07a19799): a bare
+    # pkg_resources shim already in sys.modules must not break
+    # zc.buildout's own import at the init-time filter install.
+    result = _run_in_subprocess(
+        'import sys, types\n'
+        "sys.modules['pkg_resources'] = types.ModuleType('pkg_resources')\n"
+        'import zc.buildout.buildout\n'
+        "print('ok')\n"
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'ok', result.stdout
+
+
+def test_init_installs_filter_for_preimported_pkg_resources():
+    # The happy path is unchanged: a pre-imported copy carrying the
+    # warning class still gets its deprecation noise silenced.
+    result = _run_in_subprocess(
+        'import sys, types\n'
+        "fake = types.ModuleType('pkg_resources')\n"
+        'fake.PkgResourcesDeprecationWarning = type(\n'
+        "    'PkgResourcesDeprecationWarning', (DeprecationWarning,), {})\n"
+        "sys.modules['pkg_resources'] = fake\n"
+        'import zc.buildout\n'
+        'import warnings\n'
+        'print(any(\n'
+        "    f[0] == 'ignore'\n"
+        '    and f[2] is fake.PkgResourcesDeprecationWarning\n'
+        '    for f in warnings.filters))\n'
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'True', result.stdout
