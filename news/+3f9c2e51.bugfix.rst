@@ -1,0 +1,5 @@
+CI: pin ``zc.recipe.egg = <6.0.0`` in the scripts buildout configs (the
+recipe's 6.0.0 release declares ``zc.buildout>=6.0.0``, which the in-progress
+5.x branch cannot satisfy), and pull the dagger module's container images from
+``mirror.gcr.io`` instead of ``docker.io`` — GH-hosted runners share IPs and
+exhaust Docker Hub's anonymous pull quota. [gotcha]

@@ -13,6 +13,7 @@ index-hermetic, so hatchling and its dependencies are seeded into
 installers' build isolation resolves from).
 """
 import os
+import sys
 
 import pytest
 
@@ -20,10 +21,15 @@ from zc.buildout import develop, utils
 
 
 def test_get_pth_paths(tmp_path):
+    # An absolute .pth entry passes through unchanged, a relative one
+    # resolves against the .pth directory — mirroring site's reading.
+    # A path needs the drive prefix to be absolute on Windows; spell the
+    # entry natively so the expectation holds on both platforms.
+    absolute = os.path.splitdrive(str(tmp_path))[0] + '/opt/p5/src'
     (tmp_path / 'plain.pth').write_text(
-        '/opt/p5/src\n# a comment\n\nimport some_finder\nrelative-dir\n')
+        absolute + '\n# a comment\n\nimport some_finder\nrelative-dir\n')
     assert utils.get_pth_paths(str(tmp_path)) == [
-        '/opt/p5/src', str(tmp_path / 'relative-dir')]
+        os.path.normpath(absolute), str(tmp_path / 'relative-dir')]
 
 
 def test_get_pth_paths_without_directory(tmp_path):
@@ -165,9 +171,13 @@ def test_develop_pep660_package(easy_install_env, installer_line):
     assert any(entry.endswith('.dist-info') for entry in entries), entries
     assert any(entry.endswith('.pth') for entry in entries), entries
 
-    script = os.path.join(sample_buildout, 'bin', 'demo-pep660')
+    # On Windows a console script lands as ``demo-pep660.exe`` paired
+    # with ``demo-pep660-script.py`` (see scripts._create_script); the
+    # .exe is the directly runnable entry point there.
+    suffix = '.exe' if sys.platform == 'win32' else ''
+    script = os.path.join(sample_buildout, 'bin', 'demo-pep660' + suffix)
     assert os.path.exists(script), os.listdir(os.path.join(sample_buildout, 'bin'))
-    output = system(os.path.join('bin', 'demo-pep660'))
+    output = system(os.path.join('bin', 'demo-pep660' + suffix))
     assert 'Hello from demo_pep660.' in output
 
 
