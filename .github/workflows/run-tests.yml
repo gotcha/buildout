@@ -12,7 +12,7 @@ on:
 # Tool provisioning philosophy: GitHub actions only bootstrap the
 # repo's own development environment (Nix + the devenv CLI, via the
 # repo-owned composite action in .github/actions/devenv-setup). Every
-# development tool — Python 3.9-3.14 (selected per job with
+# development tool — Python 3.10-3.14 (selected per job with
 # `devenv shell --option languages.python.version:string`), uv, ruff,
 # ty, radon, make — comes from devenv.nix, so CI runs the same toolchain a
 # local developer shell provides, pinned by devenv.lock.
@@ -190,7 +190,7 @@ jobs:
         os: [ubuntu-24.04]
         # Skip "3.10" because it is already checked above.
         # Use the last setuptools version that is still supported by all Python versions.
-        python-version: ["3.9", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         setuptools-version: ["75.6.0"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -403,7 +403,7 @@ jobs:
     strategy:
       matrix:
         package: [zest.releaser, pyspf]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         os: ["ubuntu-22.04"]
     runs-on: ${{ matrix.os }}
     steps:
