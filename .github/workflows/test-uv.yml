@@ -18,8 +18,9 @@ on:
 # PIP_VERSION varies nothing in the code under test.
 # The uv job pins the uv under test through UV_VERSION (see the Makefile
 # test-uv target): the earliest supported 0.12.x (the setup.py floor)
-# and the five most recent, on the newest setuptools that still ships
-# pkg_resources (81.0.0). The other jobs exercise the devenv-provided uv.
+# and the five most recent, on the newest setuptools (84.0.0 — the
+# bootstrap's pkg_resources import resolves to the vendored copy).
+# The other jobs exercise the devenv-provided uv.
 # Provisioning follows the same contract as run-tests.yml: GitHub
 # actions only bootstrap the repo-owned environment (actions/checkout
 # plus .github/actions/devenv-setup); every tool comes from the devenv.
@@ -34,7 +35,10 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         python-version: ["3.10"]
-        setuptools-version: ["63.0.0", "65.7.0", "69.5.1", "74.1.3", "75.9.1", "79.0.1", "80.2.0", "80.10.2", "81.0.0"]
+        # Sub-70.1 cells dropped with the 3.10 floor: upstream modern
+        # wheel no longer provides bdist_wheel for them (phase-2
+        # finding). 84.0.0 tops the range (M12, upstream 5d05392a).
+        setuptools-version: ["74.1.3", "75.9.1", "79.0.1", "80.2.0", "80.10.2", "81.0.0", "84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
@@ -65,9 +69,10 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         # Skip "3.10" because it is already checked above.
-        # Use the last setuptools version that is still supported by all Python versions.
-        python-version: ["3.9", "3.11", "3.12", "3.13", "3.14"]
-        setuptools-version: ["75.6.0"]
+        # The setuptools matrix above covers the version range, so here we
+        # only use the newest setuptools which supports every Python we test.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        setuptools-version: ["84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
@@ -96,9 +101,10 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         python-version: ["3.12"]
-        # the most recent setuptools the bootstrap supports: >= 82
-        # drops pkg_resources, which dev.py still imports
-        setuptools-version: ["81.0.0"]
+        # pinned to the newest setuptools: the bootstrap's pkg_resources
+        # import resolves to the vendored copy (81.0.0 pin retired;
+        # close-item-4 leg-314-uv green at 84.0.0)
+        setuptools-version: ["84.0.0"]
         # the earliest supported 0.12.x plus the five most recent
         # (0.12.11 is the setup.py floor: earlier 0.12.x serve their
         # own cache on --offline resolves)
@@ -134,7 +140,7 @@ jobs:
       matrix:
         os: [macos-latest]
         python-version: ["3.10"]
-        setuptools-version: ["75.8.2"]
+        setuptools-version: ["84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
@@ -179,7 +185,7 @@ jobs:
     strategy:
       matrix:
         package: [zest.releaser, pyspf]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         os: ["ubuntu-22.04"]
     runs-on: ${{ matrix.os }}
     steps:
