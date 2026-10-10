@@ -63,9 +63,14 @@ def _install_pkg_resources_warning_filters(
     Runs when a pkg_resources copy becomes the live one: from the
     bridge below for the vendored copy, or at package init (end of this
     block) for a copy some other code pre-imported (setuptools < 82).
+    A pre-imported copy can be a bare namespace shim without the
+    warning class (horse-with-no-namespace, upstream 07a19799): skip
+    the category filter there instead of failing the package import.
     """
-    warnings.filterwarnings(
-        'ignore', category=pkg_resources_module.PkgResourcesDeprecationWarning)
+    warning_class = getattr(
+        pkg_resources_module, 'PkgResourcesDeprecationWarning', None)
+    if isinstance(warning_class, type) and issubclass(warning_class, Warning):
+        warnings.filterwarnings('ignore', category=warning_class)
     warnings.filterwarnings(
         'ignore', message='Setuptools is replacing distutils.')
 
