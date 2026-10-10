@@ -53,7 +53,7 @@ setup(
     package_dir = {'': 'src'},
     python_requires = '>=3.10',
     install_requires = [
-        'setuptools>=61.0.0',
+        'setuptools>=75.8.2',
         'packaging>=23.2',
         # pip is NOT a dependency: the uv installer never touches it,
         # the legacy pip installer requires it via the
@@ -76,7 +76,7 @@ setup(
         "test": ['zope.testing', 'manuel',
               'bobo ==2.3.0', 'zdaemon', 'zc.zdaemonrecipe',
               'zc.recipe.deployment'],
-        "pip": ["pip"]},
+        "pip": ["pip>=25.0"]},
     zip_safe=False,
     classifiers = [
        'Development Status :: 6 - Mature',
