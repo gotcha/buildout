@@ -353,6 +353,25 @@ def test_requirement_contains_normalizes_divergent_keys(fixture_tree):
         assert adapted_matches == legacy_matches == ['3.5.0'], spec
 
 
+def test_dist_entry_points_matches_across_dist_shapes(fixture_tree):
+    # easy_install re-exports scripts._dist_entry_points; it dispatches
+    # on the dist shape, not the installer mode: legacy recipes
+    # (zc.recipe.egg 2.0.7, pulled in by plone.recipe.zope2instance
+    # 8.0.0 — the Plone 6.0 pin) rebuild the working set with
+    # pkg_resources.WorkingSet, so a uv-mode run holds pkg-shaped
+    # dists, and mode-keyed extraction probed the facade-only
+    # `entry_points` attribute and crashed.  The foo egg carries
+    # console_scripts metadata; both shapes must extract the same
+    # triples in the same order.
+    eggs, _site, _proj = fixture_tree
+    legacy_env = zc.buildout.easy_install.Environment([str(eggs)])
+    adapted_env = _workingset.Environment([str(eggs)])
+    extract = zc.buildout.easy_install._dist_entry_points
+    expected = [('foo', 'foo.cli', 'main')]
+    assert extract(adapted_env['foo'][0]) == expected
+    assert extract(legacy_env['foo'][0]) == expected
+
+
 def test_metadata_isdir_and_listdir_match_pkg_resources(tmp_path):
     # The distutils-scripts discovery in scripts.py reads
     # metadata_isdir/metadata_listdir; pkg_resources' Distribution
