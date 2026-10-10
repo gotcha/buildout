@@ -35,7 +35,10 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         python-version: ["3.10"]
-        setuptools-version: ["63.0.0", "65.7.0", "69.5.1", "74.1.3", "75.9.1", "79.0.1", "80.2.0", "80.10.2", "81.0.0"]
+        # Sub-70.1 cells dropped with the 3.10 floor: upstream modern
+        # wheel no longer provides bdist_wheel for them (phase-2
+        # finding). 84.0.0 tops the range (M12, upstream 5d05392a).
+        setuptools-version: ["74.1.3", "75.9.1", "79.0.1", "80.2.0", "80.10.2", "81.0.0", "84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
@@ -57,7 +60,6 @@ jobs:
         --option languages.python.version:string "${{matrix.python-version}}"
         -- make
     - name: Run pytest suite
-      if: matrix.setuptools-version != '63.0.0'
       env:
         PYTHONWARNINGS: ignore
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
@@ -150,36 +152,6 @@ jobs:
     - name: Run mypy
       run: devenv shell -- make typecheck-any
 
-  setuptools61:
-    # setuptools 61 is much slower, so we do not run all tests on it.
-    name: setuptools 61
-    needs: setuptools
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04]
-        python-version: ["3.10"]
-        setuptools-version: ["61.0.0"]
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v6.0.2
-    - uses: ./.github/actions/devenv-setup
-      with:
-        # Project cachix cache (optional): set the CACHIX_CACHE_NAME
-        # variable and CACHIX_AUTH_TOKEN secret to activate; both empty
-        # means this step is skipped entirely.
-        cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
-        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-    - name: Run tests
-      env:
-        PYTHONWARNINGS: ignore
-        SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
-      run: >-
-        devenv shell
-        --option languages.python.version:string "${{matrix.python-version}}"
-        -- make test-small
-
   python:
     name: Python ${{ matrix.python-version}}
     needs: setuptools
@@ -189,9 +161,10 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         # Skip "3.10" because it is already checked above.
-        # Use the last setuptools version that is still supported by all Python versions.
+        # The setuptools matrix above covers the version range, so here we
+        # only use the newest setuptools which supports every Python we test.
         python-version: ["3.11", "3.12", "3.13", "3.14"]
-        setuptools-version: ["75.6.0"]
+        setuptools-version: ["84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
@@ -229,7 +202,21 @@ jobs:
         os: [ubuntu-24.04]
         python-version: ["3.10"]
         pip-version: ["21.3.1", "22.3.1", "23.3.2", "24.3.1", "25.3", "26.1.2", "26.2.1"]
-        setuptools-version: ["65.7.0", "75.8.2"]
+        setuptools-version: ["75.8.2", "84.0.0"]
+        # Newest setuptools pairs only with the pips upstream exercises it
+        # with (latest-of-year, upstream 5d05392a); older pips stay on the
+        # 75.8.2 floor.
+        exclude:
+        - pip-version: "21.3.1"
+          setuptools-version: "84.0.0"
+        - pip-version: "22.3.1"
+          setuptools-version: "84.0.0"
+        - pip-version: "23.3.2"
+          setuptools-version: "84.0.0"
+        - pip-version: "24.3.1"
+          setuptools-version: "84.0.0"
+        - pip-version: "26.1.2"
+          setuptools-version: "84.0.0"
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2
@@ -268,7 +255,7 @@ jobs:
       matrix:
         os: [macos-latest]
         python-version: ["3.10"]
-        setuptools-version: ["75.8.2"]
+        setuptools-version: ["84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v6.0.2

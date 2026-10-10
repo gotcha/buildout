@@ -58,21 +58,18 @@ def _build_jobs() -> tuple[Job, ...]:
             Job(
                 name=f"setuptools-{st}",
                 python="3.10",
-                # the workflow skips the pytest step on setuptools 63.0.0
-                commands=(("make",),) if st == "63.0.0" else make_and_pytest,
+                commands=make_and_pytest,
                 family="setuptools",
                 setuptools=st,
             )
             for st in (
-                "63.0.0",
-                "65.7.0",
-                "69.5.1",
                 "74.1.3",
                 "75.9.1",
                 "79.0.1",
                 "80.2.0",
                 "80.10.2",
                 "81.0.0",
+                "84.0.0",
             )
         ),
         # setuptools-latest canary: an empty pin is not threaded (main.py
@@ -126,22 +123,15 @@ def _build_jobs() -> tuple[Job, ...]:
             # so the local gate matches CI exactly
             pip_install=("mypy==2.1.0",),
         ),
-        Job(
-            name="setuptools-61-test-small",
-            python="3.10",
-            commands=(("make", "test-small"),),
-            family="setuptools",
-            setuptools="61.0.0",
-        ),
         *(
             Job(
                 name=f"python-{py}",
                 python=py,
                 commands=make_and_pytest,
                 family="python",
-                setuptools="75.6.0",
+                setuptools="84.0.0",
             )
-            for py in ("3.9", "3.11", "3.12", "3.13", "3.14")
+            for py in ("3.11", "3.12", "3.13", "3.14")
         ),
         *(
             Job(
@@ -152,8 +142,12 @@ def _build_jobs() -> tuple[Job, ...]:
                 setuptools=st,
                 pip=pip,
             )
+            # mirrors run-tests.yml: every pip at the 75.8.2 floor, plus
+            # the newest setuptools paired only with the pips upstream
+            # exercises it with (latest-of-year 25.3 and 26.2.1)
+            for st in ("75.8.2", "84.0.0")
             for pip in ("21.3.1", "22.3.1", "23.3.2", "24.3.1", "25.3", "26.1.2", "26.2.1")
-            for st in ("65.7.0", "75.8.2")
+            if st == "75.8.2" or pip in ("25.3", "26.2.1")
         ),
         # named after the macos workflow job: same make targets, but in a Linux container
         Job(name="mac", python="3.10", commands=make_and_pytest, family="python"),
@@ -170,15 +164,13 @@ def _build_jobs() -> tuple[Job, ...]:
                 installer="uv",
             )
             for st in (
-                "63.0.0",
-                "65.7.0",
-                "69.5.1",
                 "74.1.3",
                 "75.9.1",
                 "79.0.1",
                 "80.2.0",
                 "80.10.2",
                 "81.0.0",
+                "84.0.0",
             )
         ),
         *(
@@ -187,10 +179,10 @@ def _build_jobs() -> tuple[Job, ...]:
                 python=py,
                 commands=(("make", "test-uv"),),
                 family="uv",
-                setuptools="75.6.0",
+                setuptools="84.0.0",
                 installer="uv",
             )
-            for py in ("3.9", "3.11", "3.12", "3.13", "3.14")
+            for py in ("3.11", "3.12", "3.13", "3.14")
         ),
         Job(name="mac-uv", python="3.10", commands=(("make", "test-uv"),), family="uv", installer="uv"),
         # uv twin of the setuptools-latest canary above (same floating
@@ -206,15 +198,15 @@ def _build_jobs() -> tuple[Job, ...]:
         # the uv version matrix: the legacy suite through the uv pipeline
         # with the uv under test pinned (UV_VERSION) to the earliest
         # supported 0.12.x (the setup.py floor) and the five most recent,
-        # on the newest setuptools that still ships pkg_resources
-        # (81.0.0)
+        # on the newest setuptools (84.0.0; the bootstrap's pkg_resources
+        # import resolves to the vendored copy)
         *(
             Job(
                 name=f"uv-{uv}",
                 python="3.12",
                 commands=(("make", "test-uv"),),
                 family="uv",
-                setuptools="81.0.0",
+                setuptools="84.0.0",
                 installer="uv",
                 uv=uv,
             )
@@ -232,7 +224,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 package=pkg,
                 installer="uv",
             )
-            for py in ("3.9", "3.10", "3.11", "3.12", "3.13", "3.14")
+            for py in ("3.10", "3.11", "3.12", "3.13", "3.14")
             for pkg in ("zest.releaser", "pyspf")
         ),
         Job(name="coverage-legacy", python="3.12", commands=(("make", "coverage"),), family="coverage"),
@@ -246,7 +238,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 family="scripts",
                 package=pkg,
             )
-            for py in ("3.9", "3.10", "3.11", "3.12", "3.13", "3.14")
+            for py in ("3.10", "3.11", "3.12", "3.13", "3.14")
             for pkg in ("zest.releaser", "pyspf")
         ),
         *(
