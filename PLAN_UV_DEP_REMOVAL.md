@@ -5,8 +5,9 @@ imported or provisioned by zc.buildout code; both `setuptools<82` caps
 (setup.py metadata and `easy_install.py`'s `_constrained_requirement('<82',
 ...)`, issue #744) are dropped; the legacy doctest suite stays green with
 newer setuptools and a vendored pkg_resources under BOTH `installer = pip`
-and `installer = uv`. Python support is unchanged (3.9 floor kept — we do
-not follow upstream's 6.0 floor-raise).
+and `installer = uv`. The Python floor moves to 3.10 (port-plan decision
+D1, 2026-10-09: we follow upstream's 6.0 floor-raise after all, 3.9 is
+EOL).
 
 Inventory baseline (verified on devenv @ 45ba884d): hard runtime
 `import setuptools` lives in `__init__.py` (warning hygiene),
@@ -221,7 +222,7 @@ setuptools and Python.
       967bf1f7 "Phase 3 item 4: make pip an opt-in extra";
       setup.py:58-61 comment + :79 `"pip": ["pip"]` extra;
       news/+pip-extra.breaking.rst.
-- [ ] Keep the Python window 3.9-3.14; add a 3.15 leg when the nix
+- [ ] Keep the Python window 3.10-3.14; add a 3.15 leg when the nix
       toolchain carries it (upstream #765 in the same vein).
 
 ## Phase 4 — Script stragglers (uv path)
