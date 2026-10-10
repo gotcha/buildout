@@ -62,27 +62,17 @@ def _workflow_cells(data):
     wf = data["jobs"]
     cells = {}
 
-    # setuptools matrix; the workflow skips the pytest step on 63.0.0
+    # setuptools matrix
     matrix = wf["setuptools"]["strategy"]["matrix"]
     for st in matrix["setuptools-version"]:
-        commands = (("make",),) if st == "63.0.0" else MAKE_AND_PYTEST
         cells[f"setuptools-{st}"] = {
             "python": matrix["python-version"][0],
-            "commands": commands,
+            "commands": MAKE_AND_PYTEST,
             "family": "setuptools",
             "setuptools": st,
         }
 
-    # setuptools61 is much slower, so the workflow runs make test-small only
-    matrix = wf["setuptools61"]["strategy"]["matrix"]
-    cells["setuptools-61-test-small"] = {
-        "python": matrix["python-version"][0],
-        "commands": (("make", "test-small"),),
-        "family": "setuptools",
-        "setuptools": matrix["setuptools-version"][0],
-    }
-
-    # python matrix, pinned to the last setuptools all pythons support
+    # python matrix, pinned to the newest setuptools all pythons support
     matrix = wf["python"]["strategy"]["matrix"]
     for py in matrix["python-version"]:
         cells[f"python-{py}"] = {
@@ -92,10 +82,17 @@ def _workflow_cells(data):
             "setuptools": matrix["setuptools-version"][0],
         }
 
-    # pip matrix: pip version x setuptools version
+    # pip matrix: pip version x setuptools version, minus the workflow's
+    # exclude pairs (newest setuptools rides latest-of-year pips only)
     matrix = wf["pip"]["strategy"]["matrix"]
+    excluded = {
+        (e["pip-version"], e["setuptools-version"])
+        for e in matrix.get("exclude", [])
+    }
     for pip in matrix["pip-version"]:
         for st in matrix["setuptools-version"]:
+            if (pip, st) in excluded:
+                continue
             cells[f"pip-{pip}-st-{st}"] = {
                 "python": matrix["python-version"][0],
                 "commands": MAKE_AND_PYTEST,
@@ -258,7 +255,7 @@ def test_jobs_module_imports_nothing_from_dagger():
 
 def test_workflow_cells_match_job_table(workflow, uv_workflow):
     cells = _workflow_cells(workflow) | _uv_workflow_cells(uv_workflow)
-    assert len(cells) == 82
+    assert len(cells) == 66
     by_name = {job.name: job for job in jobs.JOBS}
     missing = set(cells) - set(by_name)
     assert not missing, f"workflow cells without a Job row: {sorted(missing)}"
@@ -296,27 +293,26 @@ def test_family_invariants():
     assert set(jobs.FAMILY_MINUTES) == set(jobs.FAMILIES)
     counts = Counter(job.family for job in jobs.JOBS)
     assert counts == {
-        "setuptools": 11,
-        "python": 6,
-        "pip": 14,
-        "scripts": 34,
+        "setuptools": 8,
+        "python": 5,
+        "pip": 9,
+        "scripts": 30,
         "static": 4,
         "coverage": 3,
-        "uv": 22,
+        "uv": 19,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 95
+    assert len(jobs.JOBS) == 79
 
 
 def test_select_jobs_pip():
     selected = jobs._select_jobs("pip")
     expected = [
-        f"pip-{pip}-st-{st}"
+        f"pip-{pip}-st-75.8.2"
         for pip in ("21.3.1", "22.3.1", "23.3.2", "24.3.1", "25.3", "26.1.2", "26.2.1")
-        for st in ("65.7.0", "75.8.2")
-    ]
+    ] + [f"pip-{pip}-st-84.0.0" for pip in ("25.3", "26.2.1")]
     assert [job.name for job in selected] == expected
 
 
