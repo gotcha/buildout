@@ -283,8 +283,8 @@ def test_easy_install_distribution_installation_case_issues(easy_install_env):
         links=[link_server], index=link_server+'index/')
     # TODO assert: 'GET 404 /index/mixedcase/\nGET 200 /mixedcase-0.5.tar.gz\nGET '
     # Let's check that the uppercase dist is installed.
-    # setuptools 75.8.1+ reports the name in all lowercase, earlier versions showed it in uppercase.
-    # So we compare lowercase.
+    # Depending on the setuptools version, the name is reported either in
+    # all lowercase or in the original uppercase.  So we compare lowercase.
     for dist in ws:
         print_(str(dist).lower())
     # TODO assert: 'demoneeded 1.1\nmixedcase 0.5'

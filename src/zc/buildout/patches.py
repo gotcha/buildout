@@ -22,51 +22,6 @@ from types import ModuleType
 from typing import Any
 
 
-def patch_Distribution() -> None:
-    try:
-        from packaging import version
-        from pkg_resources import Distribution
-    except ImportError:
-        return
-
-    def hashcmp(self: Distribution) -> tuple[Any, ...]:  # type: ignore[explicit-any]  # the hashcmp tuple shape is pkg_resources-internal
-        if hasattr(self, '_hashcmp'):
-            return self._hashcmp
-        else:
-            try:
-                parsed_version = self.parsed_version
-            except Exception:  # noqa: BLE001 - see the note below: the
-                # InvalidVersion class may come from either packaging copy
-                # You get here when there is an distribution on PyPI
-                # with a version that is no longer seen as valid.
-                # I want to catch version.InvalidVersion, but it may
-                # come from a different place then I think.
-                parsed_version = version.Version("0.0.0")
-            self._hashcmp = result = (
-                parsed_version,
-                self.precedence,
-                self.key,
-                self.location,
-                self.py_version or '',
-                self.platform or '',
-            )
-            return result
-
-    # Dynamic monkeypatch on a foreign class; setattr keeps it
-    # invisible to the type checker.
-    setattr(Distribution, 'hashcmp', property(hashcmp))  # noqa: B010
-
-
-# patch_Distribution()
-# XXX This patch is disabled.
-# For a long time this patch did nothing, because of a typo in one of the imports.
-# When I fixed the typo, I would sometimes get errors during sorting of distributions,
-# which was exactly what the patch was trying to solve, so it was breaking what it was
-# trying to fix. If you still run into this error:
-#   TypeError: '<' not supported between instances of 'Version' and 'Version'
-# you should try a different setuptools version.
-
-
 def patch_PackageIndex() -> None:
     """Patch the package index from setuptools.
 
@@ -283,101 +238,6 @@ def patch_pkg_resources_requirement_contains() -> None:
     Requirement.__contains__ = __contains__
 
 
-def patch_pkg_resources_working_set_find() -> None:
-    """Patch pkg_resources.WorkingSet find method.
-
-    setuptools 75.8.1 fixed wheel file naming to follow the binary distribution
-    specification.  This broke a lot for us, especially when using editable
-    installs.  We fixed several parts of our code.
-
-    setuptools 75.8.2 fixed some of the breakage by updating the `find` method
-    of working sets.  When finding a requirement, it now considers several
-    candidates: different spellings of the requirement name.
-    See https://github.com/pypa/setuptools/pull/4856
-
-    A lot of remaining problems in Buildout are fixed if we use this setuptools
-    version.  So what we do in this patch, is to check which setuptools version
-    is used, and patch the 'find' method if the version is older than 75.8.2.
-
-    But: if the version is *much* older, the patch can be applied, but calling
-    the `find` method will raise:
-
-    AttributeError: 'WorkingSet' object has no attribute 'normalized_to_canonical_keys'
-
-    The first setuptools version that has this, is 62.0.0.
-    So don't patch versions that are older than that.
-
-    Alternatively, we could drop support.  That is fine with me.
-    """
-    import pkg_resources
-    if pkg_resources.__name__.startswith('zc.buildout._vendor'):
-        # The pkg_resources copy vendored by zc.buildout comes from
-        # setuptools 81.0.0, so the 75.8.2 `find` fix is built in.  The
-        # setuptools version check below only makes sense when
-        # pkg_resources was pre-imported from an installed setuptools.
-        return
-
-    try:
-        from importlib.metadata import version
-
-        from packaging.version import Version, parse
-
-        setuptools_version = parse(version("setuptools"))
-        if setuptools_version >= Version("75.8.2"):
-            return
-        if setuptools_version < Version("62"):
-            return
-    except Exception:  # noqa: BLE001 - defensive probe against
-        # setuptools version oddities; any failure means 'do not patch'
-        return
-
-    try:
-        from pkg_resources import (
-            Distribution,
-            Requirement,
-            VersionConflict,
-            WorkingSet,
-            safe_name,
-        )
-    except ImportError:
-        return
-
-    def find(self: WorkingSet, req: Requirement) -> Distribution | None:
-        """Find a distribution matching requirement `req`
-
-        Note: I removed the type hints, because they failed on Python 3.9:
-
-          TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
-
-        If there is an active distribution for the requested project, this
-        returns it as long as it meets the version requirement specified by
-        `req`.  But, if there is an active distribution for the project and it
-        does *not* meet the `req` requirement, ``VersionConflict`` is raised.
-        If there is no active distribution for the requested project, ``None``
-        is returned.
-        """
-        dist = None
-
-        candidates = (
-            req.key,
-            self.normalized_to_canonical_keys.get(req.key),
-            safe_name(req.key).replace(".", "-"),
-        )
-
-        for candidate in filter(None, candidates):
-            dist = self.by_key.get(candidate)
-            if dist:
-                req.key = candidate
-                break
-
-        if dist is not None and dist not in req:
-            # XXX add more info
-            raise VersionConflict(dist, req)
-        return dist
-
-    WorkingSet.find = find
-
-
 _applying = False
 
 
@@ -409,7 +269,6 @@ def apply_patches() -> None:
     _applying = True
     try:
         patch_pkg_resources_requirement_contains()
-        patch_pkg_resources_working_set_find()
     finally:
         _applying = False
 
