@@ -1,4 +1,4 @@
-.PHONY: all test pytest coverage coverage-pytest coverage-unittests typecheck test-traced lint complexity complexity-baseline help
+.PHONY: all test pytest coverage coverage-pytest coverage-unittests typecheck test-traced lint complexity complexity-baseline help test-projects test-projects-namespaces test-projects-backends
 PYTHON_VERSION ?= 3.12
 all: test
 
@@ -65,12 +65,23 @@ test-uv: bin/test $(if $(UV_VERSION),$(UV_PIN_DIR)/uv-$(UV_VERSION)/bin/uv,)
 # D3: harness lanes, not upstream's projects: GHA job). The ported
 # projects/ scenarios split into two lanes by what they cover:
 # namespaces runs the all-develop namespace scenario plus the mixed
-# develop+wheel namespace one (the case upstream most expected to fail).
+# develop+wheel namespace one (the case upstream most expected to fail);
+# backends runs both backend scenarios: hatchling (PEP 660) and
+# setuptools (legacy) develop installs in simple, and the wheel build +
+# install of all five packages in final — the coverage protecting the
+# PEP 660/develop work.
 # The HERMETIC_ENV wrapper serves the same purpose as for the suites:
 # spawned bin/buildout children must not resolve ambient devenv
-# site-packages.
+# site-packages. test-projects is the upstream-parity aggregate
+# (upstream PR #766's root Makefile target, same name and shape).
 test-projects-namespaces: bin/buildout
 	$(HERMETIC_ENV) $(MAKE) -C projects namespaces mixed
+
+test-projects-backends: bin/buildout
+	$(HERMETIC_ENV) $(MAKE) -C projects simple final
+
+test-projects: bin/buildout
+	$(HERMETIC_ENV) $(MAKE) -C projects
 
 # Coverage variants of both suites. etc/coverage/sitecustomize.py on
 # PYTHONPATH starts coverage in the suite process itself and in every

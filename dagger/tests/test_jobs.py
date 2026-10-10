@@ -278,7 +278,7 @@ def test_workflow_cells_match_job_table(workflow, uv_workflow):
     # harness lanes (plan D3): upstream's projects: GHA job is
     # deliberately not transcribed, so the lanes have no workflow cell.
     unexpected = {name for name in extra if not name.startswith("scripts-head-")} - {
-        "module-tests", "setuptools-latest", "setuptools-latest-uv", "projects-namespaces"}
+        "module-tests", "setuptools-latest", "setuptools-latest-uv", "projects-namespaces", "projects-backends"}
     assert not unexpected, f"Job rows matching no workflow cell: {sorted(unexpected)}"
     assert sum(name.startswith("scripts-head-") for name in extra) == 10
     assert "module-tests" in extra
@@ -303,12 +303,12 @@ def test_family_invariants():
         "static": 4,
         "coverage": 3,
         "uv": 19,
-        "projects": 1,
+        "projects": 2,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 80
+    assert len(jobs.JOBS) == 81
 
 
 def test_select_jobs_pip():
