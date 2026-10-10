@@ -51,7 +51,7 @@ setup(
         'zc.buildout._vendor.pkg_resources',
     ],
     package_dir = {'': 'src'},
-    python_requires = '>=3.9',
+    python_requires = '>=3.10',
     install_requires = [
         'setuptools>=61.0.0',
         'packaging>=23.2',
@@ -82,7 +82,6 @@ setup(
        'Development Status :: 6 - Mature',
        'Intended Audience :: Developers',
        'Programming Language :: Python',
-       'Programming Language :: Python :: 3.9',
        'Programming Language :: Python :: 3.10',
        'Programming Language :: Python :: 3.11',
        'Programming Language :: Python :: 3.12',
