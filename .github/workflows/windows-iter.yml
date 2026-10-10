@@ -24,7 +24,7 @@ jobs:
     name: static (ruff, radon, ty)
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
