@@ -41,7 +41,7 @@ jobs:
         setuptools-version: ["74.1.3", "75.9.1", "79.0.1", "80.2.0", "80.10.2", "81.0.0", "84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -77,7 +77,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -97,7 +97,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -118,7 +118,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -141,7 +141,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -167,7 +167,7 @@ jobs:
         setuptools-version: ["84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -219,7 +219,7 @@ jobs:
           setuptools-version: "84.0.0"
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -258,7 +258,7 @@ jobs:
         setuptools-version: ["84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -302,7 +302,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -318,7 +318,7 @@ jobs:
         --option languages.python.version:string "3.12"
         -- make coverage
     - name: Upload HTML coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7.0.2
       with:
         name: coverage-legacy-html
         path: htmlcov/
@@ -331,7 +331,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -347,7 +347,7 @@ jobs:
         --option languages.python.version:string "3.12"
         -- make coverage-pytest
     - name: Upload HTML coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7.0.2
       with:
         name: coverage-pytest-html
         path: htmlcov/
@@ -362,7 +362,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -378,7 +378,7 @@ jobs:
         --option languages.python.version:string "3.12"
         -- make coverage-unittests
     - name: Upload HTML coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7.0.2
       with:
         name: coverage-unittests-html
         path: htmlcov/
@@ -394,7 +394,7 @@ jobs:
         os: ["ubuntu-22.04"]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - uses: ./.github/actions/devenv-setup
       with:
         # Project cachix cache (optional): set the CACHIX_CACHE_NAME
@@ -438,7 +438,7 @@ jobs:
       matrix:
         family: [setuptools, python, pip, scripts, static, coverage, uv, projects, module]
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@v7.0.1
     - name: Free runner disk
       # A full run keeps ~13 GB in the engine cache (base images plus
       # committed exec layers); runners ship ~14 GB free. Drop
