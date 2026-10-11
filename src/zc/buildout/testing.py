@@ -719,6 +719,20 @@ drop_tomli_egg_link = (
     re.compile(r'(?m)^-  tomli\.egg-link\n'), '',
     )
 
+# zc.buildout declares ``setuptools>=75.8.2; sys_platform == "win32"``:
+# uv-mode Windows script generation still resolves setuptools' launcher,
+# while on POSIX every setuptools import is pip-mode or legacy-source-build
+# gated, so a develop of zc.buildout resolves setuptools (and writes its
+# egg-link into the eggs directory) only on Windows. Listings that pin the
+# dependency egg-links cannot hold on both sides of the platform boundary,
+# so drop the conditional line; the rest of the listing stays strictly
+# checked. Inert where setuptools is not resolved.
+# A (pattern, replacement) pair rather than a function so the pytest
+# harness (tests/pytests/conftest.py apply_normalizers) applies it too.
+drop_setuptools_egg_link = (
+    re.compile(r'(?m)^-  setuptools\.egg-link\n'), '',
+    )
+
 def drop_build_output_relayed_by_pip(text):
     """Drop lines that only appear because pip relays build subprocess output.
 

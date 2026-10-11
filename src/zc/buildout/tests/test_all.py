@@ -1032,7 +1032,6 @@ On the other hand, if we have a zipped egg, rather than a develop egg:
     -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
-    -  wheel.egg-link
     -  zc.buildout.egg-link
 
 We do not get a warning, but we do get setuptools included in the working set:
@@ -3639,6 +3638,7 @@ def test_suite():
                     zc.buildout.testing.normalize_script,
                     zc.buildout.testing.normalize_egg_py,
                     zc.buildout.testing.drop_tomli_egg_link,
+                    zc.buildout.testing.drop_setuptools_egg_link,
                     zc.buildout.testing.not_found,
                     zc.buildout.testing.adding_find_link,
                     zc.buildout.testing.easyinstall_deprecated,
@@ -3829,6 +3829,7 @@ def test_suite():
                 zc.buildout.testing.normalize_script,
                 zc.buildout.testing.normalize_egg_py,
                 zc.buildout.testing.drop_tomli_egg_link,
+                zc.buildout.testing.drop_setuptools_egg_link,
                 zc.buildout.testing.normalize___pycache__,
                 zc.buildout.testing.not_found,
                 zc.buildout.testing.normalize_exception_type_for_python_2_and_3,

@@ -79,7 +79,6 @@ d  recipes
 -  platformdirs.egg-link
 -  setuptools.egg-link
 -  uv.egg-link
--  wheel.egg-link
 -  zc.buildout.egg-link
 """, N)
     # The ``develop-eggs`` and ``parts`` directories are initially empty::
