@@ -98,6 +98,7 @@ from zc.buildout.install_backend import (
     _uv_executable,
     _uv_install_args,
     _uv_sibling_executable,
+    _uv_target_python,
     _uv_version,
     call_pip_install,
     check_namespace_init_file,

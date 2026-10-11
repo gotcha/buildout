@@ -253,6 +253,30 @@ def _uv_executable() -> str:
     return uv
 
 
+def _uv_target_python() -> str:
+    """The interpreter uv installs/builds for on ``uv pip install``.
+
+    Normally ``sys.executable``.  On Windows, when running inside a
+    virtualenv, that breaks uv's isolated build environments: the build
+    environment is itself an uv-created venv, and an uv venv layered on
+    top of a stdlib venv collapses to the outer venv identity (its
+    python shim re-executes the base, which then reads the *outer*
+    ``pyvenv.cfg`` — verified by the windows-iter probes: a nested
+    ``uv venv`` reports the outer venv's ``sys.prefix``).  The build
+    environment's site-packages never reach the build backend, so a
+    PEP 660 editable build fails with ``ModuleNotFoundError`` on the
+    declared build requirement (hatchling).  Passing the real base
+    interpreter keeps the build environment's identity intact; markers
+    and wheel tags are identical, since it is the same interpreter the
+    venv dispatches to.
+    """
+    if sys.platform == 'win32':
+        candidate = os.path.join(sys.base_prefix, 'python.exe')
+        if os.path.exists(candidate):
+            return candidate
+    return sys.executable
+
+
 def _uv_install_args(uv: str, spec: str, dest: str, editable: bool,
                      package_index_url: str | None,
                      log_level: int) -> list[str]:
@@ -264,7 +288,7 @@ def _uv_install_args(uv: str, spec: str, dest: str, editable: bool,
     ``--no-python-version-warning`` flag to add.
     """
     args = [uv, 'pip', 'install', '--no-deps', '-t', dest,
-            '--python', sys.executable]
+            '--python', _uv_target_python()]
     if log_level >= logging.INFO:
         args.append('-q')
     else:

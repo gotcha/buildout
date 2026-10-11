@@ -19,6 +19,7 @@ from zc.buildout.easy_install import (
     _uv_executable,
     _uv_install_args,
     _uv_sibling_executable,
+    _uv_target_python,
 )
 
 UV_BASE_ARGS = [
@@ -56,6 +57,37 @@ def test_uv_debug_log_level_selects_verbose():
 def test_uv_editable_flag_goes_before_spec():
     args = _uv_install_args('/uv', 'demo', '/dest', True, None, logging.INFO)
     assert args[-2:] == ['-e', 'demo']
+
+
+def _win32_base_prefix(monkeypatch, base_prefix):
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    monkeypatch.setattr(sys, 'base_prefix', str(base_prefix))
+
+
+def test_uv_target_python_off_windows_is_sys_executable(monkeypatch):
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    assert _uv_target_python() == sys.executable
+
+
+def test_uv_target_python_on_windows_is_real_base(monkeypatch, tmp_path):
+    real = tmp_path / 'python.exe'
+    real.write_text('')
+    _win32_base_prefix(monkeypatch, tmp_path)
+    assert _uv_target_python() == os.path.join(str(tmp_path), 'python.exe')
+
+
+def test_uv_target_python_windows_fallback_without_real_binary(
+        monkeypatch, tmp_path):
+    _win32_base_prefix(monkeypatch, tmp_path)
+    assert _uv_target_python() == sys.executable
+
+
+def test_uv_install_args_use_target_python_on_windows(monkeypatch, tmp_path):
+    real = tmp_path / 'python.exe'
+    real.write_text('')
+    _win32_base_prefix(monkeypatch, tmp_path)
+    args = _uv_install_args('/uv', 'demo', '/dest', False, None, logging.INFO)
+    assert args[args.index('--python') + 1] == str(real)
 
 
 def test_uv_remote_index_becomes_extra_index_url():
