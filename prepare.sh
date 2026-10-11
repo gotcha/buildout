@@ -97,7 +97,14 @@ PIP_ARGS="$PIP_ARGS wheel"
 # test-uv.yml): an unpinned install drifted to the untested 0.13.0,
 # whose Windows editable build isolation lost build requirements
 # (ModuleNotFoundError: hatchling in the PEP 660 develop tests).
-PIP_ARGS="$PIP_ARGS packaging platformdirs build>=1 uv>=0.12.11,<0.13"
+# UV_PIN overrides the window with one exact release for bisection
+# (the windows-iter debugging matrix).
+if test "$UV_PIN"; then
+    UV_REQ="uv==$UV_PIN"
+else
+    UV_REQ="uv>=0.12.11,<0.13"
+fi
+PIP_ARGS="$PIP_ARGS packaging platformdirs build>=1 $UV_REQ"
 echo
 echo "Using arguments for pip install: $PIP_ARGS"
 # Bring pip current first: the install and seed passes must read

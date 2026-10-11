@@ -30,13 +30,16 @@ jobs:
     # provisioning: uv is a declared zc.buildout dependency, so the
     # venv pip install lays uv.exe next to the Python executable,
     # where easy_install._uv_executable finds it after the PATH miss.
-    name: ${{ inputs.installer == 'uv' && 'Windows (uv installer)' || 'Windows' }}
+    name: ${{ inputs.installer == 'uv' && 'Windows (uv installer)' || format('Windows (uv {0})', matrix.uv-pin) }}
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest]
         python-version: ["3.10"]
         setuptools-version: ["75.8.2"]
+        # PROBE (windows-iter only): bisect uv versions for the Windows
+        # PEP 660 editable build-isolation failure.
+        uv-pin: ["0.12.11", "0.12.17", "0.12.24", "0.13.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v7.0.1
@@ -51,12 +54,16 @@ jobs:
         PYTHONWARNINGS: ignore
         PYTHON_VERSION: ${{matrix.python-version}}
         SETUPTOOLS_VERSION: ${{matrix.setuptools-version}}
+        # PROBE: exact uv under test (bisects the Windows PEP 660
+        # editable build-isolation failure on windows-iter).
+        UV_PIN: ${{ matrix.uv-pin }}
         # Defining temporary directories is needed on Windows for
         # test_all.TestEasyInstall.test_move_to_eggs_dir_and_compile
         TMPDIR: C:\tmp
         TMP: C:\tmp
         TEMP: C:\tmp
-      run: make
+      # PROBE: prepare + buildout only, no doctest suite.
+      run: make bin/test
     - name: Run tests (uv installer)
       if: inputs.installer == 'uv'
       env:
@@ -86,4 +93,5 @@ jobs:
         TMPDIR: C:\tmp
         TMP: C:\tmp
         TEMP: C:\tmp
-      run: make pytest
+      # PROBE: only the PEP 660 develop file (the failing class).
+      run: bin/py -m pytest src/zc/buildout/tests/pytests/test_develop_pep660.py -v
