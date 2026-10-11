@@ -106,7 +106,10 @@ Pushing to learn what CI thinks costs a runner round-trip per
 iteration. The dagger mirror replays the same matrix in local
 containers, so the cheap loop is: iterate with the native `make`
 targets, commit, run the dagger cells on the committed tree, push
-only what they pass. Two days of CI debugging on the uv-installer
+only what they pass. Once pushed, never monitor the GitHub run —
+report the run URL and end the turn (see verify-buildout's
+features/ci.md, "Never monitor GitHub runs"). Two days of CI
+debugging on the uv-installer
 branch (2026-09-23/24) measured the boundary:
 
 - **What local cells catch.** Container-axis and version-matrix

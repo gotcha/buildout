@@ -112,3 +112,16 @@ look.
   stops uv from substituting a uv-managed interpreter).
 - YAML parse checks do not validate GitHub's schema (action versions,
   `needs:` graph). Runner proof (step 3) is where those surface.
+
+## Never monitor GitHub runs
+
+GitHub runs are long. After pushing, report the run URL in the
+requesting thread and end the turn — never sit in a loop polling
+`gh run view` or `gh run watch` while a run crawls through its legs.
+The watch belongs with the requester (they ping when it lands) or
+with the next session's first action (one `gh run view --json jobs`
+read of a completed run), never with an agent keeping a shell alive.
+The single exception is a debugging loop explicitly chartered as
+"iterate on CI" (e.g. the windows-iter probe rounds): each round
+reads a completed run, edits, and pushes the next probe — reads of
+finished runs, never watches.
