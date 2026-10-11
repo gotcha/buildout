@@ -36,7 +36,8 @@ towncrier (news fragments, see the develop-buildout skill) and ruff
 (`make lint`), and exports `PYTHON_VERSION` + `USE_UV` +
 `UV_VENV_CLEAR` + `SETUPTOOLS_VERSION=75.8.2` so the bootstrap below
 just works.
-Pick another supported Python (3.9–3.14) from the command line, no
+Pick another supported Python (3.10–3.14; floor per
+`python_requires` in `setup.py`) from the command line, no
 file edit:
 
 ```sh
@@ -66,6 +67,35 @@ missing):
 cd $REPO
 make bin/buildout        # = ./prepare.sh: venv in venvs/, pip deps, sdist, dev.py
 ```
+
+## Restart from scratch
+
+When the checkout is in a state you do not trust — a venv left by a
+previous session with unknown pins, a `bin/buildout` whose shebang
+points into a deleted venv, a half-created venv whose `ensurepip` now
+fails — do not debug the layering. Restart:
+
+```sh
+rm -rf venvs bin eggs downloads parts develop-eggs .installed.cfg
+make bin/buildout        # inside devenv shell, or with the hand-set pins
+bin/py -c 'import sys; print(sys.version)'   # prove the interpreter
+```
+
+Traps this avoids:
+
+- `bin/.prepare-stamp` and `bin/buildout` are mtime-keyed: make can
+  consider them up to date while their content points at a venv that
+  no longer exists. Deleting `bin/` and `venvs/` forces a true rebuild
+  instead of re-running `python -m venv` over a half-created directory
+  (which dies inside `ensurepip`).
+- Running make outside `devenv shell` gives prepare.sh no pins: it
+  defaults to the system `python3` (3.9 on macOS — below the `>=3.10`
+  floor), and the failure surfaces deep inside the bootstrap import of
+  `zc.buildout.parts` instead of at the cause. Always bootstrap inside
+  `devenv shell`, or export the pins by hand as shown above.
+- Never substitute `git clean -fdx`: untracked source you authored —
+  news fragments in `news/`, the very patch under test — is also
+  untracked and would be deleted.
 
 Per-drive launch:
 

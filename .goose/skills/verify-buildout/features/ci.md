@@ -16,7 +16,7 @@ nixpkgs revision pinned in `devenv.lock`; it also wraps
 only when the `CACHIX_CACHE_NAME` variable / `CACHIX_AUTH_TOKEN`
 secret are set — public caches pull without a token, pushing needs
 one). Everything else — Python
-3.9–3.14, uv, ruff, ty, radon, make — comes from the devenv, so CI and a
+3.10–3.14, uv, ruff, ty, radon, make — comes from the devenv, so CI and a
 local `devenv shell` agree by construction.
 
 Per-job commands have the shape:
