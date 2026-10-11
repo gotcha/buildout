@@ -30,10 +30,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - plone: "6.0.0"
+            python: "3.10"
+          - plone: "6.0.8"
+            python: "3.11"
           - plone: "6.0.15"
             python: "3.10"
           - plone: "6.1.5"
             python: "3.12"
+          - plone: "6.2.0"
+            python: "3.14"
           - plone: "6.2.2"
             python: "3.13"
     steps:

@@ -1,0 +1,1 @@
+Widen the plone-matrix CI matrix from three rows to six: added 6.0.0/3.10 (series floor), 6.0.8/3.11 and 6.2.0/3.14 (interpreter ceiling). All three proven locally through the job's pinned-ref path: ``OK 6.0.0 ... HTTP 200``, ``OK 6.0.8 ... HTTP 200``, ``OK 6.2.0 ... HTTP 200``. [gt-coleader]
