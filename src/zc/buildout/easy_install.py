@@ -493,11 +493,11 @@ if is_win32:
     # when a Windows script actually needs a launcher.
     def get_win_launcher(kind: str) -> bytes:
         try:
-            from setuptools._scripts import (
-                get_win_launcher as _get_win_launcher)
+            from setuptools._scripts import get_win_launcher as _get_win_launcher
         except ImportError:
             from setuptools.command.easy_install import (
-                get_win_launcher as _get_win_launcher)
+                get_win_launcher as _get_win_launcher,
+            )
         return _get_win_launcher(kind)
 else:
     get_win_launcher = None
