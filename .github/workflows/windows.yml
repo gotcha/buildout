@@ -65,7 +65,7 @@ jobs:
         TEMP: C:\tmp
       # PROBE: prepare + buildout only, no doctest suite.
       run: make bin/test
-    - name: Probe build-env venv nesting (windows-iter debug)
+    - name: Probe build-env venv nesting 2 (windows-iter debug)
       shell: bash
       run: |
         set -x
@@ -75,56 +75,59 @@ jobs:
         PY="$ROOT/venvs/python/Scripts/python3.exe"
         SEED_N="$ROOT/downloads/test-seed"
         FSLASH() { echo "${1//\\//}"; }
-        rm -rf /tmp/p3 && mkdir -p /tmp/p3/pkg/src/demo_pep660
+        rm -rf /tmp/p4 && mkdir -p /tmp/p4/pkg/src/demo_pep660
         {
           printf '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n\n'
           printf '[project]\nname = "demo-pep660"\nversion = "0.1.0"\n'
-        } > /tmp/p3/pkg/pyproject.toml
-        printf 'def main():\n    pass\n' > /tmp/p3/pkg/src/demo_pep660/__init__.py
-        T3="$(cd /tmp/p3 && pwd -W)"
-        PKG_N="$T3/pkg"
+        } > /tmp/p4/pkg/pyproject.toml
+        printf 'def main():\n    pass\n' > /tmp/p4/pkg/src/demo_pep660/__init__.py
+        T4="$(cd /tmp/p4 && pwd -W)"
+        PKG_N="$T4/pkg"
         mkdest() { mkdir -p "$1"; (cd "$1" && pwd -W); }
         freshcache() { local c; c="$(mktemp -d)"; (cd "$c" && pwd -W); }
-        export PIP_NO_INDEX=1
-        export PIP_FIND_LINKS="$SEED_N"
-        export UV_FIND_LINKS="$SEED_N"
-        export UV_INDEX_URL="file:///nonexistent-hermetic-index"
-        export UV_NO_PROGRESS=1
+        hermetic_env() {
+          export PIP_NO_INDEX=1
+          export PIP_FIND_LINKS="$SEED_N"
+          export UV_FIND_LINKS="$SEED_N"
+          export UV_INDEX_URL="file:///$(FSLASH "$1")/nonexistent-hermetic-index"
+          export UV_NO_PROGRESS=1
+        }
 
-        echo "===== E1: outer venv identity ====="
-        "$PY" -c "import sys; print('exe:', sys.executable); print('_base_executable:', getattr(sys, '_base_executable', None)); print('prefix:', sys.prefix); print('base_prefix:', sys.base_prefix)"
-        cat "$ROOT/venvs/python/pyvenv.cfg"
-        ls -la "$ROOT/venvs/python/Scripts/" | head -12
+        echo "===== E2f: control, fixed hermetic index (expect resolve OK, build-env loss) ====="
+        C1="$(freshcache)"
+        hermetic_env "$C1"
+        export UV_CACHE_DIR="$C1"
+        DEST="$(mkdest /tmp/p4/d-ctrl)"
+        "$UV" pip install --no-deps -t "$DEST" --python "$PY" -v -e "file:///$(FSLASH "$PKG_N")" 2>&1 | tail -25
+        echo "E2f rc=${PIPESTATUS[0]}"
 
-        echo "===== E2: control (probe-2 repro, expect FAIL) ====="
-        DEST="$(mkdest /tmp/p3/d-ctrl)"; export UV_CACHE_DIR="$(freshcache)"
-        "$UV" pip install --no-deps -t "$DEST" --python "$PY" -v -e "file:///$(FSLASH "$PKG_N")"
-        echo "E2 rc=$?"
+        echo "===== E3x: uv venv identity on a REAL base interpreter ====="
+        BASEP="$("$PY" -c 'import sys; print(sys.base_prefix)')"
+        BASEP="$(FSLASH "$BASEP")"
+        REAL="$BASEP/python.exe"
+        echo "REAL=$REAL"
+        C2="$(freshcache)"; hermetic_env "$C2"; export UV_CACHE_DIR="$C2"
+        "$UV" venv --python "$REAL" "$T4/nested-real"
+        NESTR="$T4/nested-real/Scripts/python.exe"
+        "$NESTR" -c "import sys; print('exe:', sys.executable); print('prefix:', sys.prefix); print('base_prefix:', sys.base_prefix)"
+        "$UV" pip install --python "$NESTR" hatchling 2>&1 | tail -3
+        "$NESTR" -c "import hatchling; print('hatchling at', hatchling.__file__)"
+        echo "E3x import rc=$?"
 
-        echo "===== E3: nested uv venv on the outer venv (spawn trap test) ====="
-        export UV_CACHE_DIR="$(freshcache)"
-        "$UV" venv --python "$PY" "$T3/nested"
-        NEST="$T3/nested/Scripts/python.exe"
-        "$NEST" -c "import sys; print('exe:', sys.executable); print('prefix:', sys.prefix); print('base_prefix:', sys.base_prefix)"
-        "$UV" pip install --python "$NEST" hatchling
-        echo "E3 install rc=$?"
-        "$NEST" -c "import hatchling; print('hatchling at', hatchling.__file__)"
-        echo "E3 import rc=$?"
+        echo "===== W1f: editable install with --python = real base ====="
+        C3="$(freshcache)"; hermetic_env "$C3"; export UV_CACHE_DIR="$C3"
+        DEST="$(mkdest /tmp/p4/d-w1)"
+        "$UV" pip install --no-deps -t "$DEST" --python "$REAL" -v -e "file:///$(FSLASH "$PKG_N")" 2>&1 | tail -25
+        echo "W1f rc=${PIPESTATUS[0]}"
 
-        echo "===== W1: --python = real base interpreter ====="
-        REAL="$("$PY" -c 'import sys; print(sys._base_executable)')"
-        REAL="${REAL//\\//}"
-        printf 'REAL=%s\n' "$REAL"
-        DEST="$(mkdest /tmp/p3/d-w1)"; export UV_CACHE_DIR="$(freshcache)"
-        "$UV" pip install --no-deps -t "$DEST" --python "$REAL" -v -e "file:///$(FSLASH "$PKG_N")"
-        echo "W1 rc=$?"
-
-        echo "===== W2: --no-build-isolation + PYTHONPATH preseeded backend ====="
-        BLD="$(mkdest /tmp/p3/bld)"; export UV_CACHE_DIR="$(freshcache)"
-        "$UV" pip install -t "$BLD" --python "$PY" hatchling
-        DEST="$(mkdest /tmp/p3/d-w2)"
-        PYTHONPATH="$(FSLASH "$BLD")" "$UV" pip install --no-deps --no-build-isolation -t "$DEST" --python "$PY" -v -e "file:///$(FSLASH "$PKG_N")"
-        echo "W2 rc=$?"
+        echo "===== W2f: --no-build-isolation + PYTHONPATH preseeded backend ====="
+        C4="$(freshcache)"; hermetic_env "$C4"; export UV_CACHE_DIR="$C4"
+        BLD="$(mkdest /tmp/p4/bld)"
+        "$UV" pip install -t "$BLD" --python "$PY" hatchling 2>&1 | tail -5
+        echo "W2f preseed rc=${PIPESTATUS[0]}"
+        DEST="$(mkdest /tmp/p4/d-w2)"
+        PYTHONPATH="$(FSLASH "$BLD")" "$UV" pip install --no-deps --no-build-isolation -t "$DEST" --python "$PY" -v -e "file:///$(FSLASH "$PKG_N")" 2>&1 | tail -20
+        echo "W2f rc=${PIPESTATUS[0]}"
         exit 0
     - name: Run tests (uv installer)
       if: inputs.installer == 'uv'
