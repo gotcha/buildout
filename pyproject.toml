@@ -6,7 +6,23 @@
 # dagger is a Dagger SDK module (own pyproject, generated sdk/ dir);
 # the repo venv has no dagger-io to check it against. It is verified
 # by running it (dagger call), not statically.
-exclude = ["src/zc/buildout/_vendor", "etc/tracing", "dagger"]
+# venvs, eggs, downloads, bin, develop-eggs, parts: build artifacts the
+# dagger static cell creates via prepare/bootstrap before `make typecheck`.
+# ty only respects .gitignore when .git is a directory — from a worktree
+# checkout .git is a pointer file, so without these entries ty scans the
+# runtime-created venv and extracted eggs and drowns in third-party
+# diagnostics.
+exclude = [
+    "src/zc/buildout/_vendor",
+    "etc/tracing",
+    "dagger",
+    "venvs",
+    "eggs",
+    "downloads",
+    "bin",
+    "develop-eggs",
+    "parts",
+]
 
 [tool.mypy]
 # Explicit-Any burndown gate (make typecheck-any; separate from the ty
