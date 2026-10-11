@@ -62,8 +62,11 @@ def _build_jobs() -> tuple[Job, ...]:
                 family="setuptools",
                 setuptools=st,
             )
+            # Bottom tracks the setup.py setuptools floor (>=75.8.2):
+            # hermetic cells below the floor die at bootstrap when
+            # buildout's upgrade check cannot satisfy the floor
+            # (GH run 38115156429).
             for st in (
-                "74.1.3",
                 "75.9.1",
                 "79.0.1",
                 "80.2.0",
@@ -164,7 +167,6 @@ def _build_jobs() -> tuple[Job, ...]:
                 installer="uv",
             )
             for st in (
-                "74.1.3",
                 "75.9.1",
                 "79.0.1",
                 "80.2.0",
