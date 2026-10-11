@@ -38,7 +38,12 @@ jobs:
         # Sub-70.1 cells dropped with the 3.10 floor: upstream modern
         # wheel no longer provides bdist_wheel for them (phase-2
         # finding). 84.0.0 tops the range (M12, upstream 5d05392a).
-        setuptools-version: ["74.1.3", "75.9.1", "79.0.1", "80.2.0", "80.10.2", "81.0.0", "84.0.0"]
+        # The 75.9.1 bottom tracks the setup.py floor (setuptools
+        # >=75.8.2): a lower cell cannot exercise its own version —
+        # networked GHA legs upgrade the venv past the floor
+        # mid-flight, hermetic dagger cells error out at bootstrap
+        # (GH run 38115156429).
+        setuptools-version: ["75.9.1", "79.0.1", "80.2.0", "80.10.2", "81.0.0", "84.0.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v7.0.1
