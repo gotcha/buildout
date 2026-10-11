@@ -114,7 +114,7 @@ branch (2026-09-23/24) measured the boundary:
   dagger uv cells while macOS-native runs and the GHA ubuntu legs
   stayed green; the py3.10-only `tomli` seed gap was invisible from
   the py3.12 native surface, and the local python-matrix cells span
-  3.9–3.14. The `static` family replays lint, typecheck, and
+  3.10–3.14. The `static` family replays lint, typecheck, and
   complexity in-container.
 - **What they cannot catch.** The GHA runner's ambient environment
   (the `RUST_LOG=debug` flood lived on the runner, in no container),
@@ -122,6 +122,25 @@ branch (2026-09-23/24) measured the boundary:
   macOS leg's devenv evaluation, and network flakes. Green local
   cells narrow the push risk; for those axes the runner run stays
   the only proof.
+- **A dagger/runner split on the same commit: suspect the job setup
+  before the code, in both directions.** Both sides run the same make
+  targets; what differs is the world they start from — the workflow's
+  `env:`/`with:` wiring, setup steps (devenv evaluation, Python
+  setup, cache tokens, pinned tool versions), the runner's ambient
+  environment, and network reach.
+  - *Green in dagger, red on the runner* → look at what the runner
+    leg adds around the targets: its setup steps, env propagation,
+    ambient state, and axes the container cannot reproduce (Windows,
+    macOS devenv evaluation).
+  - *Red in dagger, green on the runner* → the leg may be green by
+    accident, no longer testing what its name claims (observed
+    2026-10-11: the networked `setuptools-74.1.3` GHA leg stayed
+    green by upgrading setuptools past the floor mid-flight, while
+    the hermetic dagger cell failed honestly). Check what the network
+    or runner state silently supplies before weakening the hermetic
+    cell to match.
+  Reproduce the bare-metal wiring step by step before touching the
+  code under test.
 
 Two rules make the gate trustworthy:
 
