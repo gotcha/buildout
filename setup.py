@@ -53,17 +53,28 @@ setup(
     package_dir = {'': 'src'},
     python_requires = '>=3.10',
     install_requires = [
-        'setuptools>=75.8.2',
+        # setuptools ships on win32 only: uv-mode Windows script and
+        # interpreter generation still imports it (scripts.py calls
+        # easy_install.get_win_launcher, which resolves
+        # setuptools._scripts) until the Phase-4 launcher decision
+        # lands.  On POSIX every setuptools import is pip-mode or
+        # legacy-source-build gated, so there it comes from the
+        # 'zc.buildout[pip]' extra below.
+        'setuptools>=75.8.2; sys_platform == "win32"',
         'packaging>=23.2',
         # pip is NOT a dependency: the uv installer never touches it,
         # the legacy pip installer requires it via the
         # 'zc.buildout[pip]' extra below, and pip mode raises a clear
         # error when pip is missing (guard in
         # easy_install._compute_toolchain).
-        # platformdirs is used by the vendored pkg_resources copy, see
-        # src/zc/buildout/_vendor/README.rst
+        # platformdirs stays: the vendored pkg_resources copy
+        # hard-imports it (see src/zc/buildout/_vendor/README.rst) and
+        # the bootstrap command reaches pkg_resources in both
+        # installer modes (buildout.Buildout.bootstrap).
         'platformdirs',
-        'wheel',
+        # wheel is gone: nothing imports it; only the self-upgrade
+        # check still resolves it by name (buildout._maybe_upgrade),
+        # to be installed on demand by the active installer.
         # 0.12.11 is the floor: earlier 0.12.x serve their own cache on
         # --offline resolves, breaking install-from-cache isolation
         # (easy_install.txt and downloadcache.txt pin that contract).
@@ -76,7 +87,7 @@ setup(
         "test": ['zope.testing', 'manuel',
               'bobo ==2.3.0', 'zdaemon', 'zc.zdaemonrecipe',
               'zc.recipe.deployment'],
-        "pip": ["pip>=25.0"]},
+        "pip": ["pip>=25.0", "setuptools>=75.8.2"]},
     zip_safe=False,
     classifiers = [
        'Development Status :: 6 - Mature',

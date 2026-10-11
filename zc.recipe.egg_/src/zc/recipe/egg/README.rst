@@ -81,7 +81,6 @@ Now, if we look at the buildout eggs directory:
     -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
-    -  wheel.egg-link
     d  zc.buildout-1.0-pyN.N.egg
 
 We see that we got an egg for demo that met the requirement, as well
@@ -279,7 +278,6 @@ Then we'll get a new demo egg:
     -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
-    -  wheel.egg-link
     d  zc.buildout-1.0-py2.4.egg
 
 The script is updated too:

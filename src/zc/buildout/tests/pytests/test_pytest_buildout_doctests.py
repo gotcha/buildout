@@ -634,7 +634,6 @@ uses namespace packages but the distribution does not require setuptools.
 -  platformdirs.egg-link
 -  setuptools.egg-link
 -  uv.egg-link
--  wheel.egg-link
 -  zc.buildout.egg-link
 """, N)
     # We do not get a warning, but we do get setuptools included in the working set:

@@ -43,7 +43,6 @@ We also get other buildout artifacts::
     -  platformdirs.egg-link
     -  setuptools.egg-link
     -  uv.egg-link
-    -  wheel.egg-link
     -  zc.buildout.egg-link
 
 (We list both the ``eggs`` and ``develop-eggs`` directories because the
