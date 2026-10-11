@@ -64,6 +64,39 @@ jobs:
         TEMP: C:\tmp
       # PROBE: prepare + buildout only, no doctest suite.
       run: make bin/test
+    - name: Probe bare uv editable build (windows-iter debug)
+      shell: bash
+      run: |
+        set -x
+        ROOT="$(pwd -W)"
+        rm -rf /tmp/probe-pkg /tmp/probe-dest
+        mkdir -p /tmp/probe-pkg/src/demo_pep660 /tmp/probe-dest
+        {
+          printf '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n\n'
+          printf '[project]\nname = "demo-pep660"\nversion = "0.1.0"\n'
+        } > /tmp/probe-pkg/pyproject.toml
+        printf 'def main():\n    pass\n' > /tmp/probe-pkg/src/demo_pep660/__init__.py
+        PKG_N="$(cd /tmp/probe-pkg && pwd -W)"
+        DEST_N="$(cd /tmp/probe-dest && pwd -W)"
+        SEED_N="$ROOT/downloads/test-seed"
+        ls "$SEED_N" | head -20
+        CACHE="$(mktemp -d)"
+        CACHE_N="$(cd "$CACHE" && pwd -W)"
+        FSLASH() { echo "${1//\\//}"; }
+        export PIP_NO_INDEX=1
+        export PIP_FIND_LINKS="$SEED_N"
+        export UV_FIND_LINKS="$SEED_N"
+        export UV_CACHE_DIR="$CACHE_N"
+        export UV_INDEX_URL="file:///$(FSLASH "$CACHE_N")/nonexistent-hermetic-index"
+        export UV_NO_PROGRESS=1
+        UV="$ROOT/venvs/python/Scripts/uv.exe"
+        PY="$ROOT/venvs/python/Scripts/python3.exe"
+        "$PY" --version
+        "$UV" --version
+        env | grep -E "^(UV_|PIP_)" | sed 's/\\\\/\\\\/g'
+        "$UV" pip install --no-deps -t "$DEST_N" --python "$PY" -v -e "file:///$(FSLASH "$PKG_N")"
+        echo "probe exit: $?"
+        ls "$DEST_N"
     - name: Run tests (uv installer)
       if: inputs.installer == 'uv'
       env:
