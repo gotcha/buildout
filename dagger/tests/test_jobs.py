@@ -255,7 +255,7 @@ def test_jobs_module_imports_nothing_from_dagger():
 
 def test_workflow_cells_match_job_table(workflow, uv_workflow):
     cells = _workflow_cells(workflow) | _uv_workflow_cells(uv_workflow)
-    assert len(cells) == 66
+    assert len(cells) == 64
     by_name = {job.name: job for job in jobs.JOBS}
     missing = set(cells) - set(by_name)
     assert not missing, f"workflow cells without a Job row: {sorted(missing)}"
@@ -295,20 +295,23 @@ def test_family_invariants():
         assert job.family in jobs.VALID_FAMILIES
     assert set(jobs.FAMILY_MINUTES) == set(jobs.FAMILIES)
     counts = Counter(job.family for job in jobs.JOBS)
+    # The counts drift deliberately when matrices move: setuptools cells
+    # bottom out at 75.9.1 because setup.py floors setuptools at 75.8.2
+    # (GH run 38115156429), each uv twin cell shadows a workflow cell.
     assert counts == {
-        "setuptools": 8,
+        "setuptools": 7,
         "python": 5,
         "pip": 9,
         "scripts": 30,
         "static": 4,
         "coverage": 3,
-        "uv": 19,
+        "uv": 18,
         "projects": 2,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 81
+    assert len(jobs.JOBS) == 79
 
 
 def test_select_jobs_pip():
