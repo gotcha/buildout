@@ -69,7 +69,9 @@ from zc.buildout.buildout import (
     _valued_option,
     _version_eggs_directory,
 )
+from zc.buildout.cli import _known_user_errors
 from zc.buildout.download import Download
+from zc.buildout.parts import _dist_upgrades_active_module
 
 
 def test_extends_cache_absent():
@@ -1491,6 +1493,13 @@ def test_find_upgraded_dists_module_outside_dist_location_is_upgraded(
     assert upgraded == [dist]
 
 
+def test_dist_upgrades_active_module_unimportable_project_is_false():
+    dist = pkg_resources.Distribution(
+        location='/eggs/nonexistentmodule-1.0-pyX.egg',
+        project_name='nonexistentmodule', version='1.0')
+    assert not _dist_upgrades_active_module('nonexistentmodule', dist)
+
+
 def test_find_upgraded_dists_unimportable_project_is_not_an_upgrade():
     # Under the uv installer the resolved dists are not importable
     # in-process; a project without an importable module has no active
@@ -1503,6 +1512,18 @@ def test_find_upgraded_dists_unimportable_project_is_not_an_upgrade():
     upgraded = _find_upgraded_dists(
         ('nonexistentmodule',), ws, logging.getLogger('zc.buildout'))
     assert upgraded == []
+
+
+def test_known_user_errors_includes_distutils_errors():
+    import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
+    assert _known_user_errors() == (
+        zc.buildout.UserError, distutils.errors.DistutilsError)
+
+
+def test_known_user_errors_degenerates_without_distutils(monkeypatch):
+    monkeypatch.setitem(sys.modules, 'distutils', None)
+    monkeypatch.setitem(sys.modules, 'distutils.errors', None)
+    assert _known_user_errors() == (zc.buildout.UserError,)
 
 
 def test_handle_buildout_error_without_distutils_user_error(
