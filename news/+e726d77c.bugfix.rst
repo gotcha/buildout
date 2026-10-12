@@ -1,0 +1,7 @@
+Fix the ``zc.recipe.egg`` ``custom.rst`` doctest under ``installer =
+uv``: its pinned ``Running pip install:`` anchor became the truthful
+``Running uv pip install:`` when install messages started naming the
+real installer, so the anchor stopped matching in uv mode (CI run
+38290238614); the recipe test checker now normalizes the uv spelling
+back onto the anchor, while pip-mode comparisons are untouched.
+[gotcha]
