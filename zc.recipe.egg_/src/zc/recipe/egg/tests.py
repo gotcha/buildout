@@ -133,6 +133,17 @@ def test_suite():
                     zc.buildout.testing.pkg_resources_deprecated,
                     zc.buildout.testing.warnings_warn,
                     zc.buildout.testing.ignore_root_logger,
+                    # uv names the real installer in the -vvv
+                    # transcript: under ``installer = uv`` the line
+                    # below this expectation reads
+                    # ``Running uv pip install:`` instead of the
+                    # pip-mode anchor custom.rst pins.  Normalize the
+                    # uv spelling onto the anchor; pip mode never
+                    # emits the uv spelling, so pip-mode comparisons
+                    # are untouched.  (The label originates in
+                    # install_backend._install_command_label.)
+                    (re.compile(r'(?m)^Running uv pip install:$'),
+                     'Running pip install:'),
                     zc.buildout.testing.drop_build_output_relayed_by_pip,
                     (re.compile("(d  ((ext)?demo(needed)?|other)"
                                 r"-\d[.]\d-py)\d[.]\d{1,2}(-\S+)?[.]egg"),
