@@ -216,8 +216,13 @@ def fake_repo(tmp_path, monkeypatch):
         releases={
             "setuptools": ["61.0.0", "63.0.0", "75.9.1", "81.0.0", "82.0.0"],
             "pip": ["21.3.1", "26.2.1"],
-            "uv": ["0.12.9", "0.12.11", "0.12.13", "0.12.14",
-                   "0.12.15", "0.12.16", "0.12.17", "0.12.18"],
+            # the real supported uv series 0.12.11..0.13.0, plus two
+            # sub-floor releases the sampling must skip
+            "uv": ["0.12.9", "0.12.10",
+                   "0.12.11", "0.12.12", "0.12.13", "0.12.14",
+                   "0.12.15", "0.12.16", "0.12.17", "0.12.18",
+                   "0.12.19", "0.12.20", "0.12.21", "0.12.22",
+                   "0.12.23", "0.12.24", "0.13.0"],
         },
         newest_python="3.12",
         devenv_ok=True,
@@ -407,11 +412,16 @@ def test_bump_pip_heals_jobs_table_after_partial_failure(fake_repo):
     assert 'for pip in ("21.3.1", "26.2.1")' in test_jobs.text
 
 
-def test_bump_uv_window_is_floor_plus_five_recent(fake_repo):
+def test_bump_uv_window_is_every_fifth_from_floor_plus_five_recent(
+        fake_repo):
     wf = bumper.WorkflowFile(fake_repo.workflows / "test-uv.yml")
     jobs = bumper.JobsTable(fake_repo.jobs_py)
     message = bumper.bump_uv(wf, jobs)
-    wanted = ["0.12.11", "0.12.14", "0.12.15", "0.12.16", "0.12.17", "0.12.18"]
+    # every fifth of the supported series from the 0.12.11 floor
+    # (0.12.11, 0.12.16, 0.12.21) unioned with the five most recent
+    # (0.12.21..0.13.0): the shipped matrix
+    wanted = ["0.12.11", "0.12.16", "0.12.21", "0.12.22", "0.12.23",
+              "0.12.24", "0.13.0"]
     assert message == f"uv: window now {', '.join(wanted)}"
     index = wf.job_matrix_lines("uv", "uv-version")[0]
     assert wf.get_list(index)[2] == wanted
@@ -471,8 +481,8 @@ def test_main_end_to_end_and_rerun_is_a_noop(fake_repo, capsys):
     out = capsys.readouterr().out
     assert "setuptools: sweep now tops at 81.0.0" in out
     assert "pip: added 26.2.1" in out
-    assert ("uv: window now 0.12.11, 0.12.14, 0.12.15, 0.12.16, "
-            "0.12.17, 0.12.18") in out
+    assert ("uv: window now 0.12.11, 0.12.16, 0.12.21, 0.12.22, "
+            "0.12.23, 0.12.24, 0.13.0") in out
     assert "python: added 3.12 (plus scripts-3.12.cfg)" in out
     assert "test_jobs.py: count assertions regenerated" in out
     assert "uvx not on PATH" in out
@@ -488,8 +498,8 @@ def test_main_end_to_end_and_rerun_is_a_noop(fake_repo, capsys):
     assert 'setuptools-version: ["75.6.0"]' in run_tests
     assert 'setuptools-version: ["65.7.0", "75.8.2"]' in run_tests
     assert 'setuptools-version: ["81.0.0"]' in test_uv
-    assert ('uv-version: ["0.12.11", "0.12.14", "0.12.15", '
-            '"0.12.16", "0.12.17", "0.12.18"]') in test_uv
+    assert ('uv-version: ["0.12.11", "0.12.16", "0.12.21", "0.12.22", '
+            '"0.12.23", "0.12.24", "0.13.0"]') in test_uv
 
     module = _exec_module(fake_repo.jobs_py)
     families = Counter(job.family for job in module.JOBS)
