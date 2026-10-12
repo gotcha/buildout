@@ -366,6 +366,26 @@ def _finalize_installed_options(
         os.remove(buildout_options['installed'])
 
 
+def _dist_upgrades_active_module(
+        project: str,
+        dist: pkg_resources.Distribution,
+        ) -> bool:
+    """Whether the active in-process module for ``project`` lives
+    outside ``dist`` (i.e. ``dist`` upgrades the active version).
+
+    A project that cannot be imported in-process has no active
+    version, so import failure means "not an upgrade", not an error:
+    the uv installer never makes the resolved dists importable (a
+    pip-era assumption), and lean installs ship no wheel/setuptools.
+    """
+    try:
+        importlib.import_module(project)
+    except ImportError:
+        return False
+    return not inspect.getfile(sys.modules[project]).startswith(
+        zc.buildout.easy_install._dist_location(dist))
+
+
 def _find_upgraded_dists(
         projects: tuple[str, ...],
         ws: pkg_resources.WorkingSet,
@@ -393,18 +413,15 @@ def _find_upgraded_dists(
             # version is used, this is either useless or a life saver.
             req = parse(project)
             dist = ws.find(req)
-        importlib.import_module(project)
         if dist is None:
             # This is unexpected.  This must be some problem with how we use
-            # setuptools/pkg_resources.  But since the import worked, it feels
-            # safe to ignore.
+            # setuptools/pkg_resources.
             logger.warning(
                 "Could not find %s in working set during upgrade check. Ignoring.",
                 project,
             )
             continue
-        if not inspect.getfile(sys.modules[project]).startswith(
-                zc.buildout.easy_install._dist_location(dist)):
+        if _dist_upgrades_active_module(project, dist):
             upgraded.append(dist)
     return upgraded
 

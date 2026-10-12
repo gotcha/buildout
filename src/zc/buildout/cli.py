@@ -255,6 +255,22 @@ def _pop_command(args: list[str]) -> str:
     return command
 
 
+def _known_user_errors() -> tuple[type[Exception], ...]:
+    """The exception classes reported as user errors (a message and
+    exit 1, no traceback).
+
+    The distutils import is a lazy runtime setuptools import via
+    _distutils_hack: lean installs on Python 3.12+ ship neither
+    distutils nor setuptools, and the classification degenerates to
+    UserError alone there.
+    """
+    try:
+        import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
+    except ImportError:
+        return (zc.buildout.UserError,)
+    return (zc.buildout.UserError, distutils.errors.DistutilsError)
+
+
 def _handle_buildout_error(debug: bool) -> NoReturn:
     """Report a buildout failure (a pdb post-mortem under ``-D``) and
     exit 1."""
@@ -269,13 +285,7 @@ def _handle_buildout_error(debug: bool) -> NoReturn:
         sys.stderr.write('\nStarting pdb:\n')
         pdb.post_mortem(exc_info[2])
     else:
-        # Lazy: a runtime setuptools import via _distutils_hack, so it
-        # fires only on the failure path, never at cli.py import time.
-        import distutils.errors  # ty: ignore[unresolved-import]  # runtime: setuptools distutils-precedence hook
-        if isinstance(v, (zc.buildout.UserError,
-                          distutils.errors.DistutilsError
-                          )
-                      ):
+        if isinstance(v, _known_user_errors()):
             _error(str(v))
         else:
             sys.stderr.write(_internal_error_template)

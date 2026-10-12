@@ -1,0 +1,1 @@
+Fix two crashes installing projects with bin/buildout on lean installs, where setuptools and wheel are not importable: the self-upgrade check no longer requires each candidate project to be importable in-process (under the uv installer the resolved dists never are), and the error reporter no longer assumes distutils exists on Python 3.12 and later. [gotcha]
