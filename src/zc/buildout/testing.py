@@ -908,8 +908,8 @@ def drop_uv_getting_got_lines(text):
 
 
 _UV_CHATTER_BODY = re.compile(
-    r'^ *(?:Using uv |Using CPython |Running pip install:|'
-    r'Pip install completed successfully\.|Contents of |'
+    r'^ *(?:Using uv |Using CPython |Running (?:uv )?pip install:|'
+    r'(?:Pip|uv pip) install completed successfully\.|Contents of |'
     r'Making egg in |Searching for namespace __init__[.]py|'
     r'No namespace __init__[.]py|Resolved \d+ package|Prepared \d+ package|'
     r'Installed \d+ package|- \S|'
@@ -925,7 +925,7 @@ _UV_CHATTER_CONT = re.compile(
 _UV_CHATTER_HEADER = re.compile(r'^[^\n]*\bDEBUG$')
 _LEGACY_FETCH_DEBUG = re.compile(
     r'(?m)^[^\n]*\bDEBUG\n +(?:Fetching [^\n]* from:|Turning dist |'
-    r'Calling pip install for |Running pip install:|'
+    r'Calling (?:uv )?pip install for |Running (?:uv )?pip install:|'
     r'Egg for [^\n]* installed at )[^\n]*\n')
 
 

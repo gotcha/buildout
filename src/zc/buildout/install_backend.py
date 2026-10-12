@@ -187,6 +187,27 @@ def _extra_index_url(package_index_url: str | None) -> str | None:
     return None
 
 
+_INSTALL_COMMAND_LABELS = {
+    'pip': {'plain': 'pip install', 'capital': 'Pip install', 'noun': 'pip'},
+    'uv': {'plain': 'uv pip install', 'capital': 'uv pip install',
+           'noun': 'uv pip'},
+}
+
+
+def _install_command_label(form: str = 'plain') -> str:
+    """Display label for the install subprocess, per the configured
+    ``installer`` option — for messages about that subprocess.
+
+    ``form`` is ``'plain'`` (``'pip install'`` / ``'uv pip install'``),
+    ``'capital'`` (sentence start; pip mode keeps the historical capital
+    P of ``'Pip install'``) or ``'noun'`` (``'pip'`` / ``'uv pip'``, as in
+    ``'from pip installation'``).
+    """
+    from zc.buildout.easy_install import installer
+
+    return _INSTALL_COMMAND_LABELS[installer()][form]
+
+
 def _pip_install_args(spec: str, dest: str, editable: bool,
                       package_index_url: str | None,
                       log_level: int) -> list[str]:
@@ -320,10 +341,11 @@ def _pip_install_env() -> dict[str, str]:
 
 def _run_pip(args: list[str], env: dict[str, str], dest: str, level: int) -> str:
     from zc.buildout.easy_install import get_subprocess_output
-    """Run ``pip install`` and return its output, with debug logging."""
+    """Run the install subprocess and return its output, with debug logging."""
     if level <= logging.DEBUG:
-        logger.debug('Running pip install:\n"%s"\nPYTHONPATH=%s\n',
-                        '" "'.join(args), env.get('PYTHONPATH', ''))
+        logger.debug('Running %s:\n"%s"\nPYTHONPATH=%s\n',
+                     _install_command_label(), '" "'.join(args),
+                     env.get('PYTHONPATH', ''))
 
     sys.stdout.flush() # We want any pending output first
 
@@ -332,7 +354,8 @@ def _run_pip(args: list[str], env: dict[str, str], dest: str, level: int) -> str
     if level <= logging.DEBUG:
         if output:
             logger.debug(output)
-        logger.debug("Pip install completed successfully.")
+        logger.debug("%s completed successfully.",
+                     _install_command_label('capital'))
         logger.debug("Contents of %s:", dest)
         for entry in os.listdir(dest):
             logger.debug("- %s", entry)
@@ -427,18 +450,19 @@ def _editable_scan_result(
 
     # On setuptools 79 and earlier, the egg-link file is created.
     package_name, namespaces = _scan_editable_install(split_entries)
+    label = _install_command_label()
     if package_name:
         logger.debug(
-            "Found .egg-link file after successful pip install of %s",
-            spec,
+            "Found .egg-link file after successful %s of %s",
+            label, spec,
         )
     if namespaces is not None:
         # We only need this if the name was found.  If name was not
         # found, the namespaces will be checked in a different way
         # further on.
         logger.debug(
-            "Found -nspkg.pth file after successful pip install of %s",
-            spec,
+            "Found -nspkg.pth file after successful %s of %s",
+            label, spec,
         )
         logger.warning(
             "WARNING: Package %s at %s is using old style namespace packages. "
@@ -495,8 +519,8 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> str | list[s
         distinfo_dir = _dist_info_dirname(split_entries)
     except IndexError:
         logger.error(
-            "No .dist-info directory after successful pip install of %s",
-            spec)
+            "No .dist-info directory after successful %s of %s",
+            _install_command_label(), spec)
         raise
 
     full_distinfo_dir = os.path.join(dest, distinfo_dir)
@@ -745,7 +769,8 @@ def make_egg_after_pip_install(
     because the shared ``dest`` makes whole-directory moves ambiguous;
     a batched dist without RECORD is reported as a user error.
     """
-    logger.debug('Making egg in %s from pip installation in %s', dest, distinfo_dir)
+    logger.debug('Making egg in %s from %s installation in %s', dest,
+                 _install_command_label('noun'), distinfo_dir)
 
     _remove_namespace_init_files(dest)
 
@@ -963,7 +988,8 @@ def _unpack_dist_to_tmp(dist: pkg_resources.DistInfoDistribution | pkg_resources
             logger.debug("Calling unpacker for %s on %s", ext, dist.location)
             unpacker(_dist_location(dist), tmp_loc)
         else:
-            logger.debug("Calling pip install for %s on %s", ext, dist.location)
+            logger.debug("Calling %s for %s on %s", _install_command_label(),
+                         ext, dist.location)
             [tmp_loc] = easy_install.call_pip_install(_dist_location(dist), tmp_dest)
     return tmp_loc
 

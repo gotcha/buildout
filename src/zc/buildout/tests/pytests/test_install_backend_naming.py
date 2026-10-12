@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import pkg_resources
 
-from zc.buildout.install_backend import _egg_base_name, _supported_platform
+from zc.buildout import easy_install
+from zc.buildout.install_backend import (
+    _egg_base_name,
+    _install_command_label,
+    _supported_platform,
+)
 
 NAME_VERSION_CASES = [
     ('Pygments', '2.21.0'),
@@ -43,3 +48,16 @@ def test_egg_base_name_matches_pkg_resources():
 
 def test_supported_platform_matches_pkg_resources():
     assert _supported_platform() == pkg_resources.get_supported_platform()
+
+
+def test_install_command_label_follows_installer_mode(monkeypatch):
+    # Messages about the install subprocess name the configured
+    # installer; pip mode keeps the historical spellings byte for byte.
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'pip')
+    assert _install_command_label() == 'pip install'
+    assert _install_command_label('capital') == 'Pip install'
+    assert _install_command_label('noun') == 'pip'
+    monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
+    assert _install_command_label() == 'uv pip install'
+    assert _install_command_label('capital') == 'uv pip install'
+    assert _install_command_label('noun') == 'uv pip'

@@ -1363,11 +1363,12 @@ def _unpack_dist_for_build(dist: pkg_resources.Distribution, build_tmp: str) -> 
             # We used to raise an error, but now we just log a warning.
             # Maybe there is a pyproject.toml file that pip can use.
             # Otherwise we let pip do the complaining.
+            from zc.buildout.install_backend import _install_command_label
             logger.warning(
                 "Couldn't find a setup script to build in %s. "
-                "Trying pip install anyway.",
-                os.path.basename(_dist_location(dist))
-            )
+                "Trying %s anyway.",
+                os.path.basename(_dist_location(dist)),
+                _install_command_label())
         elif len(setups) > 1:
             raise distutils.errors.DistutilsError(
                 f"Multiple setup scripts in "

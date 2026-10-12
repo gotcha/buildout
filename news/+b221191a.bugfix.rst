@@ -1,0 +1,1 @@
+Name the real installer in install-subprocess messages: with ``installer = uv`` the debug and warning output said ``pip install`` while actually running ``uv pip install``; the messages now say ``uv pip install`` (pip mode output is unchanged). [gotcha]

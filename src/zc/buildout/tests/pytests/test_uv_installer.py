@@ -801,7 +801,7 @@ def test_drop_uv_install_debug_chatter_is_mode_conditional(monkeypatch):
     text = ("zc.buildout.easy_install DEBUG\n"
             "  Installing 'demo'.\n"
             'zc.buildout.easy_install DEBUG\n'
-            '  Running pip install:\n'
+            '  Running uv pip install:\n'
             '"/nix/store/uv" "pip" "install" "--no-deps" "-t" "/tmp/x"\n'
             'PYTHONPATH=/nix/store/sitecustomize.py\n'
             '\n'
@@ -812,11 +812,11 @@ def test_drop_uv_install_debug_chatter_is_mode_conditional(monkeypatch):
             'Installed 2 packages in 1ms\n'
             ' + demo==0.3 (from http://localhost/demo-0.3-py3-none-any.whl)\n'
             '\n'
-            'Pip install completed successfully.\n'
+            'uv pip install completed successfully.\n'
             'Contents of /tmp/x:\n'
             ' - .lock\n'
             ' - demo-0.3.dist-info\n'
-            'Making egg in /tmp/x from pip installation in demo-0.3.dist-info\n'
+            'Making egg in /tmp/x from uv pip installation in demo-0.3.dist-info\n'
             'No namespace __init__.py files found.\n'
             'zc.buildout.easy_install DEBUG\n'
             '  Picked: demo = 0.3\n'
@@ -844,7 +844,7 @@ def test_drop_uv_install_debug_chatter_drops_windows_argv(monkeypatch):
     text = ("zc.buildout.easy_install DEBUG\n"
             "  Installing 'demo'.\n"
             'zc.buildout.easy_install DEBUG\n'
-            '  Running pip install:\n'
+            '  Running uv pip install:\n'
             '"D:/a/buildout/buildout/venvs/python/Scripts/uv.exe" "pip"'
             ' "install" "--no-deps" "-t" "/sample-install/tmpxyz"'
             ' "--python" "D:/a/buildout/buildout/venvs/python/Scripts'
