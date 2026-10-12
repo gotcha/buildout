@@ -131,7 +131,7 @@ specifying a versions section:
     >>> # mode never produces; drop it to keep a single transcript.
     >>> print_('\n'.join(l for l in out.splitlines()
     ...                  if not l.startswith('Using uv')))
-    Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+    Installing 'zc.buildout', 'packaging'...
     ...
     Installing 'spam'.
     We have the best distribution that satisfies 'spam'.
@@ -151,7 +151,7 @@ that we can fix them in a versions section.
 If we run the buildout with the versions section:
 
     >>> print_(system(buildout+' -v'), end='')
-    Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+    Installing 'zc.buildout', 'packaging'...
     ...
     Installing 'spam'.
     We have the distribution that satisfies 'spam==1'.
@@ -180,7 +180,7 @@ versions for.
     ... ''')
 
     >>> print_(system(buildout+' -v'), end='')
-    Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+    Installing 'zc.buildout', 'packaging'...
     ...
     Installing 'spam >0'.
     We have the distribution that satisfies 'spam==1'.

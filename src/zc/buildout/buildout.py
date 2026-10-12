@@ -33,9 +33,11 @@ from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequenc
 from collections.abc import MutableMapping as DictMixin
 from functools import partial
 from hashlib import md5 as md5_original
+from importlib import metadata
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TypeVar, overload
 
 from packaging import utils as packaging_utils
+from packaging.requirements import Requirement as PackagingRequirement
 
 import zc.buildout
 import zc.buildout.configparser
@@ -206,6 +208,62 @@ def _raw_query_value(
             _error('Key not found:', option)
         else:
             _error('Section not found:', section)
+
+
+def _upgrade_candidates(installer: str) -> tuple[str, ...]:
+    """Projects the self-upgrade check seeks, derived from our own metadata.
+
+    The literal ``('zc.buildout', 'wheel', 'pip', 'setuptools')`` this
+    replaces reflected the pip-only era: every project buildout might need
+    at runtime.  Under installer modes the set differs — uv mode seeks only
+    the base requires (its own installer included: an upgraded uv dist
+    carries its own binary, honored by the ``_uv_executable`` resolution),
+    pip mode seeks the base requires plus the ``zc.buildout[pip]`` extra,
+    and pip mode never touches uv.  Markers are pre-evaluated against the
+    running environment with the extra overridden per mode, so only names
+    applying on this platform reach the resolver.  Declaration order from
+    METADATA is kept (deduped by canonicalized name) with zc.buildout
+    itself first.
+
+    When the metadata is missing (a bare pre-bootstrap checkout) the seek
+    degrades to zc.buildout alone; the same guarded idiom as
+    configsetup's minimum-version pin.
+    """
+    try:
+        requirements = metadata.requires('zc.buildout') or []
+    except metadata.PackageNotFoundError:
+        logging.getLogger('zc.buildout').debug(
+            "No distribution metadata for zc.buildout;"
+            " upgrade check covers zc.buildout alone.")
+        return ('zc.buildout',)
+    return ('zc.buildout',) + _candidate_names(requirements, installer)
+
+
+def _candidate_names(
+        requirements: list[str], installer: str) -> tuple[str, ...]:
+    """The mode's seek list from zc.buildout's Requires-Dist lines.
+
+    Extraction of ``_upgrade_candidates``' loop: the static tier pins
+    each function's cyclomatic complexity, and marker evaluation plus
+    mode and dedupe gates belong together.  Branches are pinned through
+    ``test_upgrade_candidates``.
+    """
+    extras = ('',) if installer == 'uv' else ('', 'pip')
+    names: list[str] = []
+    seen: set[str] = set()
+    for line in requirements:
+        req = PackagingRequirement(line)
+        if req.marker is not None and not any(
+                req.marker.evaluate({'extra': extra}) for extra in extras):
+            continue
+        name = packaging_utils.canonicalize_name(req.name)
+        if installer != 'uv' and name == 'uv':
+            # pip mode never touches uv: not upgraded, not explored.
+            continue
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+    return tuple(names)
 
 
 @commands
@@ -936,10 +994,7 @@ class Buildout(DictMixin):
             if not self.newest:
                 return
 
-            # We must install `wheel` before `setuptools`` to avoid confusion between
-            # the true `wheel` package and the one vendorized by `setuptools`.
-            # See https://github.com/buildout/buildout/issues/691
-            projects = ('zc.buildout', 'wheel', 'pip', 'setuptools')
+            projects = _upgrade_candidates(zc.buildout.easy_install.installer())
             ws = zc.buildout.easy_install.install(
                 projects,
                 self['buildout']['eggs-directory'],
