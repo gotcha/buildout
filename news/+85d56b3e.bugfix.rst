@@ -1,0 +1,1 @@
+Fix an import-time crash of ``zc.buildout.utils`` on installs without setuptools: the unused module-level ``SETUPTOOLS_VERSION`` and ``IS_SETUPTOOLS_80_PLUS`` constants queried setuptools metadata unconditionally and are removed. [gotcha]
