@@ -21,8 +21,9 @@ Axis rules:
   supports", "the devenv pin") and are left alone.
 - pip: the newest PyPI release (the pip matrix lives in run-tests.yml
   only: the uv pipeline never spawns pip).
-- uv: the matrix is the setup.py floor plus the five most recent
-  stable releases; the window slides as new releases land (the uv
+- uv: the matrix is the union of every fifth stable release starting
+  at the setup.py floor and the five most recent stable releases,
+  sorted and deduped; the window slides as new releases land (the uv
   matrix lives in test-uv.yml only).
 - python: the newest stable minor per endoflife.date, added only after
   a devenv probe proves the version builds; also seeds the matching
@@ -259,8 +260,14 @@ def bump_pip(workflow: WorkflowFile, jobs: JobsTable,
 
 def bump_uv(workflow: WorkflowFile, jobs: JobsTable) -> str:
     floor, _ = declared_range("uv")
-    recent = pypi_releases("uv")[-5:]
-    wanted = [floor] + [v for v in recent if v != floor]
+    stable = pypi_releases("uv")
+    # the window marries two policies: every fifth stable release from
+    # the setup.py floor up (indices 0, 5, 10, ... of the supported
+    # series) and the five most recent stable releases
+    supported = [v for v in stable
+                 if version_key(v) >= version_key(floor)]
+    wanted = sorted(set(supported[::5]) | set(stable[-5:]),
+                    key=version_key)
     lines = workflow.job_matrix_lines("uv", "uv-version")
     if len(lines) != 1:
         sys.exit(f"{workflow.path.name}: expected one uv-version list "
