@@ -24,7 +24,7 @@ from zc.buildout.easy_install import (
 
 UV_BASE_ARGS = [
     '/uv', 'pip', 'install', '--no-deps', '-t', '/dest',
-    '--python', sys.executable,
+    '--python', _uv_target_python(),
 ]
 
 
