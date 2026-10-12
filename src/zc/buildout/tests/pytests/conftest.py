@@ -97,6 +97,7 @@ NORMALIZERS_BUILDOUT = [
     zc.buildout.testing.drop_uv_getting_got_lines,
     zc.buildout.testing.drop_uv_install_debug_chatter,
     zc.buildout.testing.drop_uv_resolution_narrative,
+    zc.buildout.testing.normalize_upgrade_install_line,
     normalize_bang,
     (re.compile(r'__buildout_signature__ = recipes-\S+'),
      '__buildout_signature__ = recipes-SSSSSSSSSSS'),

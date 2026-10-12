@@ -3222,7 +3222,7 @@ def test_options_predefined_options(buildout_txt_env):
     parts =
     """)
     assert_output(system([buildout, '-vv']), """
-Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+Installing 'zc.buildout', 'packaging', 'platformdirs', 'pip', 'setuptools'.
 ...
 Configuration data:
 [buildout]

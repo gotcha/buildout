@@ -472,7 +472,7 @@ if we hadn't required sampley ourselves:
 If we use the verbose switch, we can see where requirements are coming from:
 
     >>> print_(system(buildout+' -v'), end='') # doctest: +ELLIPSIS
-    Installing 'zc.buildout', 'wheel'...
+    Installing 'zc.buildout', 'packaging'...
     Making editable install of /sample-buildout/sampley...
     Successfully made editable install: /sample-buildout/develop-eggs/sampley.egg-link
     ...
@@ -741,7 +741,7 @@ def create_sections_on_command_line():
 
     >>> print_(system(buildout + ' foo:bar=1 -vv'), end='')
     ...        # doctest: +ELLIPSIS
-    Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+    Installing 'zc.buildout', 'packaging'...
     ...
     [foo]
     bar = 1
@@ -2271,7 +2271,7 @@ def dealing_with_extremely_insane_dependencies():
     However, if we run in verbose mode, we can see why packages were included:
 
     >>> print_(system(buildout+' -v'), end='') # doctest: +ELLIPSIS
-    Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+    Installing 'zc.buildout', 'packaging'...
     ...
     Making editable install of /sample-buildout/pack0...
     Successfully made editable install: /sample-buildout/develop-eggs/pack0.egg-link
@@ -3649,6 +3649,7 @@ def test_suite():
                     zc.buildout.testing.drop_uv_getting_got_lines,
                     zc.buildout.testing.drop_uv_install_debug_chatter,
                     zc.buildout.testing.drop_uv_resolution_narrative,
+                    zc.buildout.testing.normalize_upgrade_install_line,
                     # (re.compile(r"Installing 'zc.buildout >=\S+"), ''),
                     (re.compile(r'__buildout_signature__ = recipes-\S+'),
                      '__buildout_signature__ = recipes-SSSSSSSSSSS'),
@@ -3707,6 +3708,7 @@ def test_suite():
                zc.buildout.testing.drop_uv_getting_got_lines,
                zc.buildout.testing.drop_uv_install_debug_chatter,
                zc.buildout.testing.drop_uv_resolution_narrative,
+               zc.buildout.testing.normalize_upgrade_install_line,
                # (re.compile(r"Installing 'zc.buildout >=\S+"), ''),
                # (re.compile(r"Getting distribution for 'zc.buildout >=\S+"),
                #  ''),
@@ -3843,6 +3845,7 @@ def test_suite():
                 zc.buildout.testing.drop_uv_getting_got_lines,
                 zc.buildout.testing.drop_uv_install_debug_chatter,
                 zc.buildout.testing.drop_uv_resolution_narrative,
+                zc.buildout.testing.normalize_upgrade_install_line,
                 zc.buildout.testing.ignore_native_namespace_warning_1,
                 zc.buildout.testing.ignore_native_namespace_warning_2,
                 zc.buildout.testing.ignore_native_namespace_warning_3,
