@@ -3,19 +3,12 @@ from __future__ import annotations
 import os
 import re
 import sys
-from importlib.metadata import version
 from typing import TYPE_CHECKING, Any, TextIO
-
-import packaging.version
 
 import zc.buildout
 
 if TYPE_CHECKING:
     from zc.buildout.buildout import Options
-
-# In some cases we need to check the setuptools version to know what we can do.
-SETUPTOOLS_VERSION = packaging.version.parse(version("setuptools"))
-IS_SETUPTOOLS_80_PLUS = SETUPTOOLS_VERSION >= packaging.version.Version('80')
 
 
 def normalize_name(name: str) -> str:
