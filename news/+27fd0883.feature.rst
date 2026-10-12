@@ -1,0 +1,20 @@
+The self-upgrade check now derives the projects it seeks from
+zc.buildout's own packaging metadata instead of a hardcoded list:
+``installer = uv`` mode seeks the base requires (``packaging``,
+``platformdirs`` and ``uv`` itself, plus ``tomli`` on Python 3.10 and
+``setuptools`` on Windows), while the default ``installer = pip`` mode
+seeks the base requires plus the ``zc.buildout[pip]`` extra (``pip``
+and ``setuptools``) and never touches ``uv``, which is neither upgraded
+nor explored there.  ``wheel`` exits the seek list entirely: nothing
+imports it and nothing seeks it any longer.  When the check upgrades
+the ``uv`` distribution, later uv invocations of the same run already
+use the new binary honored from the eggs directory's ``bin`` (POSIX) or
+``Scripts`` (Windows) layout — a chicken-and-egg handover: the
+pre-upgrade binary performs the install, the new one takes over
+immediately, and the automatic restart restores a single identity for
+module and command line.  When zc.buildout's metadata is missing
+entirely (a bare pre-bootstrap checkout) the check degrades to seeking
+zc.buildout alone, with a debug-level note.  On Python 3.10 the
+candidate list includes ``tomli`` even though buildout ships a vendored
+fallback copy, so an upgrade probe can install a tomli distribution
+that is never imported — accepted behavior.  [gt-coleader]
