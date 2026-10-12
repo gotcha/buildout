@@ -133,7 +133,8 @@ def test_extra_index_url_is_shared_with_pip(tmp_path):
 
 def test_dispatch_uv_uses_uv_args(monkeypatch, tmp_path):
     calls = _record_install(monkeypatch)
-    monkeypatch.setattr(easy_install, '_uv_executable', lambda: '/uv')
+    monkeypatch.setattr(easy_install, '_uv_executable',
+                        lambda honored_locations=(): '/uv')
     monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
     result = easy_install.call_pip_install('demo', str(tmp_path), editable=True)
     assert result == 'demo'
@@ -144,7 +145,8 @@ def test_dispatch_uv_uses_uv_args(monkeypatch, tmp_path):
 
 def test_dispatch_uv_skips_no_python_version_warning(monkeypatch, tmp_path):
     calls = _record_install(monkeypatch)
-    monkeypatch.setattr(easy_install, '_uv_executable', lambda: '/uv')
+    monkeypatch.setattr(easy_install, '_uv_executable',
+                        lambda honored_locations=(): '/uv')
     monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
     # The pip-only quirk records a one-shot 'displayed' attribute on
     # call_pip_install; it must never run on the uv path.
@@ -184,7 +186,8 @@ def test_pip_install_env_prepends_pip_path(monkeypatch):
 def test_dispatch_uv_passes_pythonpath_through_unchanged(
         monkeypatch, tmp_path):
     calls = _record_install(monkeypatch)
-    monkeypatch.setattr(easy_install, '_uv_executable', lambda: '/uv')
+    monkeypatch.setattr(easy_install, '_uv_executable',
+                        lambda honored_locations=(): '/uv')
     monkeypatch.setattr(easy_install.Installer, '_installer', 'uv')
     monkeypatch.setenv('PYTHONPATH', '/ambient')
     easy_install.call_pip_install('demo', str(tmp_path), editable=True)
@@ -252,6 +255,96 @@ def test_uv_executable_missing_raises_user_error(monkeypatch, tmp_path):
     message = str(excinfo.value)
     assert "'installer'" in message
     assert "'uv'" in message
+
+
+def _eggs_dir_with_uv(tmp_path, name='eggs', executable=True):
+    """A fake eggs directory carrying a console-layout uv binary."""
+    eggs = tmp_path / name
+    bin_dir = eggs / 'bin'
+    bin_dir.mkdir(parents=True)
+    binary = bin_dir / 'uv'
+    binary.write_text('#!/bin/sh\n')
+    if executable:
+        binary.chmod(0o755)
+    return eggs, binary
+
+
+def test_uv_executable_honors_eggs_dir_before_path(monkeypatch, tmp_path):
+    eggs, binary = _eggs_dir_with_uv(tmp_path)
+    monkeypatch.setattr(
+        easy_install.shutil, 'which', lambda name: '/usr/bin/uv')
+    assert _uv_executable(honored_locations=(str(eggs),)) == str(binary)
+
+
+def test_uv_executable_honored_location_needs_executable_bit(
+        monkeypatch, tmp_path):
+    # A non-executable bin/uv is dist payload, not a runnable binary:
+    # the chain falls through to PATH.
+    eggs, _ = _eggs_dir_with_uv(tmp_path, executable=False)
+    monkeypatch.setattr(
+        easy_install.shutil, 'which', lambda name: '/usr/bin/uv')
+    assert _uv_executable(honored_locations=(str(eggs),)) == '/usr/bin/uv'
+
+
+def test_uv_executable_first_honored_location_wins(monkeypatch, tmp_path):
+    first_eggs, first_binary = _eggs_dir_with_uv(tmp_path, 'first')
+    second_eggs, _ = _eggs_dir_with_uv(tmp_path, 'second')
+    monkeypatch.setattr(easy_install.shutil, 'which', lambda name: None)
+    monkeypatch.setattr(sys, 'executable', str(tmp_path / 'python'))
+    assert _uv_executable(
+        honored_locations=(str(first_eggs), str(second_eggs))
+        ) == str(first_binary)
+
+
+def test_uv_executable_honored_miss_falls_back_to_path(
+        monkeypatch, tmp_path):
+    empty = tmp_path / 'empty-eggs'
+    empty.mkdir()
+    monkeypatch.setattr(
+        easy_install.shutil, 'which', lambda name: '/usr/bin/uv')
+    assert _uv_executable(honored_locations=(str(empty),)) == '/usr/bin/uv'
+
+
+def test_uv_executable_honors_scripts_dir_on_windows(monkeypatch, tmp_path):
+    # A --target install on win32 lays the console binary down as
+    # Scripts\uv.exe, not bin\uv.
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    scripts = tmp_path / 'eggs' / 'Scripts'
+    scripts.mkdir(parents=True)
+    binary = scripts / 'uv.exe'
+    binary.write_text('binary')
+    binary.chmod(0o755)
+    monkeypatch.setattr(easy_install.shutil, 'which', lambda name: None)
+    monkeypatch.setattr(sys, 'executable', str(tmp_path / 'python.exe'))
+    assert _uv_executable(
+        honored_locations=(str(tmp_path / 'eggs'),)) == str(binary)
+
+
+def test_uv_executable_error_mentions_honored_locations(
+        monkeypatch, tmp_path):
+    eggs = tmp_path / 'eggs'
+    eggs.mkdir()
+    monkeypatch.setattr(easy_install.shutil, 'which', lambda name: None)
+    monkeypatch.setattr(sys, 'executable', str(tmp_path / 'python'))
+    with pytest.raises(zc.buildout.UserError) as excinfo:
+        _uv_executable(honored_locations=(str(eggs),))
+    message = str(excinfo.value)
+    assert "'installer'" in message
+    assert "'uv'" in message
+    assert 'honored' in message
+    assert str(eggs) in message
+
+
+def test_uv_executable_no_honored_locations_keeps_path_then_sibling(
+        monkeypatch, tmp_path):
+    # Offline (no-dest) resolution passes empty honored locations:
+    # today's PATH-then-sibling chain is unchanged.
+    sibling = tmp_path / 'uv'
+    sibling.write_text('#!/bin/sh\n')
+    sibling.chmod(0o755)
+    monkeypatch.setattr(easy_install.shutil, 'which', lambda name: None)
+    monkeypatch.setattr(sys, 'executable', str(tmp_path / 'python'))
+    assert _uv_executable() == str(sibling)
 
 
 def test_hermetic_env_covers_uv_and_cleans_its_cache():
@@ -703,10 +796,11 @@ class TestErrorTranslation:
         instance._links = []
         instance._prefer_final = True
         instance._uv_stderr_tail = None
+        instance._dest = None
 
         def fake_available(requirement, source, versions, links, index_url,
                            prefer_final, uv_stderr, offline=False,
-                           fallback_index_url=None):
+                           fallback_index_url=None, honored_locations=()):
             uv_stderr.append('Because demo was not found')
             return None
         monkeypatch.setattr(
@@ -947,7 +1041,7 @@ def _capture_obtain_offline(monkeypatch, dest, **class_attrs):
 
     def fake_available(requirement, source, versions, links, index_url,
                        prefer_final, uv_stderr, offline=False,
-                       fallback_index_url=None):
+                       fallback_index_url=None, honored_locations=()):
         captured['offline'] = offline
         return None
     monkeypatch.setattr(easy_install, '_uv_available_dists', fake_available)
@@ -1079,7 +1173,7 @@ def _capture_obtain_sources(monkeypatch, index_url=None):
 
     def fake_available(requirement, source, versions, links, index_url,
                        prefer_final, uv_stderr, offline=False,
-                       fallback_index_url=None):
+                       fallback_index_url=None, honored_locations=()):
         captured.update(links=list(links), index_url=index_url,
                         fallback_index_url=fallback_index_url)
         return None
