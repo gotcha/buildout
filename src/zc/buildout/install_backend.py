@@ -262,13 +262,54 @@ def _uv_version(uv: str) -> str:
         return 'uv (unknown version)'
 
 
-def _uv_executable() -> str:
-    """Resolve the ``uv`` binary, on PATH or next to ``sys.executable``."""
-    uv = shutil.which('uv') or _uv_sibling_executable()
+def _uv_in_location(location: str) -> str | None:
+    """A ``uv`` executable in ``location``'s console-bin layout, if any.
+
+    An eggs directory receives console binaries under ``bin`` on POSIX
+    (a ``--target`` install of the uv dist lands a real binary at
+    ``bin/uv``) and under ``Scripts`` on Windows (``Scripts\\uv.exe``).
+    Filesystem convention only: the probe checks for an executable
+    file; it neither imports uv nor queries its own copy of the
+    ``--target`` layout.
+    """
+    names = ['uv']
+    if sys.platform == 'win32':
+        names.append('uv.exe')
+    subdir = 'Scripts' if sys.platform == 'win32' else 'bin'
+    for name in names:
+        candidate = os.path.join(location, subdir, name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def _first_honored_uv(honored_locations: Sequence[str]) -> str | None:
+    """The first honored location's uv executable, if any."""
+    for location in honored_locations:
+        uv = _uv_in_location(location)
+        if uv is not None:
+            return uv
+    return None
+
+
+def _uv_executable(honored_locations: Sequence[str] = ()) -> str:
+    """Resolve the ``uv`` binary.
+
+    Honored locations — the eggs directories being installed into —
+    are probed first, unconditionally: when the upgrade check installs
+    a newer ``uv`` dist, later invocations in the same run already see
+    the new binary, and the post-upgrade restart restores one identity
+    for module and CLI.  Then ``uv`` on PATH, then next to
+    ``sys.executable``.
+    """
+    uv = (_first_honored_uv(honored_locations)
+          or shutil.which('uv') or _uv_sibling_executable())
     if uv is None:
         raise zc.buildout.UserError(
             "The 'installer' option is set to 'uv', but no 'uv' executable"
-            " was found on PATH or next to the Python executable"
+            " was found in the honored locations"
+            f" ({', '.join(honored_locations) or 'none passed'})"
+            ", on PATH or next to the Python executable"
             f" ({sys.executable}).")
     logger.debug('Using %s (%s)', _uv_version(uv), uv)
     return uv
@@ -495,7 +536,8 @@ def call_pip_install(spec: str, dest: str, editable: bool=False) -> str | list[s
     level = logger.getEffectiveLevel()
     if installer() == 'uv':
         args = _uv_install_args(
-            easy_install._uv_executable(), spec, dest, editable, index_url(), level)
+            easy_install._uv_executable(honored_locations=(dest,)),
+            spec, dest, editable, index_url(), level)
         env = os.environ.copy()
     else:
         args = _pip_install_args(spec, dest, editable, index_url(), level)
@@ -1137,7 +1179,11 @@ def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
     tmp_dest = tempfile.mkdtemp(dir=dest)
     try:
         args = _uv_install_args(
-            easy_install._uv_executable(), pinned[0].url, tmp_dest, False,
+            # Honor the eggs dir being installed into, not the temporary
+            # staging dir: the upgrade's new uv binary takes over only
+            # once its egg layout reaches the real location.
+            easy_install._uv_executable(honored_locations=(dest,)),
+            pinned[0].url, tmp_dest, False,
             index_url(), level)
         args.extend(p.url for p in pinned[1:])
         easy_install._run_pip(args, os.environ.copy(), tmp_dest, level)
