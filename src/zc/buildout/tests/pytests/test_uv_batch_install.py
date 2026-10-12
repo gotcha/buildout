@@ -1,7 +1,6 @@
 """Unit tests for install_pinned_dists: batched uv installs of a pin set."""
 import logging
 import os
-import sys
 
 import pkg_resources
 import pytest
@@ -11,6 +10,7 @@ from zc.buildout import easy_install
 from zc.buildout.easy_install import _uv_install_args
 from zc.buildout.install_backend import (
     _read_record_or_raise,
+    _uv_target_python,
     install_pinned_dists,
     make_egg_after_pip_install,
 )
@@ -103,7 +103,7 @@ def test_one_subprocess_with_specs_in_pin_order(monkeypatch, tmp_path):
     assert env is not os.environ
     assert args[-2:] == [pins[0].url, pins[1].url]
     assert '--no-deps' in args
-    assert args[args.index('--python') + 1] == sys.executable
+    assert args[args.index('--python') + 1] == _uv_target_python()
     # The install target is a temporary sibling inside dest.
     tmp_dest = args[args.index('-t') + 1]
     assert os.path.dirname(tmp_dest) == dest
