@@ -75,7 +75,8 @@ def _record_uv_install(monkeypatch, materialize=()):
             _write_dist_tree(dest, project_name, version, module)
         return ''
 
-    monkeypatch.setattr(easy_install, '_uv_executable', lambda: '/uv')
+    monkeypatch.setattr(easy_install, '_uv_executable',
+                        lambda honored_locations=(): '/uv')
     monkeypatch.setattr(easy_install, '_run_pip', fake_run_pip)
     return calls
 

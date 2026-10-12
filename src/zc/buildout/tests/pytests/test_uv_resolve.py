@@ -684,7 +684,8 @@ def _stub_resolve(monkeypatch, pinned=None, error=None):
         return pinned
 
     monkeypatch.setattr(uv_resolve, 'resolve', fake_resolve)
-    monkeypatch.setattr(easy_install, '_uv_executable', lambda: '/uv')
+    monkeypatch.setattr(easy_install, '_uv_executable',
+                        lambda honored_locations=(): '/uv')
     return calls
 
 

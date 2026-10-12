@@ -47,7 +47,7 @@ def _record_resolve(monkeypatch, results):
 
     def fake_resolve(requirements, versions, links, index_url, prefer_final,
                      uv_stderr=None, offline=False, fallback_index_url=None,
-                     overrides=()):
+                     overrides=(), honored_locations=()):
         calls.append({
             'requirements': list(requirements),
             'versions': versions,

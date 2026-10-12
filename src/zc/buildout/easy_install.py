@@ -920,6 +920,7 @@ def _uv_resolve_requirements(
         offline: bool = False,
         fallback_index_url: str | None = None,
         overrides: Sequence[str] = (),
+        honored_locations: Sequence[str] = (),
         ) -> uv_resolve.PinnedSet | None:
     """One ``uv pip compile`` for several requirements.
 
@@ -930,7 +931,9 @@ def _uv_resolve_requirements(
     develop projects of the running buildout).  The remaining arguments
     are forwarded to the seam exactly as ``_uv_available_dists``
     forwards them, and a resolve failure appends the tail of uv's
-    stderr to ``uv_stderr`` when a list is passed.
+    stderr to ``uv_stderr`` when a list is passed.  ``honored_locations``
+    is forwarded to ``_uv_executable``: the eggs directories being
+    installed into are probed for a ``uv`` binary first.
     """
     for requirement in requirements:
         _raise_for_hg_links(requirement, links)
@@ -946,7 +949,7 @@ def _uv_resolve_requirements(
             offline=offline,
             fallback_index_url=fallback_index_url,
             overrides=overrides,
-            uv=_uv_executable(),
+            uv=_uv_executable(honored_locations=honored_locations),
             python=sys.executable,
         )
     except uv_resolve.ResolutionError as err:
@@ -968,6 +971,7 @@ def _uv_available_dists(
         uv_stderr: list[str] | None = None,
         offline: bool = False,
         fallback_index_url: str | None = None,
+        honored_locations: Sequence[str] = (),
         ) -> list[pkg_resources.Distribution] | None:
     """Return what uv resolves for ``requirement`` as a one-dist list.
 
@@ -980,11 +984,13 @@ def _uv_available_dists(
     forwarded to the seam: uv then serves the resolve from its own
     cache, without any network access.  ``fallback_index_url`` is
     forwarded likewise: the seam puts it on the argv only when the
-    configured sources carry no index of their own.
+    configured sources carry no index of their own.  ``honored_locations``
+    is forwarded to the seam's ``_uv_executable`` resolution.
     """
     pinned = _uv_resolve_requirements(
         [requirement], versions, links, index_url, prefer_final,
-        uv_stderr, offline=offline, fallback_index_url=fallback_index_url)
+        uv_stderr, offline=offline, fallback_index_url=fallback_index_url,
+        honored_locations=honored_locations)
     if pinned is None:
         _raise_if_egg_only(requirement, links, index_url)
         return None
@@ -1738,6 +1744,19 @@ class Installer:
                 'There are no distros available that meet %r.\n'
                 'Using our best, %s.', str(requirement), dists[0])
 
+    @property
+    def _uv_honored_locations(self) -> tuple[str, ...]:
+        """The eggs directory, offered first to ``uv`` binary resolution.
+
+        A ``uv`` dist upgraded by the self-upgrade check lands its real
+        binary under this directory's console-bin layout, so later
+        resolves and installs in the same run already run the new
+        binary; the restart restores one identity.  Offline installs
+        have no destination (``_dest is None``) and keep the plain
+        PATH-then-sibling chain.
+        """
+        return (self._dest,) if self._dest is not None else ()
+
     def _uv_resolve_for_install(
             self,
             requirements: list[pkg_resources.Requirement],
@@ -1760,7 +1779,8 @@ class Installer:
             requirements, self._versions, links, index_url,
             self._prefer_final, uv_stderr, offline=self._uv_offline(),
             fallback_index_url=seam_index,
-            overrides=self._develop_overrides(requirements))
+            overrides=self._develop_overrides(requirements),
+            honored_locations=self._uv_honored_locations)
         self._uv_stderr_tail = _tail_text(uv_stderr)
         attempted = requirements
         if pinned is None and self._newest:
@@ -1777,7 +1797,8 @@ class Installer:
                         self._prefer_final, uv_stderr,
                         offline=self._uv_offline(),
                         fallback_index_url=seam_index,
-                        overrides=self._develop_overrides(required))
+                        overrides=self._develop_overrides(required),
+                        honored_locations=self._uv_honored_locations)
                     self._uv_stderr_tail = _tail_text(uv_stderr)
                     attempted = required
                 else:
@@ -2260,7 +2281,8 @@ class Installer:
                 [*self._links, *seam_links],
                 index_url, self._prefer_final, uv_stderr,
                 offline=self._uv_offline(),
-                fallback_index_url=seam_index)
+                fallback_index_url=seam_index,
+                honored_locations=self._uv_honored_locations)
             self._uv_stderr_tail = _tail_text(uv_stderr)
         else:
             dists = _available_dists(self._index, requirement, source)
