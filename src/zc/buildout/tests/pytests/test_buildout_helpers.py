@@ -1491,6 +1491,50 @@ def test_find_upgraded_dists_module_outside_dist_location_is_upgraded(
     assert upgraded == [dist]
 
 
+def test_find_upgraded_dists_unimportable_project_is_not_an_upgrade():
+    # Under the uv installer the resolved dists are not importable
+    # in-process; a project without an importable module has no active
+    # version the dist could upgrade.
+    dist = pkg_resources.Distribution(
+        location='/eggs/nonexistentmodule-1.0-pyX.egg',
+        project_name='nonexistentmodule', version='1.0')
+    ws = pkg_resources.WorkingSet([])
+    ws.add(dist)
+    upgraded = _find_upgraded_dists(
+        ('nonexistentmodule',), ws, logging.getLogger('zc.buildout'))
+    assert upgraded == []
+
+
+def test_handle_buildout_error_without_distutils_user_error(
+        monkeypatch, capsys):
+    # Lean installs on Python 3.12+ ship neither distutils nor
+    # setuptools; the failure classification must not crash there.
+    monkeypatch.setitem(sys.modules, 'distutils', None)
+    monkeypatch.setitem(sys.modules, 'distutils.errors', None)
+    try:
+        raise zc.buildout.UserError('bad things')
+    except zc.buildout.UserError:
+        with pytest.raises(SystemExit) as exc:
+            _handle_buildout_error(False)
+    assert exc.value.code == 1
+    assert 'Error: bad things' in capsys.readouterr().err
+
+
+def test_handle_buildout_error_without_distutils_internal_error(
+        monkeypatch, capsys):
+    monkeypatch.setitem(sys.modules, 'distutils', None)
+    monkeypatch.setitem(sys.modules, 'distutils.errors', None)
+    try:
+        raise RuntimeError('boom')
+    except RuntimeError:
+        with pytest.raises(SystemExit) as exc:
+            _handle_buildout_error(False)
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert 'An internal error occurred' in err
+    assert 'RuntimeError: boom' in err
+
+
 def test_upgrade_and_restart_warns_when_not_local_buildout(
         tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(sys, 'argv', ['/usr/bin/buildout'])
