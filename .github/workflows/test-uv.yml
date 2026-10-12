@@ -17,8 +17,9 @@ on:
 # The pip matrix is not mirrored: the uv pipeline never spawns pip, so
 # PIP_VERSION varies nothing in the code under test.
 # The uv job pins the uv under test through UV_VERSION (see the Makefile
-# test-uv target): the earliest supported 0.12.x (the setup.py floor)
-# and the five most recent, on the newest setuptools (84.0.0 — the
+# test-uv target): the setup.py floor 0.12.11, mid anchors
+# 0.12.16/0.12.21, the latest 0.12.x patch run up to the 0.12.24
+# default, and the first 0.13.x, on the newest setuptools (84.0.0 — the
 # bootstrap's pkg_resources import resolves to the vendored copy).
 # The other jobs exercise the devenv-provided uv.
 # Provisioning follows the same contract as run-tests.yml: GitHub
@@ -108,10 +109,11 @@ jobs:
         # import resolves to the vendored copy (81.0.0 pin retired;
         # close-item-4 leg-314-uv green at 84.0.0)
         setuptools-version: ["84.0.0"]
-        # the earliest supported 0.12.x plus the five most recent
-        # (0.12.11 is the setup.py floor: earlier 0.12.x serve their
-        # own cache on --offline resolves)
-        uv-version: ["0.12.11", "0.12.13", "0.12.14", "0.12.15", "0.12.16", "0.12.17"]
+        # floor 0.12.11 (the setup.py floor: earlier 0.12.x serve their
+        # own cache on --offline resolves), mid anchors 0.12.16 and
+        # 0.12.21, the latest 0.12.x patch run up to the prepare.sh
+        # default 0.12.24, plus the first 0.13.x
+        uv-version: ["0.12.11", "0.12.16", "0.12.21", "0.12.22", "0.12.23", "0.12.24", "0.13.0"]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v7.0.1

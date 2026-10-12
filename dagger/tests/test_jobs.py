@@ -255,7 +255,7 @@ def test_jobs_module_imports_nothing_from_dagger():
 
 def test_workflow_cells_match_job_table(workflow, uv_workflow):
     cells = _workflow_cells(workflow) | _uv_workflow_cells(uv_workflow)
-    assert len(cells) == 64
+    assert len(cells) == 65
     by_name = {job.name: job for job in jobs.JOBS}
     missing = set(cells) - set(by_name)
     assert not missing, f"workflow cells without a Job row: {sorted(missing)}"
@@ -305,13 +305,13 @@ def test_family_invariants():
         "scripts": 30,
         "static": 4,
         "coverage": 3,
-        "uv": 18,
+        "uv": 19,
         "projects": 2,
         "module": 1,
     }
     names = [job.name for job in jobs.JOBS]
     assert len(names) == len(set(names)), "duplicate job names"
-    assert len(jobs.JOBS) == 79
+    assert len(jobs.JOBS) == 80
 
 
 def test_select_jobs_pip():

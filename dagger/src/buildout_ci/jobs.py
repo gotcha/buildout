@@ -198,8 +198,9 @@ def _build_jobs() -> tuple[Job, ...]:
             installer="uv",
         ),
         # the uv version matrix: the legacy suite through the uv pipeline
-        # with the uv under test pinned (UV_VERSION) to the earliest
-        # supported 0.12.x (the setup.py floor) and the five most recent,
+        # with the uv under test pinned (UV_VERSION) to the setup.py
+        # floor 0.12.11, mid anchors 0.12.16/0.12.21, the latest 0.12.x
+        # patch run up to the 0.12.24 default, and the first 0.13.x,
         # on the newest setuptools (84.0.0; the bootstrap's pkg_resources
         # import resolves to the vendored copy)
         *(
@@ -212,7 +213,7 @@ def _build_jobs() -> tuple[Job, ...]:
                 installer="uv",
                 uv=uv,
             )
-            for uv in ("0.12.11", "0.12.13", "0.12.14", "0.12.15", "0.12.16", "0.12.17")
+            for uv in ("0.12.11", "0.12.16", "0.12.21", "0.12.22", "0.12.23", "0.12.24", "0.13.0")
         ),
         # the uv variant of run-tests.yml's generate-scripts: same
         # packages and pythons, with buildout_testing_installer=uv set

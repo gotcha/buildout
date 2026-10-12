@@ -93,11 +93,14 @@ PIP_ARGS="$PIP_ARGS wheel"
 # an unfloored build requirement silently backtracks to build 0.9.0, which
 # lacks build.env.DefaultIsolatedEnv and fails the test suite much later.
 # uv is a dependency of zc.buildout; add it like packaging.
-# uv is pinned to the tested 0.12.x series (the UV_VERSION matrix in
-# test-uv.yml): an unpinned install drifted to the untested 0.13.0,
-# whose Windows editable build isolation lost build requirements
-# (ModuleNotFoundError: hatchling in the PEP 660 develop tests).
-PIP_ARGS="$PIP_ARGS packaging platformdirs build>=1 uv>=0.12.11,<0.13"
+# uv is pinned to the default under test, 0.12.24 (the top of the
+# UV_VERSION matrix's 0.12.x run in test-uv.yml): an unpinned install
+# drifted to the then-untested 0.13.0, whose Windows editable build
+# isolation lost build requirements (ModuleNotFoundError: hatchling in
+# the PEP 660 develop tests). The 0.13.0 matrix cell is unaffected:
+# UV_VERSION installs its own uv (the Makefile test-uv target), it
+# never resolves against this pin.
+PIP_ARGS="$PIP_ARGS packaging platformdirs build>=1 uv==0.12.24"
 echo
 echo "Using arguments for pip install: $PIP_ARGS"
 # Bring pip current first: the install and seed passes must read
