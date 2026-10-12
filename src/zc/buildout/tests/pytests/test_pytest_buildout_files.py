@@ -180,7 +180,7 @@ recipe v1
     # about versions used. If we run the buildout in verbose mode without
     # specifying a versions section:
     assert_output(system(buildout + ' buildout:versions= -v'), """
-Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+Installing 'zc.buildout', 'packaging', 'platformdirs', 'pip', 'setuptools'.
 ...
 Installing 'spam'.
 We have the best distribution that satisfies 'spam'.
@@ -199,7 +199,7 @@ recipe v2
     #
     # If we run the buildout with the versions section:
     assert_output(system(buildout + ' -v'), """
-Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+Installing 'zc.buildout', 'packaging', 'platformdirs', 'pip', 'setuptools'.
 ...
 Installing 'spam'.
 We have the distribution that satisfies 'spam==1'.
@@ -226,7 +226,7 @@ recipe v1
     recipe = spam >0
     ''')
     assert_output(system(buildout + ' -v'), """
-Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.
+Installing 'zc.buildout', 'packaging', 'platformdirs', 'pip', 'setuptools'.
 ...
 Installing 'spam >0'.
 We have the distribution that satisfies 'spam==1'.

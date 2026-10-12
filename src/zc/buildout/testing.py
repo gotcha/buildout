@@ -1003,6 +1003,38 @@ def drop_uv_resolution_narrative(text):
     return _UV_RESOLVE_ERROR.sub('', _UV_NARRATIVE.sub('', text))
 
 
+_UPGRADE_INSTALL_LINE = re.compile(r"^Installing 'zc\.buildout'[^\n]*$",
+                                   re.MULTILINE)
+_UPGRADE_INSTALL_UV = ("Installing 'zc.buildout', 'packaging', "
+                       "'platformdirs', 'uv'.")
+_UPGRADE_INSTALL_PIP = ("Installing 'zc.buildout', 'packaging', "
+                        "'platformdirs', 'pip', 'setuptools'.")
+
+
+def normalize_upgrade_install_line(text):
+    """Fold the self-upgrade ``Installing ...`` line to one spelling per mode.
+
+    The upgrade candidates are derived from zc.buildout's packaging
+    metadata, so the debug line varies with the installer mode — uv
+    mode names ``uv``, pip mode names ``pip`` and ``setuptools`` (pip
+    mode never touches uv) — and with the platform: Python 3.10 adds
+    ``tomli``, and on win32 ``setuptools`` moves into the base
+    position ahead of ``packaging``.  Both modes are folded to one
+    canonical spelling each; the full candidate tables are pinned by
+    unit tests instead.  A self-only ``Installing 'zc.buildout'.``
+    line (the metadata-missing fallback) is mode-independent and left
+    as is.
+    """
+    def _canonical(match):
+        line = match.group(0)
+        if "'uv'" in line:
+            return _UPGRADE_INSTALL_UV
+        if "'pip'" in line:
+            return _UPGRADE_INSTALL_PIP
+        return line
+    return _UPGRADE_INSTALL_LINE.sub(_canonical, text)
+
+
 def drop_uv_download_cache_deprecation(text):
     """Drop the download-cache deprecation warning lines in uv mode.
 

@@ -72,9 +72,8 @@ setup(
         # the bootstrap command reaches pkg_resources in both
         # installer modes (buildout.Buildout.bootstrap).
         'platformdirs',
-        # wheel is gone: nothing imports it; only the self-upgrade
-        # check still resolves it by name (buildout._maybe_upgrade),
-        # to be installed on demand by the active installer.
+        # wheel is gone: nothing imports it and nothing seeks it;
+        # the upgrade check derives its candidates from this metadata.
         # 0.12.11 is the floor: earlier 0.12.x serve their own cache on
         # --offline resolves, breaking install-from-cache isolation
         # (easy_install.txt and downloadcache.txt pin that contract).
