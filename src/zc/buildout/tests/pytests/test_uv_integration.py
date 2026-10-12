@@ -49,7 +49,7 @@ def test_installer_option_from_config(easy_install_env):
     ...
     Installing eggs.
     ...
-    Running pip install:
+    Running uv pip install:
     """ + UV_DEBUG_LINE + """
     ...
     """, N)
@@ -68,7 +68,7 @@ def test_installer_option_from_command_line(easy_install_env):
     ...
     Installing eggs.
     ...
-    Running pip install:
+    Running uv pip install:
     """ + UV_DEBUG_LINE + """
     ...
     """, N)
@@ -88,7 +88,7 @@ def test_installer_default_from_testing_env_var(easy_install_env, monkeypatch):
     ...
     Installing eggs.
     ...
-    Running pip install:
+    Running uv pip install:
     """ + UV_DEBUG_LINE + """
     ...
     """, N)
@@ -150,10 +150,10 @@ def test_uv_debug_line_matches_uv_exe_argv0_on_windows():
     # The spawned buildout prints the resolved uv path as argv[0]; pip
     # lays the console script down as uv.exe on Windows.
     actual = (
-        'Running pip install:\n'
+        'Running uv pip install:\n'
         '"D:/a/buildout/venvs/python/Scripts/uv.exe" "pip" "install"'
         ' "--no-deps" "--python" "python3.exe" "-v" "pkg"\n')
-    assert_output(actual, 'Running pip install:\n' + UV_DEBUG_LINE, N)
+    assert_output(actual, 'Running uv pip install:\n' + UV_DEBUG_LINE, N)
 
 
 def test_installer_rejects_invalid_value(easy_install_env):
