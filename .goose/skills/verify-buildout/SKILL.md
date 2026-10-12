@@ -160,10 +160,14 @@ index, then follow the feature file. The tiers:
    network or a warm pip cache.
 3. **Suites** (the deep proof): the repo has TWO suites, run from the
    repo root. Hierarchy: `make test` is the official truth — no change
-   is verified until it passes; `make pytest` is the fast development
-   loop, still too young to stand alone. If legacy fails while pytest
-   passes, the pytest port is wrong — fix pytest to match. A change
-   that impacts existing tests updates BOTH suites.
+   is verified until it passes; `make test-uv` is its uv-pipeline twin
+   (the legacy corpus re-run through the uv installer) and rides in
+   every verification too, now that uv is the default path — a green
+   pip-era legacy run says nothing about the pipeline users actually
+   get; `make pytest` is the fast development loop, still too young to
+   stand alone. If legacy fails while pytest passes, the pytest port is
+   wrong — fix pytest to match. A change that impacts existing tests
+   updates BOTH suites.
 
 Alongside the tiers, `make lint` (ruff, from the devenv) is a
 seconds-fast static hygiene gate — see
