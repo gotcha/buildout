@@ -7,7 +7,7 @@ import pytest
 
 import zc.buildout
 from zc.buildout import easy_install
-from zc.buildout.easy_install import _uv_install_args
+from zc.buildout.easy_install import BIN_SCRIPTS, _uv_install_args
 from zc.buildout.install_backend import (
     _read_record_or_raise,
     _uv_target_python,
@@ -58,6 +58,31 @@ def _write_dist_tree(dest, project_name, version, module):
         os.makedirs(os.path.dirname(target), exist_ok=True)
     with open(target, 'w') as f:
         f.write('# written by the fake uv subprocess\n')
+
+
+def _write_uv_dist_tree(dest, version):
+    """A fake uv install: module, dist-info with console_scripts, bin/uv.
+
+    The console_scripts entry is what makes the egg-making step remove
+    the scripts directory from the shared ``--target`` result; the
+    binary's survival at the destination's console-bin root is the
+    behavior under test.
+    """
+    _write_dist_tree(dest, 'uv', version, 'uv')
+    distinfo = os.path.join(dest, f'uv-{version}.dist-info')
+    with open(os.path.join(distinfo, 'entry_points.txt'), 'w') as f:
+        f.write('[console_scripts]\nuv = uv:main\n')
+    _write_script(dest, 'uv', '#!/bin/fake-uv\n', executable=True)
+
+
+def _write_script(dest, name, content, executable=False):
+    bin_dir = os.path.join(dest, BIN_SCRIPTS)
+    os.makedirs(bin_dir, exist_ok=True)
+    script = os.path.join(bin_dir, name)
+    with open(script, 'w') as f:
+        f.write(content)
+    if executable:
+        os.chmod(script, 0o755)
 
 
 def _record_uv_install(monkeypatch, materialize=()):
@@ -262,3 +287,62 @@ def test_missing_dist_info_raises_user_error_naming_pin(
     # demo was fully processed before the failure; the tmp dir inside
     # dest was still cleaned up.
     assert [e for e in os.listdir(dest) if not e.endswith('.egg')] == []
+
+
+def test_uv_console_binary_is_preserved_beside_the_egg(
+        monkeypatch, tmp_path):
+    """An uv batched install keeps bin/uv at the eggs-dir root.
+
+    The egg-making step removes the scripts directory of every dist
+    with console entry points; install_pinned_dists preserves the uv
+    binary beside the eggs first, where the honored-locations probe in
+    _uv_executable reads it after an upgrade restart.
+    """
+    pins = [_pin('uv', '0.12.24')]
+
+    def fake_run_pip(args, env, dest, level):
+        _write_uv_dist_tree(dest, '0.12.24')
+        return ''
+
+    monkeypatch.setattr(easy_install, '_uv_executable',
+                        lambda honored_locations=(): '/uv')
+    monkeypatch.setattr(easy_install, '_run_pip', fake_run_pip)
+    dest = str(tmp_path / 'eggs')
+    [newdist] = install_pinned_dists(pins, dest)
+    assert newdist.project_name == 'uv'
+    uv_bin = os.path.join(dest, BIN_SCRIPTS, 'uv')
+    assert os.path.isfile(uv_bin)
+    assert os.access(uv_bin, os.X_OK)
+    with open(uv_bin) as f:
+        assert f.read() == '#!/bin/fake-uv\n'
+    # The egg itself keeps no scripts directory; the preserved copy
+    # lives at the eggs-dir root, not inside the egg.
+    import glob as glob_
+    for egg in glob_.glob(os.path.join(dest, '*.egg')):
+        assert not os.path.isdir(os.path.join(egg, BIN_SCRIPTS))
+
+
+def test_non_uv_console_scripts_are_not_preserved(monkeypatch, tmp_path):
+    """Only uv's binary survives at the eggs-dir root.
+
+    Console scripts of other dists keep their pip-era fate: removed
+    from the shared install with the scripts directory, regenerated
+    later by the script generation step.
+    """
+    pins = [_pin('demo', '1.0')]
+
+    def fake_run_pip(args, env, dest, level):
+        _write_dist_tree(dest, 'demo', '1.0', 'demo')
+        distinfo = os.path.join(dest, 'demo-1.0.dist-info')
+        with open(os.path.join(distinfo, 'entry_points.txt'), 'w') as f:
+            f.write('[console_scripts]\ndemo = demo:main\n')
+        _write_script(dest, 'demo', '#!/bin/fake-demo\n', executable=True)
+        return ''
+
+    monkeypatch.setattr(easy_install, '_uv_executable',
+                        lambda honored_locations=(): '/uv')
+    monkeypatch.setattr(easy_install, '_run_pip', fake_run_pip)
+    dest = str(tmp_path / 'eggs')
+    [newdist] = install_pinned_dists(pins, dest)
+    assert newdist.project_name == 'demo'
+    assert not os.path.exists(os.path.join(dest, BIN_SCRIPTS))

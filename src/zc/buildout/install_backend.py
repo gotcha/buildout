@@ -1154,6 +1154,55 @@ def _dist_for_pin(dest: str, pin: uv_resolve.PinnedDist
     return None
 
 
+def _maybe_preserve_uv_console_binary(
+        pinned: Sequence[uv_resolve.PinnedDist],
+        tmp_dest: str,
+        dest: str) -> None:
+    """Preserve the uv console binary when the pin set carries uv.
+
+    The per-dist egg making removes the scripts directory (see
+    _remove_pip_bin_dir); the uv binary must reach the eggs dir first,
+    or the honored-locations probe would keep falling back to PATH
+    after an uv upgrade.  Kept outside ``install_pinned_dists``: the
+    static tier pins that function's cyclomatic complexity.
+    """
+    for pin in pinned:
+        if str(canonicalize_name(pin.name)) == 'uv':
+            _preserve_uv_console_binary(tmp_dest, dest)
+            return
+
+
+def _preserve_uv_console_binary(tmp_dest: str, dest: str) -> None:
+    """Keep the uv console binary beside the eggs it arrived with.
+
+    A ``--target`` install of the uv dist drops its real binary at
+    ``bin/uv`` (``Scripts\\uv.exe`` on Windows), and the egg-making
+    step then removes every dist's scripts directory — pip-era
+    behavior: console entry points get regenerated through the script
+    generation step, so the install copies are noise for every dist
+    but one.  The uv binary is the exception: it must survive as-is.
+    The upgrade check installs a new uv into the eggs directory, and
+    on restart the honored-locations probe in ``_uv_executable`` reads
+    exactly ``<dest>/bin/uv`` (``<dest>/Scripts`` on Windows) to hand
+    over to it.  Copy the binary there before the scripts directory is
+    removed during egg making.  ``copy2`` keeps the executable bit.
+    """
+    from zc.buildout.easy_install import BIN_SCRIPTS
+    names = ['uv']
+    if sys.platform == 'win32':
+        names.append('uv.exe')
+    for name in names:
+        source = os.path.join(tmp_dest, BIN_SCRIPTS, name)
+        if os.path.isfile(source):
+            target_dir = os.path.join(dest, BIN_SCRIPTS)
+            os.makedirs(target_dir, exist_ok=True)
+            shutil.copy2(source, os.path.join(target_dir, name))
+            return
+    logger.debug('The uv install in %s carried no console binary; the '
+                 'eggs dir keeps its previous uv binary, if any.',
+                 tmp_dest)
+
+
 def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
                          dest: str) -> list[pkg_resources.Distribution]:
     """Install a pinned set into ``dest`` with one uv subprocess.
@@ -1187,6 +1236,7 @@ def install_pinned_dists(pinned: Sequence[uv_resolve.PinnedDist],
             index_url(), level)
         args.extend(p.url for p in pinned[1:])
         easy_install._run_pip(args, os.environ.copy(), tmp_dest, level)
+        _maybe_preserve_uv_console_binary(pinned, tmp_dest, dest)
         newdists = []
         for pin in pinned:
             distro = _dist_for_pin(tmp_dest, pin)
