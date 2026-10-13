@@ -254,6 +254,37 @@ container), the `dagger core -s version` readiness probe, the full
 remediation ladder for a wedged engine (machine → container → cache
 volume), and the run discipline in one place. Load it when a run
 cannot connect, dies mid-run, or the engine needs surgery.
+## Audit sweeps: ast-grep first, grep for one-shot
+
+Sweeps that must find EVERY occurrence of a string — test-expectation
+audits, literal migrations, removal-day hunts — default to ast-grep
+over the AST, not to `grep -rn`. grep matches spelling; it cannot see
+"the same literal with a different spelling". A literal whose text has
+already drifted (renamed member, platform-conditional content) escapes
+the regex pattern and stays behind as a latent red.
+
+Canonical case (2026-10-13): a sweep migrating the hard
+`Installing 'zc.buildout', 'wheel', 'pip', 'setuptools'.` expectation
+to the uv-era spelling used a grep anchored on the wheel-era form. Two
+pytest sites already half-rewritten (hard spelling without 'wheel')
+were missed; python 3.10's extra 'tomli' candidate member then made
+them red on CI while every other site — same hard spelling, but behind
+a normalizer fold — stayed green. The ast-grep audit that recovered
+them keys on *position* (a string constant containing the fragment),
+not on spelling:
+
+    id: installing-buildout-literal
+    language: python
+    rule:
+      kind: string_content
+      regex: "Installing 'zc\\.buildout'"
+
+Rule of thumb: one-shot site finding ("where is X used?") → grep is
+fine. Sweep-to-exhaustion ("find every site, prove none left") →
+ast-grep over `kind: string_content` (or the AST node of interest)
+with a content-fragment regex; and run the same sweep again after the
+fix to prove the count went to zero.
+
 ## Reproducing CI failures: match the CI surface
 
 CI jobs run inside `devenv shell`, and the shell is part of the
