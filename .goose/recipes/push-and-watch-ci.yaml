@@ -4,6 +4,11 @@ description: "Push a branch to an allowlisted fork remote, report the CI run URL
 instructions: |
   You are pushing one branch and watching its CI. Nothing else.
 
+  0. Pre-push gate (mandatory, from develop-buildout's dagger.md,
+     "Pre-test CI locally before pushing"): the tip commit of
+     {{branch}} must already carry a green dagger cell pass run
+     against that exact commit. If you have no evidence of that pass,
+     STOP and report back — do not push first and let CI discover it.
   1. Allowed push remotes: {{allowed_remotes}}. Inspect
      `git -C {{worktree}} remote -v`. If the intended target is not on
      the allowlist — in particular any remote pointing at the upstream

@@ -102,11 +102,26 @@ Reproducing one CI leg locally:
 
 ## Pre-test CI locally before pushing
 
+**Rule: no push without green dagger cells on the committed tree.**
 Pushing to learn what CI thinks costs a runner round-trip per
-iteration. The dagger mirror replays the same matrix in local
-containers, so the cheap loop is: iterate with the native `make`
-targets, commit, run the dagger cells on the committed tree, push
-only what they pass. Once pushed, never monitor the GitHub run —
+iteration and burns the branch's CI history on self-inflicted reds.
+The dagger mirror replays the same matrix in local containers, so
+the loop is mandatory, not advisory: iterate with the native `make`
+targets, commit, run the dagger cells for every family the change
+touches (when in doubt: `dagger call smoke` plus the job cells whose
+lanes CI would exercise), push only what they pass on the exact tip
+being pushed.
+
+Proven 2026-10-13: after two CI reds landed from a push that skipped
+the gate, a probe worktree detached at the pre-fix tip replayed both
+failures word-for-word — the py3.10 `tomli` upgrade-candidate
+divergence in cell `setuptools-75.9.1` (`2 failed, 882 passed`,
+the two doctest tests CI named) and the uv transcript divergence in
+cell `setuptools-75.9.1-uv` (`custom.rst` line 309, `Running uv pip
+install:`). A pre-push cell run would have caught both before they
+cost a CI cycle.
+
+Once pushed, never monitor the GitHub run —
 report the run URL and end the turn (see verify-buildout's
 features/ci.md, "Never monitor GitHub runs"). Two days of CI
 debugging on the uv-installer
@@ -122,9 +137,16 @@ branch (2026-09-23/24) measured the boundary:
 - **What they cannot catch.** The GHA runner's ambient environment
   (the `RUST_LOG=debug` flood lived on the runner, in no container),
   the Windows legs (the module builds Linux containers only), the
-  macOS leg's devenv evaluation, and network flakes. Green local
+  macOS leg's devenv evaluation, and network flakes. On Windows even
+  data derived from the installed dists can diverge (observed
+  2026-10-13: the metadata-derived upgrade-candidate list ordered
+  `setuptools` first there), so any expectation that pins a
+  platform-shaped spelling stays unverified locally. Green local
   cells narrow the push risk; for those axes the runner run stays
-  the only proof.
+  the only proof. Note the workflow's fail-gating compounds this:
+  a red matrix skips the Windows/Scripts/coverage legs outright, so
+  a divergence that lives only in those legs surfaces a full run
+  later than the matrix reds — the skipped legs are not green.
 - **A dagger/runner split on the same commit: suspect the job setup
   before the code, in both directions.** Both sides run the same make
   targets; what differs is the world they start from — the workflow's
