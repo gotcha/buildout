@@ -128,7 +128,7 @@ It checks, printing OK/FAIL per line and exiting non-zero on any FAIL:
 - `venvs/` has a python (bootstrap venv present)
 - `git -C <repo> rev-parse HEAD` and `status --short` — record the exact
   revision driven, and whether the tree was dirty
-- `eggs/v5/` exists (pytest suite needs its eggs on PYTHONPATH)
+- `eggs/v5/` exists (pytest suite needs the buildout-eggs.pth it feeds)
 - `ty --version` on PATH (Astral checker for the static tier; the
   devenv provides it)
 
@@ -192,10 +192,12 @@ the suites and never substitute for them.
    - `make pytest` — ported pytest suite in
      `src/zc/buildout/tests/pytests/`, run with xdist
      (`bin/py -m pytest ... -n auto`). The development loop — iterate
-     here, prove with `make test`. The Makefile passes
-     `PYTHONPATH=eggs/v5/*.egg` because xdist workers are bare
+     here, prove with `make test`. The Makefile arms
+     `ZC_BUILDOUT_SUITE_EGGS=1`: the `bin/test` build writes a
+     flag-gated `buildout-eggs.pth` into the venv's site-packages
+     (from `bin/py`'s sys.path), because xdist workers are bare
      interpreters that do not inherit `bin/py`'s baked sys.path — if
-     you invoke pytest by hand, you MUST set that PYTHONPATH yourself.
+     you invoke pytest by hand, you MUST set that flag yourself.
      The requirement rides with `-n`, not with the full suite: a
      scoped run with `-n 2` breaks just the same; only `-n`-free
      hand runs are exempt. The symptom of forgetting it: every

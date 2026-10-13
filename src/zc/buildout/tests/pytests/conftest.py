@@ -266,6 +266,7 @@ def easy_install_env(_sample_eggs_cache):
     """
     fake = _FakeTest()
     zc.buildout.testing.buildoutSetUp(fake)
+    fake.globs['system'] = _scrubbing_system(fake.globs['system'])
     sample_eggs_cache, extdemo_src = _sample_eggs_cache
     sample_eggs = fake.globs['tmpdir']('sample_eggs')
     fake.globs['sample_eggs'] = sample_eggs
@@ -293,11 +294,39 @@ def _dedenting_write(write_fn):
     return _write
 
 
+def _scrubbing_system(system_fn):
+    """Strip the pytest-lane path flag from children spawned by tests.
+
+    ``make pytest`` arms ``ZC_BUILDOUT_SUITE_EGGS`` so bare-interpreter
+    xdist workers find the checkout's ``src/`` and eggs through the
+    flag-gated ``buildout-eggs.pth`` in the venv's site-packages.  A
+    sample buildout the test spawns must resolve packages on its own
+    terms — legacy-lane children see nothing of the sort, and an
+    inherited flag makes the sample resolve the repo's develop egg
+    (``zc.recipe.egg_``) instead of the index (sensitized tests:
+    ``test_want_new_zcrecipeegg``, ``test_init_initial_eggs``).
+
+    The flag is set to the empty string — not deleted — so that a
+    test-supplied ``env`` mapping still wins: ``system`` builds a child
+    env from ``os.environ`` and updates it with the caller's ``env``.
+    """
+
+    def _system(command, input='', with_exit_code=False, env=None):
+        scrubbed = {'ZC_BUILDOUT_SUITE_EGGS': ''}
+        if env:
+            scrubbed.update(env)
+        return system_fn(
+            command, input=input, with_exit_code=with_exit_code, env=scrubbed)
+
+    return _system
+
+
 @pytest.fixture
 def buildout_env():
     """Basic buildout sandbox without sample eggs."""
     fake = _FakeTest()
     zc.buildout.testing.buildoutSetUp(fake)
+    fake.globs['system'] = _scrubbing_system(fake.globs['system'])
     fake.globs['write'] = _dedenting_write(fake.globs['write'])
     yield fake.globs
     zc.buildout.testing.buildoutTearDown(fake)
@@ -363,6 +392,7 @@ def buildout_txt_env(_buildout_txt_index_cache):
     """
     fake = _FakeTest()
     zc.buildout.testing.buildoutSetUp(fake)
+    fake.globs['system'] = _scrubbing_system(fake.globs['system'])
 
     index_url = os.environ['buildout_testing_index_url']
     index = Path(index_url[len('file://'):])
@@ -450,6 +480,7 @@ def update_env():
     """Sandbox for update.txt: buildoutSetUp + new zc.buildout releases."""
     fake = _FakeTest()
     zc.buildout.testing.buildoutSetUp(fake)
+    fake.globs['system'] = _scrubbing_system(fake.globs['system'])
 
     new_releases = fake.globs['tmpdir']('new_releases')
     fake.globs['new_releases'] = new_releases

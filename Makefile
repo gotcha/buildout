@@ -25,6 +25,13 @@ bin/buildout: bin/.prepare-stamp
 
 bin/test: bin/buildout buildout.cfg
 	bin/buildout || bin/buildout.exe
+	# Refresh the path artefact for bare venv-python children (xdist
+	# workers, fest-style external tools): a flag-gated
+	# buildout-eggs.pth in the venv's site-packages, generated from
+	# bin/py's sys.path. Armed per-lane with ZC_BUILDOUT_SUITE_EGGS=1;
+	# inert without the flag, and invisible to interpreters outside
+	# this venv, so spawned pip/build children stay clean.
+	bin/py etc/write-buildout-eggs-pth.py
 
 test: bin/test
 	$(HERMETIC_ENV) PYTHONWARNINGS=ignore bin/test -pvc
@@ -88,6 +95,9 @@ test-projects: bin/buildout
 # spawned Python subprocess (bin/buildout drives, pip installs, xdist
 # workers) — each interpreter writes its own data file (.coveragerc has
 # parallel = true). COVERAGE_PROCESS_START arms the sitecustomize hook.
+# The xdist workers' eggs do NOT ride PYTHONPATH here: they arrive via
+# the gated buildout-eggs.pth (bin/test build step), armed by
+# ZC_BUILDOUT_SUITE_EGGS in the two pytest-coverage lanes below.
 # An absolute COVERAGE_FILE keeps all data files in the repo root: bin/test
 # exits with parts/test as cwd and test-spawned processes chdir around.
 # combine/report/html go through bin/coverage: the bare venv python has no
@@ -95,7 +105,7 @@ test-projects: bin/buildout
 COVERAGE_ENV = COVERAGE_PROCESS_START=$(CURDIR)/.coveragerc \
 	COVERAGE_FILE=$(CURDIR)/.coverage \
 	PYTHONWARNINGS=ignore \
-	PYTHONPATH="$(CURDIR)/etc/coverage$$(bin/py -c 'import glob, os; print(os.pathsep + os.pathsep.join(glob.glob(os.path.join(os.getcwd(), "eggs", "v5", "*.egg"))))')"
+	PYTHONPATH="$(CURDIR)/etc/coverage"
 
 coverage: bin/test
 	rm -f .coverage .coverage.*
@@ -108,7 +118,7 @@ coverage: bin/test
 coverage-pytest: bin/test
 	rm -f .coverage .coverage.*
 	rm -rf htmlcov
-	$(COVERAGE_ENV) $(HERMETIC_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
+	$(COVERAGE_ENV) $(HERMETIC_ENV) ZC_BUILDOUT_SUITE_EGGS=1 bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
 	bin/coverage combine
 	bin/coverage report
 	bin/coverage html
@@ -120,7 +130,7 @@ coverage-pytest: bin/test
 coverage-unittests: bin/test
 	rm -f .coverage .coverage.*
 	rm -rf htmlcov
-	$(COVERAGE_ENV) $(HERMETIC_ENV) bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto --unittests-only
+	$(COVERAGE_ENV) $(HERMETIC_ENV) ZC_BUILDOUT_SUITE_EGGS=1 bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto --unittests-only
 	bin/coverage combine
 	bin/coverage report
 	bin/coverage html
@@ -136,11 +146,14 @@ typecheck: bin/test
 
 pytest: bin/test
 	# xdist workers are bare-interpreter subprocesses: they do not inherit
-	# bin/py's baked sys.path, so pass the eggs via PYTHONPATH. Let Python
-	# itself assemble the value: the PWD variable is empty when make is
-	# invoked from PowerShell (Windows CI), and the PYTHONPATH separator
-	# is ';' on Windows but ':' elsewhere.
-	$(HERMETIC_ENV) PYTHONWARNINGS=ignore PYTHONPATH="$$(bin/py -c 'import glob, os; print(os.pathsep.join(glob.glob(os.path.join(os.getcwd(), "eggs", "v5", "*.egg"))))')" \
+	# bin/py's baked sys.path, and execnet spawns them (-u -c) in a way no
+	# interpreter option can intercept. The gated buildout-eggs.pth written
+	# by the bin/test build supplies the path set instead: arming
+	# ZC_BUILDOUT_SUITE_EGGS makes every python on this venv — workers
+	# included — extend sys.path with the checkout's src/ and eggs/v5.
+	# Spawned children outside the venv (python -m build fixtures) never
+	# see the file, so nothing leaks the way a PYTHONPATH glob did.
+	$(HERMETIC_ENV) PYTHONWARNINGS=ignore ZC_BUILDOUT_SUITE_EGGS=1 \
 		bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
 
 lint:

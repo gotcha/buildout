@@ -166,14 +166,16 @@ content is unchanged:
   re-run an 8-minute suite on an identical tree.
 - If the tree differs (conflict resolution, amended files), rerun the
   verify-buildout ladder before claiming the result verified.
-- Rerunning the pytest tier by hand: `make pytest` passes
-  `PYTHONPATH=eggs/v5/*.egg` because xdist workers are bare
-  interpreters that do not inherit `bin/py`'s baked sys.path. Any
-  hand invocation with `-n` — full or scoped, e.g. one file with
-  `-n 2` — must replicate it:
+- Rerunning the pytest tier by hand: `make pytest` arms
+  `ZC_BUILDOUT_SUITE_EGGS=1` because xdist workers are bare
+  interpreters that do not inherit `bin/py`'s baked sys.path (the
+  `bin/test` build writes a flag-gated `buildout-eggs.pth` into the
+  venv's site-packages; the flag arms it). Any hand invocation with
+  `-n` — full or scoped, e.g. one file with `-n 2` — must replicate
+  it:
 
   ```sh
-  PYTHONWARNINGS=ignore PYTHONPATH="$(ls -d $PWD/eggs/v5/*.egg | tr '\n' ':')" \
+  PYTHONWARNINGS=ignore ZC_BUILDOUT_SUITE_EGGS=1 \
     bin/py -m pytest src/zc/buildout/tests/pytests/test_<x>.py -q [-n 2]
   ```
 
