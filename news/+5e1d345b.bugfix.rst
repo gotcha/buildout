@@ -1,0 +1,1 @@
+Develop-egg signature hashing now ignores a ``buildout-eggs.pth`` file anywhere in the hashed tree (same class as ``SOURCES.txt`` and ``.coverage*``): a write of that file after a buildout run no longer marks every part stale on the next run — a flip that reinstalled all parts and, on Windows, deleted the running ``bin\buildout.exe``. [gt-leader]
