@@ -19,7 +19,7 @@ ver=$("$REPO/bin/buildout" --version 2>/dev/null | tail -1)
 pybin=$(ls -d "$REPO"/venvs/*/bin/python* 2>/dev/null | head -1)
 [ -n "$pybin" ] && [ -x "$pybin" ]; check "venvs python" $? "$pybin"
 
-[ -d "$REPO/eggs/v5" ]; check "eggs/v5 (pytest PYTHONPATH source)" $?
+[ -d "$REPO/eggs/v5" ]; check "eggs/v5 (feeds buildout-eggs.pth)" $?
 
 tyver=$(command -v ty >/dev/null 2>&1 && ty --version 2>/dev/null | head -1)
 [ -n "$tyver" ]; check "ty on PATH (devenv, static tier)" $? "$tyver"

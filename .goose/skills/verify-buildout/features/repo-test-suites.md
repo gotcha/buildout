@@ -85,7 +85,7 @@ Preconditions:
 - **Pytest suite.** `make pytest 2>&1 | tee "$ART/make-pytest.log"`.
   Exit 0; final line `N passed ...`. Capture it.
 - **Scoped smoke (fast proof).** `make test-small` and
-  `PYTHONWARNINGS=ignore PYTHONPATH="$(ls -d $PWD/eggs/v5/*.egg | tr '\n' ':')" \
+  `PYTHONWARNINGS=ignore ZC_BUILDOUT_SUITE_EGGS=1 \
     bin/py -m pytest src/zc/buildout/tests/pytests/test_pytest_rmtree.py -q`.
   Both exit 0. Use these when the full suites are too slow for the
   question at hand, and say so in the report — a scoped smoke is
@@ -112,14 +112,24 @@ Preconditions:
   pip current right after venv creation, downloads the seeds under
   it, and only then installs `$PIP_VERSION`. Preserve that ordering
   when touching the bootstrap.
-- Hand-invoking pytest WITHOUT the `PYTHONPATH=eggs/v5/*.egg` line
-  breaks xdist workers (they are bare interpreters and do not inherit
-  `bin/py`'s baked sys.path) — the Makefile comment says exactly this.
-  Use `make pytest`, or replicate the PYTHONPATH. This applies to ANY
-  `-n` invocation, including a scoped `-n 2` on one file (only
-  `-n`-free hand runs are exempt): the workers fail collection with
-  `ModuleNotFoundError` for the eggs and the file reports 0 passed —
-  do not mistake that for a red suite.
+- Hand-invoking pytest WITHOUT `ZC_BUILDOUT_SUITE_EGGS=1` breaks
+  xdist workers (they are bare interpreters and do not inherit
+  `bin/py`'s baked sys.path): the `bin/test` build writes a
+  flag-gated `buildout-eggs.pth` into the venv's site-packages, and
+  the flag arms it. Use `make pytest`, or replicate the flag. This
+  applies to ANY `-n` invocation, including a scoped `-n 2` on one
+  file (only `-n`-free hand runs are exempt): the workers fail
+  collection with `ModuleNotFoundError` for the eggs and the file
+  reports 0 passed — do not mistake that for a red suite. Sample
+  buildouts a test spawns must NOT see the flag: the pytest conftest
+  wraps `system()` to scrub it (an inherited flag makes samples load
+  the repo's `zc.recipe.egg_` develop egg instead of the index).
+- External pytest-driving tools (fest mutation testing, hypothesis)
+  ride the same channel: spawn the tool with the repo venv active
+  (`VIRTUAL_ENV=$PWD/venvs/python3.12` or a `.venv` it discovers)
+  and `ZC_BUILDOUT_SUITE_EGGS=1` exported; fest additionally needs
+  `pytest-cov` installed in that venv. Hypothesis is an in-process
+  plugin and needs nothing beyond the flag.
 - `make test` rebuilds `bin/test` via `bin/buildout` if the config
   changed — a suite run can rewrite repo-root state. That is normal;
   the doctor's dirty-tree NOTE records it.
