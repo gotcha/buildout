@@ -1659,6 +1659,9 @@ def _default_globals() -> dict[str, Any]:  # type: ignore[explicit-any]  # eval 
 
 ignore_directories = '.svn', 'CVS', '__pycache__', '.git'
 _dir_hashes = {}
+_DIR_HASH_IGNORED_FILES = ('SOURCES.txt', 'buildout-eggs.pth')
+
+
 def _dir_hash_file_ignored(name: str) -> bool:
     """Files _dir_hash must not see.
 
@@ -1673,9 +1676,15 @@ def _dir_hash_file_ignored(name: str) -> bool:
     the checkout root in CI — while other buildout runs hash the tree,
     so a develop signature can flip between two runs of one narrative
     (GH's coverage pytest job: test_buildout_prefer_final_option).
+    ``buildout-eggs.pth`` is the same class from the repo's own test
+    harness: the ``bin/test`` build writes it into the venv's
+    site-packages after every buildout run, and the venv sits inside
+    the hashed develop tree, so without the ignore every second
+    ``bin/buildout`` run would reinstall all parts (Windows CI:
+    WinError 32 self-delete of the running bin\\buildout.exe).
     """
     return (name.endswith(('pyc', 'pyo'))
-            or name == 'SOURCES.txt'
+            or name in _DIR_HASH_IGNORED_FILES
             or name.startswith('.coverage'))
 
 

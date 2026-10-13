@@ -862,6 +862,31 @@ def test_dir_hash_ignores_coverage_data_files(easy_install_env):
     write('covpkg', 'mod2.py', "y = 2\n")
     assert _dir_hash('covpkg') != before
 
+def test_dir_hash_ignores_buildout_eggs_pth(easy_install_env):
+    mkdir = easy_install_env['mkdir']
+    write = easy_install_env['write']
+
+    # The test harness writes buildout-eggs.pth into the venv's
+    # site-packages after every bin/test build (flag-gated path artefact
+    # for xdist workers). The venv sits inside the hashed develop tree,
+    # so the artefact must not move the hash: observed as every second
+    # bin/buildout run reinstalling all parts, fatal on Windows where
+    # the reinstall self-deletes the running bin/buildout.exe.
+    from zc.buildout.buildout import _dir_hash, _dir_hashes
+    mkdir('pthpkg')
+    write('pthpkg', 'mod.py', "x = 1\n")
+    _dir_hashes.clear()
+    before = _dir_hash('pthpkg')
+    _dir_hashes.clear()
+    write('pthpkg', 'buildout-eggs.pth', "import os, sys\n")
+    assert _dir_hash('pthpkg') == before
+    _dir_hashes.clear()
+    write('pthpkg', 'buildout-eggs.pth', "import os\n")
+    assert _dir_hash('pthpkg') == before
+    _dir_hashes.clear()
+    write('pthpkg', 'other.pth', "import sys\n")
+    assert _dir_hash('pthpkg') != before
+
 def test_o_option_sets_offline(easy_install_env):
     join = easy_install_env['join']
     sample_buildout = easy_install_env['sample_buildout']
