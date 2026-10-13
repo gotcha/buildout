@@ -1,0 +1,7 @@
+Convert the two pure data holders in ``zc.buildout.annotations`` to
+dataclasses: ``HistoryItem`` becomes ``@dataclass(frozen=True)`` (it is
+never mutated after construction) and ``SectionKey`` becomes
+``@dataclass(eq=False)`` with a declared ``history`` field, keeping its
+custom ``__init__(value, source)`` and identity equality. Both keep
+their custom ``__repr__``, so ``buildout annotate`` output is
+unchanged. [gt-builder]

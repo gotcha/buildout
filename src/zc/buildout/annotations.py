@@ -22,7 +22,7 @@ from __future__ import annotations
 import copy
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 
 from zc.buildout.utils import print_
@@ -37,7 +37,11 @@ def _annotate_section(section: RawSection, source: str) -> AnnotatedSection:
     return annotated
 
 
+@dataclass(eq=False)
 class SectionKey:
+    value: str
+    history: list[HistoryItem] = field(default_factory=list)
+
     def __init__(self, value: str, source: str) -> None:
         self.history = []
         self.value = value
