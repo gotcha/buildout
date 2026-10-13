@@ -81,7 +81,10 @@ PIP_ARGS="$PIP_ARGS setuptools"
 if test $SETUPTOOLS_VERSION; then
 	PIP_ARGS="$PIP_ARGS==$SETUPTOOLS_VERSION"
 fi
-# wheel is a dependency of zc.buildout, so always include it:
+# wheel is no longer a dependency of zc.buildout — nothing imports it
+# and the upgrade check derives its candidates from the metadata — but
+# the seed keeps it for now: whether the harness still needs it is a
+# separate investigation.
 PIP_ARGS="$PIP_ARGS wheel"
 # packaging and platformdirs are dependencies of zc.buildout, but we
 # explicitly add them because zc.buildout itself is not pip-installed here.
