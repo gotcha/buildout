@@ -9,19 +9,24 @@
 # venvs, eggs, downloads, bin, develop-eggs, parts: build artifacts the
 # dagger static cell creates via prepare/bootstrap before `make typecheck`.
 # ty only respects .gitignore when .git is a directory — from a worktree
-# checkout .git is a pointer file, so without these entries ty scans the
+# checkout .git is a pointer file, and the dagger CI cells mount /src
+# without .git at all — so without these entries ty scans the
 # runtime-created venv and extracted eggs and drowns in third-party
-# diagnostics.
+# diagnostics. Glob form: worktrees and harnesses nest these dirs.
 exclude = [
     "src/zc/buildout/_vendor",
     "etc/tracing",
     "dagger",
-    "venvs",
-    "eggs",
-    "downloads",
-    "bin",
-    "develop-eggs",
-    "parts",
+    "**/venvs",
+    "**/eggs",
+    "**/bin",
+    "**/build",
+    "**/dist",
+    "**/parts",
+    "**/downloads",
+    "**/develop-eggs",
+    "**/htmlcov",
+    "**/python*",
 ]
 
 [tool.mypy]
@@ -62,7 +67,23 @@ consider_namespace_packages = true
 target-version = "py310"
 # _vendor is frozen third-party code (the pkg_resources v81 fork):
 # not gateable signal, excluded like the ty/mypy static tiers.
-extend-exclude = ["src/zc/buildout/_vendor"]
+# The venvs/eggs/bin/... artifact dirs are gitignored, but the gate
+# cannot lean on .gitignore: harnesses that mount this tree without
+# .git (the dagger CI cells) create those dirs in-tree during the
+# build, and ruff would scan thousands of third-party files.
+extend-exclude = [
+    "src/zc/buildout/_vendor",
+    "**/venvs",
+    "**/eggs",
+    "**/bin",
+    "**/build",
+    "**/dist",
+    "**/parts",
+    "**/downloads",
+    "**/develop-eggs",
+    "**/htmlcov",
+    "**/python*",
+]
 
 [tool.ruff.lint]
 # The burndown end state: the wide set the tree is burned clean against,
