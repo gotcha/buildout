@@ -95,14 +95,26 @@ test-projects: bin/buildout
 # spawned Python subprocess (bin/buildout drives, pip installs, xdist
 # workers) — each interpreter writes its own data file (.coveragerc has
 # parallel = true). COVERAGE_PROCESS_START arms the sitecustomize hook.
-# The xdist workers' eggs do NOT ride PYTHONPATH here: they arrive via
-# the gated buildout-eggs.pth (bin/test build step), armed by
-# ZC_BUILDOUT_SUITE_EGGS in the two pytest-coverage lanes below.
 # An absolute COVERAGE_FILE keeps all data files in the repo root: bin/test
 # exits with parts/test as cwd and test-spawned processes chdir around.
 # combine/report/html go through bin/coverage: the bare venv python has no
 # coverage installed.
+#
+# Two lane envs. The legacy lane (bin/test) keeps the eggs glob on
+# PYTHONPATH: its doctests spawn sample buildouts on this venv's python
+# and pin exact child-interpreter state, so the gated-pth flag must not
+# arm there — the coverage egg reaches spawned children via the glob,
+# unchanged from pre-flag times. The pytest lanes control child env
+# through conftest fixtures (the flag is scrubbed from sample builds),
+# so they drop the glob: xdist workers' eggs arrive via the gated
+# buildout-eggs.pth (bin/test build step), armed below with
+# ZC_BUILDOUT_SUITE_EGGS=1.
 COVERAGE_ENV = COVERAGE_PROCESS_START=$(CURDIR)/.coveragerc \
+	COVERAGE_FILE=$(CURDIR)/.coverage \
+	PYTHONWARNINGS=ignore \
+	PYTHONPATH="$(CURDIR)/etc/coverage$$(bin/py -c 'import glob, os; print(os.pathsep + os.pathsep.join(glob.glob(os.path.join(os.getcwd(), "eggs", "v5", "*.egg"))))')"
+
+COVERAGE_PYTEST_ENV = COVERAGE_PROCESS_START=$(CURDIR)/.coveragerc \
 	COVERAGE_FILE=$(CURDIR)/.coverage \
 	PYTHONWARNINGS=ignore \
 	PYTHONPATH="$(CURDIR)/etc/coverage"
@@ -118,7 +130,7 @@ coverage: bin/test
 coverage-pytest: bin/test
 	rm -f .coverage .coverage.*
 	rm -rf htmlcov
-	$(COVERAGE_ENV) $(HERMETIC_ENV) ZC_BUILDOUT_SUITE_EGGS=1 bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
+	$(COVERAGE_PYTEST_ENV) $(HERMETIC_ENV) ZC_BUILDOUT_SUITE_EGGS=1 bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto
 	bin/coverage combine
 	bin/coverage report
 	bin/coverage html
@@ -130,7 +142,7 @@ coverage-pytest: bin/test
 coverage-unittests: bin/test
 	rm -f .coverage .coverage.*
 	rm -rf htmlcov
-	$(COVERAGE_ENV) $(HERMETIC_ENV) ZC_BUILDOUT_SUITE_EGGS=1 bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto --unittests-only
+	$(COVERAGE_PYTEST_ENV) $(HERMETIC_ENV) ZC_BUILDOUT_SUITE_EGGS=1 bin/py -m pytest src/zc/buildout/tests/pytests/ -v -n auto --unittests-only
 	bin/coverage combine
 	bin/coverage report
 	bin/coverage html
