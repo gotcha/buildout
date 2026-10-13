@@ -260,9 +260,16 @@ def test_uv_executable_missing_raises_user_error(monkeypatch, tmp_path):
 def _eggs_dir_with_uv(tmp_path, name='eggs', executable=True):
     """A fake eggs directory carrying a console-layout uv binary."""
     eggs = tmp_path / name
-    bin_dir = eggs / 'bin'
+    # A --target install of the uv dist lays the console binary down as
+    # bin/uv on POSIX and Scripts/uv.exe on Windows; the honored-location
+    # probe in install_backend reads exactly that platform shape.
+    if sys.platform == 'win32':
+        bin_dir = eggs / 'Scripts'
+        binary = bin_dir / 'uv.exe'
+    else:
+        bin_dir = eggs / 'bin'
+        binary = bin_dir / 'uv'
     bin_dir.mkdir(parents=True)
-    binary = bin_dir / 'uv'
     binary.write_text('#!/bin/sh\n')
     if executable:
         binary.chmod(0o755)
@@ -276,6 +283,10 @@ def test_uv_executable_honors_eggs_dir_before_path(monkeypatch, tmp_path):
     assert _uv_executable(honored_locations=(str(eggs),)) == str(binary)
 
 
+@pytest.mark.skipif(
+    sys.platform == 'win32',
+    reason='Windows has no executable bit: any existing file passes the '
+           'os.access(candidate, os.X_OK) gate in the honored-location probe.')
 def test_uv_executable_honored_location_needs_executable_bit(
         monkeypatch, tmp_path):
     # A non-executable bin/uv is dist payload, not a runnable binary:

@@ -47,6 +47,7 @@ NORMALIZERS_EASY_INSTALL = [
     zc.buildout.testing.drop_uv_getting_got_lines,
     zc.buildout.testing.drop_uv_install_debug_chatter,
     zc.buildout.testing.drop_uv_resolution_narrative,
+    zc.buildout.testing.normalize_upgrade_install_line,
     normalize_bang,
     (re.compile(r'^(\w+\.)*(Missing\w+: )'), r'\2'),
     (re.compile(r"buildout: Running \S*setup.py"), 'buildout: Running setup.py'),
