@@ -248,6 +248,13 @@ mechanics, and replaying the CI matrix on the committed tree
 before a push. Load it before touching `dagger/` or pre-testing
 CI locally.
 
+**The pre-push gate is mandatory: no push without green dagger
+cells on the committed tree being pushed.** Proven 2026-10-13 —
+the two CI reds that a gate-skipping push produced replayed
+word-for-word in the local cells on a probe worktree at the
+pre-fix tip. Details and the catch/no-catch matrix: dagger.md,
+"Pre-test CI locally before pushing".
+
 The **dagger** skill is the operational companion to this section:
 engine anatomy (state lives in the `dagger-cache` volume, not the
 container), the `dagger core -s version` readiness probe, the full
