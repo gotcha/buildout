@@ -22,6 +22,7 @@ from __future__ import annotations
 import copy
 import os
 import sys
+from dataclasses import dataclass
 from typing import cast
 
 from zc.buildout.utils import print_
@@ -121,11 +122,11 @@ class SectionKey:
         return f"<SectionKey value={value} source={self.source}>"
 
 
+@dataclass(frozen=True)
 class HistoryItem:
-    def __init__(self, operation: str, value: str, source: str) -> None:
-        self.operation = operation
-        self.value = value
-        self.source = source
+    operation: str
+    value: str
+    source: str
 
     def printShort(self, toprint: list[str], basedir: str) -> None:
         source = self.source_for_human(basedir)
