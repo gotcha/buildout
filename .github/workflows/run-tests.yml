@@ -54,6 +54,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: ${{ matrix.python-version }}
     - name: Run tests
       env:
         # When you install packages, you see far too many setuptools warnings.
@@ -180,6 +181,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: ${{ matrix.python-version }}
     - name: Run tests
       env:
         PYTHONWARNINGS: ignore
@@ -232,6 +234,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: ${{ matrix.python-version }}
     - name: Run tests
       env:
         PYTHONWARNINGS: ignore
@@ -271,6 +274,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: ${{ matrix.python-version }}
     - name: Run tests
       env:
         PYTHONWARNINGS: ignore
@@ -315,6 +319,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: "3.12"
     - name: Run legacy suite with coverage
       env:
         PYTHONWARNINGS: ignore
@@ -344,6 +349,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: "3.12"
     - name: Run pytest suite with coverage
       env:
         PYTHONWARNINGS: ignore
@@ -375,6 +381,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: "3.12"
     - name: Run unittests with coverage
       env:
         PYTHONWARNINGS: ignore
@@ -407,6 +414,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: ${{ matrix.python-version }}
     - name: Setup buildout virtualenv
       run: >-
         devenv shell

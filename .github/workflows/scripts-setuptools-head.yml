@@ -27,6 +27,7 @@ jobs:
         # means this step is skipped entirely.
         cachix-cache: ${{ vars.CACHIX_CACHE_NAME }}
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        python-version: ${{ matrix.python-version }}
     - name: Setup buildout virtualenv
       run: >-
         devenv shell
