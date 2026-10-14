@@ -1,0 +1,1 @@
+CI: the devenv-setup composite action now pre-materializes the matrix python toolchains (3.10-3.14) with retries, so a leg's first ``devenv shell`` eval no longer dies on intermittently missing lazily-copied store paths (``path '/nix/store/...patch' is not valid``).

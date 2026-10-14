@@ -21,6 +21,15 @@ inputs:
       pull-only.
     required: false
     default: ''
+  python-version:
+    description: >-
+      Python version the calling job will select via
+      `devenv shell --option languages.python.version:string` (its
+      matrix.python-version). The toolchain for exactly this version is
+      realized once, here, with retries. Empty warms the default shell
+      only.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -43,3 +52,31 @@ runs:
   - name: Show devenv version
     shell: bash
     run: devenv version
+  - name: Pre-materialize the job's python toolchain (flake shield)
+    shell: bash
+    env:
+      WARM_PYTHON_VERSION: ${{ inputs.python-version }}
+    run: |
+      # devenv evaluates the shell lazily: files from the locked
+      # nixpkgs / nixpkgs-python trees are copied into the store per
+      # path, not as whole trees. On fresh runners one of those
+      # per-file copies is intermittently absent at instantiation time,
+      # and the leg's first eval then dies in ~1s with:
+      #   error: path '/nix/store/<hash>-<file>.patch' is not valid
+      # (2026-10-12 setuptools 79.0.1 leg; 2026-10-14 Scripts legs,
+      # attempts 2 and 3; each time a different cpython patch file).
+      # The derivation is correct; the store path is just missing.
+      # Realize the version this job will use once, here, with retries;
+      # afterwards the leg's own devenv shell evals find every path
+      # already valid in the store.
+      for attempt in 1 2 3 4; do
+        if [ -n "$WARM_PYTHON_VERSION" ]; then
+          devenv shell --option languages.python.version:string "$WARM_PYTHON_VERSION" -- true && exit 0
+        else
+          devenv shell -- true && exit 0
+        fi
+        echo "::warning::devenv warmup failed (attempt $attempt); retrying"
+        sleep $((attempt * 10))
+      done
+      echo "::error::devenv warmup failed after 4 attempts"
+      exit 1
